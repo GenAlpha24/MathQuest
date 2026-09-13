@@ -955,6 +955,19 @@
       return { text: `${ea} ${eOp} ${eb} = ?`, answer: eAns, opts: shuffle([...opt]), a: ea, b: eb, op: eOp === "−" ? "-" : "+" };
     }
 
+    // ---- Grade 3 topic questions ----
+    // Based on the Mashup Math 3rd grade curriculum: besides add/sub/multiply,
+    // third graders practice place value (to thousands), comparing multi-digit
+    // numbers with < > =, and rounding to the nearest 10 or 100.
+    // Mix these topics in with the arithmetic questions below.
+    if (grade === 3) {
+      const roll = Math.random();
+      if (roll < 0.20) return makeG3PlaceValue();
+      if (roll < 0.35) return makeG3Compare();
+      if (roll < 0.50) return makeG3Rounding(lv);
+      // else fall through to arithmetic (add / subtract / multiply)
+    }
+
     // +1 difficulty every 2 levels. Grade 3 climbs more gently (every 3 levels).
     const bump = grade === 3
       ? Math.floor((lv - 1) / 3)
@@ -1015,6 +1028,71 @@
 
     const opts = shuffle([...options]);
     return { text: `${a} ${opSymbols[op]} ${b} = ?`, answer, opts, a, b, op };
+  }
+
+  // ---- Grade 3 topic generators (Mashup Math 3rd grade skills) ----
+
+  // Place value: "In 4,382, which digit is in the hundreds place?" (to thousands)
+  function makeG3PlaceValue() {
+    const places = [
+      { name: "ones", pow: 1 },
+      { name: "tens", pow: 10 },
+      { name: "hundreds", pow: 100 },
+      { name: "thousands", pow: 1000 },
+    ];
+    const num = rand(1000, 9999);           // a 4-digit number
+    const digits = String(num).split("").map(Number); // [thousands..ones]
+    const idx = rand(0, 3);                 // which place to ask about
+    const place = places[3 - idx];          // idx 0 => ones
+    const answer = digits[3 - idx];         // the digit sitting in that place
+    // options: the correct digit plus other digits from the number, then
+    // fillers 0-9 until we have 4 unique choices
+    const options = new Set([answer]);
+    for (const d of digits) { if (options.size < 4) options.add(d); }
+    let f = 0;
+    while (options.size < 4 && f <= 9) { options.add(f); f++; }
+    return {
+      text: `In ${num.toLocaleString()}, which digit is in the ${place.name} place?`,
+      answer, opts: shuffle([...options]),
+      topic: "placeValue", num, place: place.name,
+    };
+  }
+
+  // Compare two multi-digit numbers with <, >, or =
+  function makeG3Compare() {
+    const a = rand(100, 9999);
+    // sometimes make them equal so "=" is a real possibility
+    const b = Math.random() < 0.15 ? a : rand(100, 9999);
+    const answer = a < b ? "<" : a > b ? ">" : "=";
+    return {
+      text: `Compare:  ${a.toLocaleString()}  ?  ${b.toLocaleString()}`,
+      answer, opts: shuffle(["<", ">", "="]),
+      topic: "compare", a, b,
+    };
+  }
+
+  // Round to the nearest 10 or 100 (numbers up to 1,000)
+  function makeG3Rounding(lv) {
+    const toHundred = Math.random() < 0.5;
+    const nearest = toHundred ? 100 : 10;
+    const num = rand(nearest === 100 ? 101 : 11, 1000);
+    const answer = Math.round(num / nearest) * nearest;
+    const options = new Set([answer]);
+    // plausible wrong answers: neighboring multiples + a common mistake
+    options.add(Math.floor(num / nearest) * nearest);
+    options.add(Math.ceil(num / nearest) * nearest);
+    options.add(answer + nearest);
+    options.add(answer - nearest);
+    const clean = [...options].filter(v => v >= 0 && v !== answer);
+    const opts = new Set([answer]);
+    for (const v of shuffle(clean)) { if (opts.size < 4) opts.add(v); }
+    let f = answer + nearest * 2;
+    while (opts.size < 4) { opts.add(f); f += nearest; }
+    return {
+      text: `Round ${num.toLocaleString()} to the nearest ${nearest}.`,
+      answer, opts: shuffle([...opts]),
+      topic: "rounding", num, nearest,
+    };
   }
 
   function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -1245,6 +1323,26 @@
 
   function buildHint(q) {
     const { a, b, op, answer } = q;
+
+    // Grade 3 topic questions have their own explanations.
+    if (q.topic === "placeValue") {
+      return `Place value tells you what each digit is worth.\n` +
+             `Reading ${q.num.toLocaleString()} from the right: ones, tens, hundreds, thousands.\n` +
+             `The digit in the ${q.place} place is ${answer}.`;
+    }
+    if (q.topic === "compare") {
+      const word = answer === "<" ? "less than" : answer === ">" ? "greater than" : "equal to";
+      return `Compare the numbers place by place, starting from the left.\n` +
+             `${q.a.toLocaleString()} is ${word} ${q.b.toLocaleString()}.\n` +
+             `The open side of < or > always points to the bigger number.`;
+    }
+    if (q.topic === "rounding") {
+      const digit = Math.floor((q.num % (q.nearest * 10)) / q.nearest);
+      return `To round ${q.num.toLocaleString()} to the nearest ${q.nearest}:\n` +
+             `look at the digit just to the right of the ${q.nearest === 100 ? "hundreds" : "tens"} place.\n` +
+             `5 or more rounds up, 4 or less rounds down → ${answer.toLocaleString()}.`;
+    }
+
     if (op === "+") {
       return `Addition means putting groups together.\n` +
              `Start at ${a}, then count up ${b} more.\n` +
@@ -1274,9 +1372,15 @@
     el.hint.classList.add("show");
   }
 
+  const TOPIC_WORD = {
+    placeValue: "place value to thousands",
+    compare: "comparing multi-digit numbers",
+    rounding: "rounding to the nearest ten and hundred",
+  };
   function openVideo() {
     if (!currentQuestion) return;
-    const word = OP_WORD[currentQuestion.op] || "math";
+    const q = currentQuestion;
+    const word = TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
     const query = encodeURIComponent(`how to do ${word} for kids`);
     // Opens a YouTube search in a new tab (always a valid link).
     window.open(`https://www.youtube.com/results?search_query=${query}`, "_blank", "noopener");
