@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Math Quest: Monster Battles</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
+    background: linear-gradient(#7ec8ff, #bfe9ff);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+    user-select: none;
+  }
+  h1 {
+    color: #ff5a8c;
+    text-shadow: 2px 2px 0 #fff;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  #topbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #2b3a67;
+  }
+  #topbar .who { background:#fff; padding:6px 12px; border-radius:12px; box-shadow:0 3px 0 #cfd8ff; }
+  #hud {
+    display: flex;
+    gap: 18px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #2b3a67;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .hud-box {
+    background: #fff;
+    padding: 6px 14px;
+    border-radius: 12px;
+    box-shadow: 0 3px 0 #cfd8ff;
+  }
+  #gameWrap { position: relative; }
+  canvas {
+    background: linear-gradient(#aee2ff 60%, #7dd87d 60%);
+    border: 6px solid #2b3a67;
+    border-radius: 16px;
+    display: block;
+    max-width: 100%;
+  }
+  /* Overlays */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: rgba(43, 58, 103, 0.88);
+    color: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { font-size: 30px; margin-bottom: 10px; }
+  .overlay p { font-size: 18px; margin-bottom: 16px; max-width: 460px; }
+
+  /* Auth */
+  #auth input {
+    font-family: inherit;
+    font-size: 18px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    margin: 6px 0;
+    width: 260px;
+    text-align: center;
+  }
+  #auth .row { display:flex; gap:10px; margin-top:8px; }
+  #authMsg { min-height: 22px; color:#ffd43b; margin-top:10px; }
+
+  /* Battle box */
+  #battle .question {
+    font-size: 40px;
+    background: #fff;
+    color: #2b3a67;
+    padding: 14px 28px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  #battle .answers {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    width: 320px;
+  }
+  .btn {
+    font-family: inherit;
+    font-size: 22px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    background: #ffd43b;
+    color: #2b3a67;
+    box-shadow: 0 4px 0 #e0a800;
+    transition: transform .05s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #e0a800; }
+  .btn.big { background: #51cf66; box-shadow: 0 4px 0 #2f9e44; color:#fff; }
+  .btn.small { font-size:16px; padding:8px 14px; }
+  #gradePick, #speedPick { margin: 4px 0 14px; }
+  #gradeButtons, #speedButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .grade-btn { font-family:inherit; font-size:18px; font-weight:bold; cursor:pointer; border:none;
+    border-radius:12px; padding:10px 16px; background:#fff; color:#2b3a67; box-shadow:0 4px 0 #cfd8ff; }
+  .grade-btn.selected { background:#ff5a8c; color:#fff; box-shadow:0 4px 0 #c92a6a; }
+  #battle .monster-face { font-size: 60px; margin-bottom: 6px; }
+  #battle .feedback { font-size: 20px; height: 26px; margin-top: 12px; }
+  #battle .battle-tools { display:flex; gap:10px; margin-top:14px; }
+  #battle .hint {
+    background: #fff; color:#2b3a67; border-radius:12px;
+    padding: 0 16px; max-width: 360px; font-size: 16px; line-height: 1.4;
+    max-height: 0; overflow: hidden; transition: max-height .2s, padding .2s;
+    text-align: left;
+  }
+  #battle .hint.show { max-height: 260px; padding: 12px 16px; margin-top: 10px; }
+
+  /* Crayon scratchpad */
+  #scratchCanvas {
+    background: #fffef4; border-radius: 12px; border: 4px solid #ffd43b;
+    touch-action: none; cursor: crosshair; max-width: 100%;
+  }
+  #crayonColors { display:flex; gap:8px; justify-content:center; margin-top:10px; }
+  .crayon-swatch {
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .crayon-swatch.selected { border-color: #2b3a67; transform: scale(1.15); }
+
+  /* Timer bar */
+  #timerWrap { width: 320px; margin-bottom: 14px; }
+  #timerText { font-size: 16px; margin-bottom: 4px; }
+  #timerBar { height: 14px; background: rgba(255,255,255,0.3); border-radius: 10px; overflow: hidden; }
+  #timerFill { height: 100%; width: 100%; background: #51cf66; transition: width .1s linear; }
+
+  /* Leaderboard */
+  #leaderboard table { border-collapse: collapse; background:#fff; color:#2b3a67; border-radius:10px; overflow:hidden; min-width: 320px; }
+  #leaderboard th, #leaderboard td { padding: 10px 16px; text-align: left; }
+  #leaderboard th { background:#ffd43b; }
+  #leaderboard tr:nth-child(even) td { background:#f1f4ff; }
+  #leaderboard .you td { font-weight:bold; color:#ff5a8c; }
+
+  #controls-hint {
+    margin-top: 10px;
+    color: #2b3a67;
+    font-size: 14px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <h1>Math Quest: Monster Battles</h1>
+
+  <div id="topbar" style="display:none;">
+    <span class="who">Player: <b id="whoName">-</b></span>
+    <button class="btn small" id="pauseBtn">⏸ Pause</button>
+    <button class="btn small" id="helpBtn">❓ Help</button>
+    <button class="btn small" id="leaderboardBtn">🏆 Leaderboard</button>
+    <button class="btn small" id="logoutBtn">Log out</button>
+  </div>
+
+  <div id="hud" style="display:none;">
+    <div class="hud-box">Grade: <span id="gradeDisplay">1</span></div>
+    <div class="hud-box">Speed: <span id="speedDisplay">Normal</span></div>
+    <div class="hud-box">Level: <span id="level">1</span></div>
+    <div class="hud-box">Lives: <span id="lives">3</span></div>
+    <div class="hud-box">Score: <span id="score">0</span></div>
+    <div class="hud-box">Best: <span id="best">0</span></div>
+    <div class="hud-box">Monsters left: <span id="monstersLeft">0</span></div>
+  </div>
+
+  <div id="gameWrap">
+    <canvas id="game" width="800" height="400"></canvas>
+
+    <!-- Auth (login / signup) -->
+    <div id="auth" class="overlay show">
+      <h2 id="authTitle">Log in to play</h2>
+      <p id="authSubtitle">Create an account or log in. Your progress and scores are saved to your account and appear on the global leaderboard.</p>
+      <input id="authName" placeholder="Display name (for sign up)" maxlength="16" autocomplete="off" />
+      <input id="authEmail" type="email" placeholder="Email" maxlength="60" autocomplete="off" />
+      <input id="authPass" type="password" placeholder="Password (6+ characters)" maxlength="32" autocomplete="off" />
+      <div class="row">
+        <button class="btn big" id="loginBtn">Log In</button>
+        <button class="btn" id="signupBtn">Sign Up</button>
+      </div>
+      <div id="authMsg"></div>
+    </div>
+
+    <!-- Start -->
+    <div id="start" class="overlay">
+      <h2>Welcome, <span id="startName">Hero</span>!</h2>
+      <p>Run and JUMP over the spikes. When you reach a monster, answer the math question before the timer runs out! Clear all monsters to advance.</p>
+      <div id="gradePick">
+        <p style="margin-bottom:8px;">Pick your grade (this sets the math difficulty):</p>
+        <div id="gradeButtons"></div>
+      </div>
+      <div id="speedPick">
+        <p style="margin-bottom:8px;">Pick the running speed:</p>
+        <div id="speedButtons"></div>
+      </div>
+      <button class="btn big" id="startBtn">Play</button>
+      <p id="resumeNote" style="margin-top:12px; font-size:15px;"></p>
+    </div>
+
+    <!-- Battle -->
+    <div id="battle" class="overlay">
+      <div class="monster-face" id="monsterFace">👾</div>
+      <h2>Monster Battle!</h2>
+      <div id="timerWrap">
+        <div id="timerText">Time: <span id="timerSecs">15</span>s</div>
+        <div id="timerBar"><div id="timerFill"></div></div>
+      </div>
+      <div class="question" id="question">2 + 2 = ?</div>
+      <div class="answers" id="answers"></div>
+      <div class="battle-tools">
+        <button class="btn small" id="mathHelpBtn">💡 Math Help</button>
+        <button class="btn small" id="crayonBtn">🖍️ Crayon</button>
+        <button class="btn small" id="videoBtn">📺 Watch Video</button>
+      </div>
+      <div class="hint" id="hint"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+
+    <!-- Level clear -->
+    <div id="levelClear" class="overlay">
+      <h2>Level Cleared! 🎉</h2>
+      <p id="levelClearText">Great job! Ready for the next level?</p>
+      <button class="btn big" id="nextLevelBtn">Next Level</button>
+    </div>
+
+    <!-- Game over -->
+    <div id="gameOver" class="overlay">
+      <h2>Game Over</h2>
+      <p id="gameOverText">You ran out of lives. Want to try again?</p>
+      <button class="btn big" id="retryBtn">Play Again</button>
+    </div>
+
+    <!-- Crayon scratchpad -->
+    <div id="scratch" class="overlay">
+      <h2>🖍️ Scratchpad</h2>
+      <p id="scratchQuestion" style="margin-bottom:8px;">Work it out here!</p>
+      <canvas id="scratchCanvas" width="440" height="240"></canvas>
+      <div id="crayonColors"></div>
+      <div class="row" style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn" id="scratchClearBtn">Clear</button>
+        <button class="btn big" id="scratchDoneBtn">Done</button>
+      </div>
+    </div>
+
+    <!-- Help -->
+    <div id="help" class="overlay">
+      <h2>❓ How to Play</h2>
+      <div style="text-align:left; max-width:520px; font-size:16px; line-height:1.5;">
+        <p><b>Goal:</b> Run across the level, jump over spikes, and beat every monster to clear the level.</p>
+        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Landing on a rock also earns a bonus life ❤️ (once per rock). Watch out for flying birds, stay on the ground to pass under them! And jump over the holes in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
+        <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out. Right answer beats the monster (and answering fast gives bonus points). A wrong answer or running out of time costs a life.</p>
+        <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life. ❤️</p>
+        <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
+        <p style="margin-top:10px;"><b>Pause:</b> Press the ⏸ Pause button or the <b>P</b> / <b>Esc</b> key anytime.</p>
+        <p style="margin-top:10px;"><b>Saving:</b> Your level, grade, and best score are saved to your account automatically.</p>
+      </div>
+      <button class="btn big" id="helpCloseBtn" style="margin-top:16px;">Got it!</button>
+    </div>
+
+    <!-- Pause -->
+    <div id="pause" class="overlay">
+      <h2>⏸ Paused</h2>
+      <p>Take a break! Your progress is safe. Press Resume (or the P key) to keep playing.</p>
+      <button class="btn big" id="resumeBtn">Resume</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="overlay">
+      <h2>🏆 Leaderboard</h2>
+      <p id="lbStatus" style="margin-bottom:8px; font-size:15px;"></p>
+      <table id="lbTable">
+        <thead><tr><th>#</th><th>Player</th><th>Best Score</th><th>Level</th></tr></thead>
+        <tbody id="lbBody"></tbody>
+      </table>
+      <button class="btn big" id="lbCloseBtn" style="margin-top:16px;">Close</button>
+    </div>
+  </div>
+
+  <div id="controls-hint">Controls: press <b>Space</b> or <b>↑</b> to jump &nbsp;•&nbsp; on touch, <b>tap the game</b> to jump</div>
+
+<!-- ===================================================================
+     Firebase Firestore (global leaderboard). Loaded as an ES module from
+     the CDN so it works in a plain HTML file with no build step. It
+     exposes window.MathQuestCloud for the main game script to call.
+     If the network/Firebase is unavailable, the game falls back to the
+     local leaderboard automatically.
+==================================================================== -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    signOut, onAuthStateChanged, updateProfile
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, collection, getDocs,
+    query, orderBy, limit, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDRNgB_mcdVfc-hiCLXisMmut8wvxdoeJg",
+    authDomain: "mathquest-ca395.firebaseapp.com",
+    projectId: "mathquest-ca395",
+    storageBucket: "mathquest-ca395.firebasestorage.app",
+    messagingSenderId: "1044106391627",
+    appId: "1:1044106391627:web:cd87243524ae7fa78a5dce",
+    measurementId: "G-ZXZTET81FR"
+  };
+
+  let auth = null, db = null;
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) {
+    console.warn("Firebase init failed; the game will run in local-only mode.", e);
+  }
+
+  const USERS = "users"; // one doc per player, keyed by Firebase UID
+
+  // Turn Firebase's error codes into kid-friendly messages.
+  function friendlyError(e) {
+    const code = (e && e.code) || "";
+    if (code.includes("email-already-in-use")) return "That email already has an account. Try logging in.";
+    if (code.includes("invalid-email")) return "That doesn't look like a valid email.";
+    if (code.includes("weak-password")) return "Password should be at least 6 characters.";
+    if (code.includes("user-not-found") || code.includes("invalid-credential")) return "Wrong email or password.";
+    if (code.includes("wrong-password")) return "Wrong password. Try again.";
+    if (code.includes("network")) return "Can't reach the internet. Check your connection.";
+    return "Something went wrong. Please try again.";
+  }
+
+  window.MathQuestCloud = {
+    available: !!(auth && db),
+
+    // ---- Auth ----
+    // Register a callback that fires whenever the logged-in user changes.
+    onAuthChange(cb) {
+      if (!auth) { cb(null); return; }
+      onAuthStateChanged(auth, (user) => {
+        cb(user ? { uid: user.uid, name: user.displayName || (user.email || "").split("@")[0], email: user.email } : null);
+      });
+    },
+
+    async signup({ email, password, name }) {
+      if (!auth) return { ok: false, error: "Cloud login is unavailable." };
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        if (name) await updateProfile(cred.user, { displayName: name.slice(0, 16) });
+        // create the player's profile document keyed by their unique UID
+        await setDoc(doc(db, USERS, cred.user.uid), {
+          uid: cred.user.uid,
+          name: (name || email.split("@")[0]).slice(0, 16),
+          best: 0, level: 1, grade: 1, speed: 2,
+          created: serverTimestamp(), updated: serverTimestamp(),
+        });
+        return { ok: true };
+      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+    },
+
+    async login({ email, password }) {
+      if (!auth) return { ok: false, error: "Cloud login is unavailable." };
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        return { ok: true };
+      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+    },
+
+    async logout() {
+      if (auth) { try { await signOut(auth); } catch (e) {} }
+    },
+
+    // ---- Per-user profile (Firestore users/{uid}) ----
+    async loadProfile(uid) {
+      if (!db || !uid) return null;
+      try {
+        const snap = await getDoc(doc(db, USERS, uid));
+        return snap.exists() ? snap.data() : null;
+      } catch (e) { console.warn("loadProfile failed", e); return null; }
+    },
+
+    // Save the player's progress. Only writes their OWN doc (uid must match auth).
+    async saveProfile(uid, { name, best, level, grade, speed }) {
+      if (!db || !uid) return false;
+      try {
+        await setDoc(doc(db, USERS, uid), {
+          uid,
+          name: String(name || "").slice(0, 16),
+          best: Number(best) || 0,
+          level: Number(level) || 1,
+          grade: (grade === undefined || grade === null) ? 1 : Number(grade),
+          speed: Number(speed) || 2,
+          updated: serverTimestamp(),
+        }, { merge: true });
+        return true;
+      } catch (e) { console.warn("saveProfile failed", e); return false; }
+    },
+
+    // ---- Leaderboard: one entry per player, top by best score ----
+    async topScores(max = 10) {
+      if (!db) return null; // null => cloud unavailable, caller shows local
+      try {
+        const q = query(collection(db, USERS), orderBy("best", "desc"), limit(max));
+        const snap = await getDocs(q);
+        const rows = [];
+        snap.forEach(d => rows.push(d.data()));
+        return rows;
+      } catch (e) { console.warn("topScores failed", e); return null; }
+    },
+  };
+</script>
+
+<script>
+(function () {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H * 0.6; // top of the grass
+
+  // ---- HUD / UI elements ----
+  const el = {
+    topbar: document.getElementById("topbar"),
+    hud: document.getElementById("hud"),
+    whoName: document.getElementById("whoName"),
+    gradeDisplay: document.getElementById("gradeDisplay"),
+    gradeButtons: document.getElementById("gradeButtons"),
+    speedDisplay: document.getElementById("speedDisplay"),
+    speedButtons: document.getElementById("speedButtons"),
+    level: document.getElementById("level"),
+    lives: document.getElementById("lives"),
+    score: document.getElementById("score"),
+    best: document.getElementById("best"),
+    monstersLeft: document.getElementById("monstersLeft"),
+    auth: document.getElementById("auth"),
+    authName: document.getElementById("authName"),
+    authEmail: document.getElementById("authEmail"),
+    authPass: document.getElementById("authPass"),
+    authMsg: document.getElementById("authMsg"),
+    start: document.getElementById("start"),
+    startName: document.getElementById("startName"),
+    resumeNote: document.getElementById("resumeNote"),
+    battle: document.getElementById("battle"),
+    levelClear: document.getElementById("levelClear"),
+    gameOver: document.getElementById("gameOver"),
+    pause: document.getElementById("pause"),
+    help: document.getElementById("help"),
+    leaderboard: document.getElementById("leaderboard"),
+    lbBody: document.getElementById("lbBody"),
+    lbStatus: document.getElementById("lbStatus"),
+    question: document.getElementById("question"),
+    answers: document.getElementById("answers"),
+    hint: document.getElementById("hint"),
+    feedback: document.getElementById("feedback"),
+    scratch: document.getElementById("scratch"),
+    scratchQuestion: document.getElementById("scratchQuestion"),
+    scratchCanvas: document.getElementById("scratchCanvas"),
+    crayonColors: document.getElementById("crayonColors"),
+    monsterFace: document.getElementById("monsterFace"),
+    levelClearText: document.getElementById("levelClearText"),
+    gameOverText: document.getElementById("gameOverText"),
+    timerSecs: document.getElementById("timerSecs"),
+    timerFill: document.getElementById("timerFill"),
+  };
+
+  const MONSTER_EMOJIS = ["👾", "👹", "🐲", "👻", "🤖", "🦖"];
+
+  // =====================================================================
+  //  ACCOUNTS
+  //  Real accounts are handled by Firebase Auth (email/password). Each
+  //  player has a permanent unique UID. Their profile (best/level/grade/
+  //  speed) lives in Firestore at users/{uid}. We also keep a small local
+  //  cache per-UID so progress survives a brief offline moment.
+  // =====================================================================
+  const CACHE_KEY = "mathQuestCache"; // { "<uid>": {name,best,level,grade,speed} }
+  let currentUid = null;
+  let currentUser = null; // display name
+
+  function loadCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function saveCache(map) { localStorage.setItem(CACHE_KEY, JSON.stringify(map)); }
+  function cacheProfile(uid, profile) {
+    const map = loadCache();
+    map[uid] = Object.assign({}, map[uid], profile);
+    saveCache(map);
+  }
+  function getCached(uid) { return loadCache()[uid] || null; }
+
+  // ---- Game state ----
+  let state = "auth"; // auth | start | playing | battle | levelClear | gameOver | leaderboard
+  let level = 1;
+  let lives = 3;
+  let score = 0;
+  let bestScore = 0;
+  // Grade codes (ordered easiest -> hardest). Early learners are negative/zero
+  // so Grades 1-5 keep their familiar numbers and old saves still work.
+  //  -2 = Pre-K, -1 = TK, 0 = Kindergarten, 1..5 = Grade 1..5
+  const GRADE_ORDER = [-2, -1, 0, 1, 2, 3, 4, 5];
+  const GRADE_SHORT = { "-2": "Pre-K", "-1": "TK", "0": "K", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5" };
+  let grade = 1; // chosen per user, drives math difficulty
+
+  const player = { x: 80, y: GROUND_Y, w: 40, h: 46, vy: 0, onGround: true };
+  const GRAVITY = 0.8;
+  const JUMP_V = -14;
+  // Run speed is adjustable: 1 = Slow, 2 = Normal, 3 = Fast (saved per user)
+  const SPEED_VALUES = { 1: 2.2, 2: 3.2, 3: 4.4 };
+  const SPEED_NAMES = { 1: "Slow", 2: "Normal", 3: "Fast" };
+  let speedSetting = 2;
+  let scrollSpeed = SPEED_VALUES[speedSetting];
+
+  let obstacles = [];
+  let holes = []; // gaps in the ground: { x, w, awardedFall }
+  let monsters = [];
+  let worldOffset = 0;
+  let levelLength = 0;
+  let currentMonster = null;
+
+  // ---- Timer state (per equation) ----
+  let questionAnswered = false;
+  let timerId = null;
+  let timeLeft = 0;
+  const QUESTION_SECONDS = 15;
+  let currentQuestion = null; // the active question object {a,b,op,answer,...}
+  let hintUsed = false;       // whether Math Help was used this question
+
+  // ---- Pause state ----
+  let paused = false;
+  let prePauseState = null; // the state we were in before pausing
+
+  // =====================================================================
+  //  SOUND EFFECTS (Web Audio API - no files needed)
+  //  Browsers block audio until the first user interaction, so the
+  //  context is created lazily and resumed on demand.
+  // =====================================================================
+  let audioCtx = null;
+  function getAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  // Play a single tone. type: sine/square/triangle/sawtooth
+  function tone(freq, duration, type = "square", volume = 0.15, startAt = 0) {
+    const ac = getAudio();
+    if (!ac) return;
+    const t = ac.currentTime + startAt;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + duration);
+  }
+  // Play a sequence of [freq, duration] notes back to back.
+  function melody(notes, type = "square", volume = 0.15) {
+    let at = 0;
+    for (const [f, d] of notes) { tone(f, d, type, volume, at); at += d; }
+  }
+
+  const sfx = {
+    jump:      () => tone(520, 0.12, "square", 0.12),
+    correct:   () => melody([[660, 0.10], [880, 0.14]], "square", 0.14),
+    wrong:     () => melody([[220, 0.16], [160, 0.22]], "sawtooth", 0.14),
+    timeup:    () => melody([[300, 0.12], [200, 0.12], [120, 0.2]], "sawtooth", 0.14),
+    hit:       () => tone(140, 0.22, "sawtooth", 0.16),
+    levelClear:() => melody([[523,0.12],[659,0.12],[784,0.12],[1047,0.22]], "triangle", 0.16),
+    gameOver:  () => melody([[392,0.2],[311,0.2],[262,0.35]], "triangle", 0.16),
+    extraLife: () => melody([[784,0.1],[988,0.1],[1319,0.2]], "sine", 0.16),
+  };
+
+  // =====================================================================
+  //  AUTH FLOW
+  // =====================================================================
+  function showAuth() {
+    state = "auth";
+    el.topbar.style.display = "none";
+    el.hud.style.display = "none";
+    hideAllOverlays();
+    el.auth.classList.add("show");
+  }
+
+  const cloud = () => window.MathQuestCloud;
+
+  async function doSignup() {
+    const name = el.authName.value.trim();
+    const email = el.authEmail.value.trim();
+    const pass = el.authPass.value;
+    if (!cloud() || !cloud().available) { el.authMsg.textContent = "Online sign-up needs an internet connection."; return; }
+    if (name.length < 2) { el.authMsg.textContent = "Please enter a display name (2+ characters)."; return; }
+    if (!email.includes("@")) { el.authMsg.textContent = "Please enter a valid email."; return; }
+    if (pass.length < 6) { el.authMsg.textContent = "Password needs at least 6 characters."; return; }
+
+    el.authMsg.textContent = "Creating your account…";
+    const res = await cloud().signup({ email, password: pass, name });
+    if (!res.ok) { el.authMsg.textContent = res.error; return; }
+    el.authMsg.textContent = "";
+    // onAuthChange will fire and complete the sign-in via enterGame().
+  }
+
+  async function doLogin() {
+    const email = el.authEmail.value.trim();
+    const pass = el.authPass.value;
+    if (!cloud() || !cloud().available) { el.authMsg.textContent = "Online login needs an internet connection."; return; }
+    if (!email.includes("@")) { el.authMsg.textContent = "Please enter your email."; return; }
+    if (!pass) { el.authMsg.textContent = "Please enter your password."; return; }
+
+    el.authMsg.textContent = "Logging in…";
+    const res = await cloud().login({ email, password: pass });
+    if (!res.ok) { el.authMsg.textContent = res.error; return; }
+    el.authMsg.textContent = "";
+    // onAuthChange will fire and complete the sign-in via enterGame().
+  }
+
+  // Called by the auth-state listener once we have a signed-in user.
+  async function enterGame(user) {
+    currentUid = user.uid;
+    currentUser = user.name || "Player";
+
+    // Load profile from Firestore, falling back to the local cache.
+    let profile = await (cloud() ? cloud().loadProfile(user.uid) : null);
+    if (!profile) profile = getCached(user.uid);
+    profile = profile || { name: currentUser, best: 0, level: 1, grade: 1, speed: 2 };
+
+    if (profile.name) currentUser = profile.name;
+    level = profile.level || 1;
+    bestScore = profile.best || 0;
+    grade = (profile.grade === undefined || profile.grade === null) ? 1 : profile.grade;
+    speedSetting = profile.speed || 2;
+    scrollSpeed = SPEED_VALUES[speedSetting];
+    score = 0;
+
+    cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting });
+
+    el.authName.value = ""; el.authEmail.value = ""; el.authPass.value = "";
+    el.whoName.textContent = currentUser;
+    el.startName.textContent = currentUser;
+    el.topbar.style.display = "flex";
+    el.hud.style.display = "flex";
+    renderGradeButtons();
+    renderSpeedButtons();
+    updateHUD();
+
+    el.resumeNote.textContent = level > 1
+      ? `Welcome back! You'll continue from level ${level}.`
+      : `Let's start your adventure at level 1.`;
+
+    hideAllOverlays();
+    el.start.classList.add("show");
+    state = "start";
+  }
+
+  async function logout() {
+    await persistProgress();
+    stopTimer();
+    paused = false;
+    prePauseState = null;
+    scratchOpen = false;
+    currentUid = null;
+    currentUser = null;
+    if (cloud()) await cloud().logout();
+    showAuth();
+  }
+
+  // =====================================================================
+  //  SAVE / LOAD PROGRESS  (Firestore users/{uid}, plus local cache)
+  // =====================================================================
+  function persistProgress() {
+    if (!currentUid) return Promise.resolve();
+    bestScore = Math.max(bestScore, score);
+    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting };
+    cacheProfile(currentUid, profile); // instant local cache
+    if (cloud() && cloud().available) {
+      return cloud().saveProfile(currentUid, profile); // writes to Firestore
+    }
+    return Promise.resolve();
+  }
+
+  // Kept for call sites; saving the profile also updates the global board,
+  // since the leaderboard reads from users/{uid}.
+  function submitBestToCloud() { persistProgress(); }
+
+  // ---- Grade selection ----
+  const GRADE_LABELS = {
+    "-2": "Pre-K — count & add to 3",
+    "-1": "TK — count & add to 5",
+    "0":  "Kindergarten — add & subtract to 5",
+    "1": "Grade 1 — add & subtract to 10",
+    "2": "Grade 2 — add & subtract to 20",
+    "3": "Grade 3 — easy times tables (to 5) + add/sub to 30",
+    "4": "Grade 4 — multiply & divide",
+    "5": "Grade 5 — all four, larger numbers",
+  };
+  const GRADE_BTN_TEXT = {
+    "-2": "Pre-K", "-1": "TK", "0": "Kinder",
+    "1": "Grade 1", "2": "Grade 2", "3": "Grade 3", "4": "Grade 4", "5": "Grade 5",
+  };
+  function renderGradeButtons() {
+    el.gradeButtons.innerHTML = "";
+    for (const g of GRADE_ORDER) {
+      const b = document.createElement("button");
+      b.className = "grade-btn" + (g === grade ? " selected" : "");
+      b.textContent = GRADE_BTN_TEXT[g];
+      b.title = GRADE_LABELS[g];
+      b.onclick = () => {
+        grade = g;
+        persistProgress();
+        renderGradeButtons();
+        updateHUD();
+      };
+      el.gradeButtons.appendChild(b);
+    }
+  }
+
+  // ---- Speed selection ----
+  function renderSpeedButtons() {
+    el.speedButtons.innerHTML = "";
+    for (let s = 1; s <= 3; s++) {
+      const b = document.createElement("button");
+      b.className = "grade-btn" + (s === speedSetting ? " selected" : "");
+      b.textContent = SPEED_NAMES[s];
+      b.onclick = () => {
+        speedSetting = s;
+        scrollSpeed = SPEED_VALUES[s]; // applies immediately, even mid-run
+        persistProgress();
+        renderSpeedButtons();
+        updateHUD();
+      };
+      el.speedButtons.appendChild(b);
+    }
+  }
+
+  // ---- Level building ----
+  // Obstacle shape: { type, x, y, w, h }
+  //   type "spike": ground triangle  -> jump over it
+  //   type "rock":  ground block      -> jump over it
+  //   type "bird":  flying, up high   -> stay on the ground to pass under
+  //   type "cactus": tall skinny plant -> jump over it
+  // x/y/w/h describe the collision box; y is the TOP of the box.
+  function makeObstacle(type, x) {
+    if (type === "bird") {
+      const h = 26;
+      // hovers at a height the player only hits while jumping
+      const y = GROUND_Y - player.h - 30 - Math.floor(Math.random() * 25);
+      return { type, x, y, w: 34, h };
+    }
+    if (type === "rock") {
+      const h = 34 + Math.floor(Math.random() * 18);
+      return { type, x, y: GROUND_Y - h, w: 40, h };
+    }
+    if (type === "cactus") {
+      const h = 28 + Math.floor(Math.random() * 14);
+      return { type, x, y: GROUND_Y - h, w: 22, h };
+    }
+    // spike (default)
+    const h = 28 + Math.floor(Math.random() * 20);
+    return { type: "spike", x, y: GROUND_Y - h, w: 26, h };
+  }
+
+  function buildLevel(lv) {
+    obstacles = [];
+    holes = [];
+    monsters = [];
+    worldOffset = 0;
+    player.y = GROUND_Y; player.vy = 0; player.onGround = true;
+
+    // Weighted pool: rocks are repeated so they appear more often.
+    // birds appear from level 2 on.
+    const groundTypes = ["rock", "rock", "rock", "spike", "cactus"];
+    const types = lv >= 2 ? groundTypes.concat(["bird"]) : groundTypes;
+
+    // fewer monsters, and the count grows slowly as levels rise
+    const monsterCount = 1 + Math.ceil(lv / 2);
+    let x = 500;
+    for (let i = 0; i < monsterCount; i++) {
+      // a gentle number of obstacles per stretch that grows slowly
+      const count = 1 + Math.floor(Math.random() * 2) + Math.floor(lv / 3);
+      for (let g = 0; g < count; g++) {
+        const type = types[Math.floor(Math.random() * types.length)];
+        obstacles.push(makeObstacle(type, x));
+        // roomy spacing so there's plenty of time to react
+        x += 240 + Math.floor(Math.random() * 120);
+
+        // From level 2, sometimes add a hole in the ground to jump over.
+        // Width is kept jumpable, and we leave room before the next thing.
+        if (lv >= 2 && Math.random() < 0.35) {
+          const holeW = 22 + Math.floor(Math.random() * 14); // 22-36 wide (shorter)
+          holes.push({ x: x, w: holeW, awardedFall: false });
+          x += holeW + 200; // clear landing space after the hole
+        }
+      }
+      monsters.push({ x: x, emoji: MONSTER_EMOJIS[(lv + i) % MONSTER_EMOJIS.length], alive: true });
+      x += 320;
+    }
+    levelLength = x + 200;
+    updateHUD();
+  }
+
+  function updateHUD() {
+    el.gradeDisplay.textContent = GRADE_SHORT[grade] || grade;
+    el.speedDisplay.textContent = SPEED_NAMES[speedSetting];
+    el.level.textContent = level;
+    el.lives.textContent = lives;
+    el.score.textContent = score;
+    el.best.textContent = Math.max(bestScore, score);
+    el.monstersLeft.textContent = monsters.filter(m => m.alive).length;
+  }
+
+  // ---- Math questions ----
+  // Difficulty is driven by the player's GRADE (1..5). The current game
+  // level (lv) adds a small bump so later levels feel a bit harder, but
+  // the grade sets the overall band and which operations can appear.
+  function makeQuestion(lv) {
+    let a, b, op, answer;
+
+    // ---- Early learners (Pre-K, TK, Kindergarten) ----
+    // Very small numbers, no level bump, and only 3 answer choices.
+    if (grade <= 0) {
+      const maxNum = grade === -2 ? 3 : grade === -1 ? 5 : 5; // Pre-K:3, TK/K:5
+      const useSub = grade === 0 && Math.random() < 0.4;      // K adds subtraction
+      let ea, eb, eOp, eAns;
+      if (useSub) {
+        ea = rand(1, maxNum); eb = rand(0, ea);
+        eOp = "−"; eAns = ea - eb;
+      } else {
+        // keep the sum within maxNum so answers stay tiny
+        ea = rand(0, maxNum); eb = rand(0, Math.max(0, maxNum - ea));
+        eOp = "+"; eAns = ea + eb;
+      }
+      // 3 unique small options including the answer
+      const opt = new Set([eAns]);
+      let g2 = 0;
+      while (opt.size < 3 && g2++ < 50) {
+        const w = eAns + rand(-2, 2);
+        if (w >= 0 && w !== eAns) opt.add(w);
+      }
+      let f = eAns + 1;
+      while (opt.size < 3) { if (f !== eAns && f >= 0) opt.add(f); f++; }
+      return { text: `${ea} ${eOp} ${eb} = ?`, answer: eAns, opts: shuffle([...opt]), a: ea, b: eb, op: eOp === "−" ? "-" : "+" };
+    }
+
+    // +1 difficulty every 2 levels. Grade 3 climbs more gently (every 3 levels).
+    const bump = grade === 3
+      ? Math.floor((lv - 1) / 3)
+      : Math.floor((lv - 1) / 2);
+
+    // Which operations are allowed for this grade.
+    //  + : addition, - : subtraction, * : multiplication, / : division
+    let allowedOps;
+    if (grade <= 1)      allowedOps = ["+", "-"];
+    else if (grade === 2) allowedOps = ["+", "-"];
+    else if (grade === 3) allowedOps = ["+", "-", "*"];
+    else if (grade === 4) allowedOps = ["+", "-", "*", "/"];
+    else                  allowedOps = ["+", "-", "*", "/"];
+
+    op = allowedOps[Math.floor(Math.random() * allowedOps.length)];
+
+    // Number range for add/sub grows with grade.
+    let range;
+    if (grade <= 1)      range = 10;
+    else if (grade === 2) range = 20;
+    else if (grade === 3) range = 30;
+    else if (grade === 4) range = 100;
+    else                  range = 200;
+    range += bump * 5;
+
+    if (op === "+") {
+      a = rand(1, range); b = rand(1, range);
+      answer = a + b;
+    } else if (op === "-") {
+      a = rand(1, range); b = rand(1, a); // no negative answers
+      answer = a - b;
+    } else if (op === "*") {
+      // multiplication table size grows with grade
+      const maxFactor = (grade === 3 ? 5 : grade === 4 ? 12 : 15) + bump;
+      a = rand(2, maxFactor); b = rand(2, maxFactor);
+      answer = a * b;
+    } else { // division with a whole-number answer
+      const maxDivisor = (grade === 4 ? 10 : 12) + bump;
+      b = rand(2, maxDivisor);
+      answer = rand(2, maxDivisor);
+      a = b * answer; // ensures a / b is exact
+    }
+
+    const opSymbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+
+    // Build 4 unique, non-negative options including the answer.
+    const spread = Math.max(5, Math.round(answer * 0.3));
+    const options = new Set([answer]);
+    let guard = 0;
+    while (options.size < 4 && guard++ < 100) {
+      const delta = rand(-spread, spread);
+      const wrong = answer + delta;
+      if (wrong >= 0 && wrong !== answer) options.add(wrong);
+    }
+    // Fallback in case the loop couldn't find enough (very small answers)
+    let filler = answer + 1;
+    while (options.size < 4) { if (filler !== answer && filler >= 0) options.add(filler); filler++; }
+
+    const opts = shuffle([...options]);
+    return { text: `${a} ${opSymbols[op]} ${b} = ?`, answer, opts, a, b, op };
+  }
+
+  function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  // =====================================================================
+  //  BATTLE + TIMER
+  // =====================================================================
+  function startBattle(monster) {
+    state = "battle";
+    currentMonster = monster;
+    el.monsterFace.textContent = monster.emoji;
+    el.feedback.textContent = "";
+    loadQuestion();
+    el.battle.classList.add("show");
+  }
+
+  function loadQuestion() {
+    const q = makeQuestion(level);
+    currentQuestion = q;
+    questionAnswered = false;
+    hintUsed = false;
+    el.question.textContent = q.text;
+    el.hint.textContent = "";
+    el.hint.classList.remove("show");
+    clearScratch(); // fresh pad for each new question
+    el.answers.innerHTML = "";
+    q.opts.forEach(opt => {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.textContent = opt;
+      b.onclick = () => answerQuestion(opt, q.answer);
+      el.answers.appendChild(b);
+    });
+    startTimer();
+  }
+
+  function startTimer() {
+    timeLeft = QUESTION_SECONDS; // fresh full time for a new question
+    runTimerInterval();
+  }
+
+  function resumeTimer() {
+    // continue counting down from the frozen timeLeft (used after a pause)
+    runTimerInterval();
+  }
+
+  function runTimerInterval() {
+    stopTimer();
+    renderTimer();
+    timerId = setInterval(() => {
+      timeLeft -= 0.1;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        renderTimer();
+        stopTimer();
+        onTimeUp();
+      } else {
+        renderTimer();
+      }
+    }, 100);
+  }
+
+  function stopTimer() {
+    if (timerId) { clearInterval(timerId); timerId = null; }
+  }
+
+  function renderTimer() {
+    el.timerSecs.textContent = Math.ceil(timeLeft);
+    const pct = Math.max(0, (timeLeft / QUESTION_SECONDS) * 100);
+    el.timerFill.style.width = pct + "%";
+    el.timerFill.style.background = pct > 50 ? "#51cf66" : (pct > 20 ? "#ffd43b" : "#ff6b6b");
+  }
+
+  function onTimeUp() {
+    if (questionAnswered) return;
+    questionAnswered = true;
+    lives--;
+    sfx.timeup();
+    el.feedback.textContent = "Time's up! The monster hits you. ⏰";
+    updateHUD();
+    persistProgress();
+    if (lives <= 0) {
+      setTimeout(() => { el.battle.classList.remove("show"); gameOver(); }, 800);
+    } else {
+      setTimeout(loadQuestion, 900);
+    }
+  }
+
+  function answerQuestion(chosen, correct) {
+    if (questionAnswered) return;
+    questionAnswered = true;
+    stopTimer();
+
+    if (chosen === correct) {
+      // bonus points for answering quickly (no speed bonus if a hint was used)
+      const speedBonus = hintUsed ? 0 : Math.round(timeLeft);
+      score += 10 + speedBonus;
+      sfx.correct();
+      el.feedback.textContent = hintUsed
+        ? `Correct! +10 (used a hint) ✅`
+        : `Correct! +${10 + speedBonus} (speed bonus ${speedBonus}) ✅`;
+      currentMonster.alive = false;
+      persistProgress();
+      updateHUD();
+      setTimeout(endBattle, 800);
+    } else {
+      lives--;
+      sfx.wrong();
+      el.feedback.textContent = "Oops! The monster hits you. ❌";
+      persistProgress();
+      updateHUD();
+      if (lives <= 0) {
+        setTimeout(() => { el.battle.classList.remove("show"); gameOver(); }, 800);
+      } else {
+        setTimeout(loadQuestion, 900);
+      }
+    }
+  }
+
+  function endBattle() {
+    el.battle.classList.remove("show");
+    currentMonster = null;
+    if (monsters.every(m => !m.alive)) {
+      levelCleared();
+    } else {
+      state = "playing";
+    }
+  }
+
+  function levelCleared() {
+    state = "levelClear";
+    level++; // advance and save the new level so it persists
+    lives++; // reward: gain a life for clearing the level
+    updateHUD();
+    persistProgress();
+    submitBestToCloud(); // update global leaderboard
+    sfx.levelClear();
+    setTimeout(sfx.extraLife, 500); // little "1-up" jingle after the fanfare
+    el.levelClearText.textContent = `Awesome! You beat every monster and earned an extra life! ❤️ Score: ${score}. Next up: level ${level}.`;
+    el.levelClear.classList.add("show");
+  }
+
+  function gameOver() {
+    stopTimer();
+    state = "gameOver";
+    sfx.gameOver();
+    persistProgress();
+    submitBestToCloud(); // update global leaderboard
+    el.gameOverText.textContent = `You ran out of lives. Final score: ${score}. Best: ${Math.max(bestScore, score)}. Your level (${level}) is saved.`;
+    el.gameOver.classList.add("show");
+  }
+
+  // =====================================================================
+  //  LEADERBOARD
+  // =====================================================================
+  function localLeaderboardRows() {
+    const map = loadCache();
+    const rows = Object.keys(map).map(uid => ({
+      name: map[uid].name || "Player",
+      best: map[uid].best || 0,
+      level: map[uid].level || 1,
+    }));
+    rows.sort((a, b) => b.best - a.best || b.level - a.level);
+    return rows;
+  }
+
+  function renderLeaderboardRows(rows) {
+    el.lbBody.innerHTML = "";
+    if (!rows || rows.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="4">No players yet. Be the first!</td>`;
+      el.lbBody.appendChild(tr);
+      return;
+    }
+    rows.slice(0, 10).forEach((r, i) => {
+      const tr = document.createElement("tr");
+      if (r.name === currentUser) tr.className = "you";
+      tr.innerHTML = `<td>${i + 1}</td><td>${escapeHtml(String(r.name))}</td><td>${r.best || 0}</td><td>${r.level || 1}</td>`;
+      el.lbBody.appendChild(tr);
+    });
+  }
+
+  async function showLeaderboard() {
+    el.leaderboard.classList.add("show");
+    const cloud = window.MathQuestCloud;
+
+    // Push our latest best up first so the global board is fresh.
+    submitBestToCloud();
+
+    if (cloud && cloud.available) {
+      el.lbStatus.textContent = "🌍 Loading global scores…";
+      renderLeaderboardRows([]);
+      const rows = await cloud.topScores(10);
+      if (rows) {
+        el.lbStatus.textContent = "🌍 Global leaderboard (top players worldwide)";
+        renderLeaderboardRows(rows);
+        return;
+      }
+      // cloud failed at read time -> fall back to local
+      el.lbStatus.textContent = "⚠️ Couldn't reach the internet. Showing scores on this device.";
+      renderLeaderboardRows(localLeaderboardRows());
+      return;
+    }
+
+    // No cloud configured/available
+    el.lbStatus.textContent = "📴 Offline. Showing scores saved on this device.";
+    renderLeaderboardRows(localLeaderboardRows());
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+
+  // =====================================================================
+  //  MATH HELP (hint) + VIDEO
+  //  Builds a friendly, step-by-step explanation for the CURRENT question.
+  //  Using a hint removes the speed bonus for that question but never
+  //  costs a life. The video button opens a kid-friendly search for the
+  //  right kind of lesson so the link is always valid.
+  // =====================================================================
+  const OP_WORD = { "+": "addition", "-": "subtraction", "*": "multiplication", "/": "division" };
+
+  function buildHint(q) {
+    const { a, b, op, answer } = q;
+    if (op === "+") {
+      return `Addition means putting groups together.\n` +
+             `Start at ${a}, then count up ${b} more.\n` +
+             `${a} + ${b} = ${answer}.`;
+    }
+    if (op === "-") {
+      return `Subtraction means taking away.\n` +
+             `Start at ${a}, then count back ${b}.\n` +
+             `${a} − ${b} = ${answer}.`;
+    }
+    if (op === "*") {
+      return `Multiplication is repeated addition.\n` +
+             `${a} × ${b} means adding ${a} together ${b} times:\n` +
+             `${Array(Math.min(b, 6)).fill(a).join(" + ")}${b > 6 ? " + …" : ""} = ${answer}.`;
+    }
+    // division
+    return `Division means sharing into equal groups.\n` +
+           `${a} ÷ ${b} asks: how many groups of ${b} fit in ${a}?\n` +
+           `Because ${b} × ${answer} = ${a}, the answer is ${answer}.`;
+  }
+
+  function showMathHelp() {
+    if (state !== "battle" || !currentQuestion || questionAnswered) return;
+    hintUsed = true; // no speed bonus once help is opened
+    el.hint.textContent = buildHint(currentQuestion);
+    el.hint.style.whiteSpace = "pre-line"; // keep the line breaks from \n
+    el.hint.classList.add("show");
+  }
+
+  function openVideo() {
+    if (!currentQuestion) return;
+    const word = OP_WORD[currentQuestion.op] || "math";
+    const query = encodeURIComponent(`how to do ${word} for kids`);
+    // Opens a YouTube search in a new tab (always a valid link).
+    window.open(`https://www.youtube.com/results?search_query=${query}`, "_blank", "noopener");
+  }
+
+  // =====================================================================
+  //  CRAYON SCRATCHPAD
+  //  A little drawing pad so kids can work out the problem. Opening it
+  //  freezes the battle timer (like a pause) so drawing doesn't cost time.
+  //  Using it does NOT remove points, it's just for working things out.
+  // =====================================================================
+  const CRAYON_COLORS = ["#e53935", "#1e88e5", "#43a047", "#8e24aa", "#fb8c00", "#3e2723"];
+  let crayonColor = CRAYON_COLORS[0];
+  let sctx = null;      // scratch canvas 2D context
+  let drawing = false;
+  let scratchOpen = false;
+
+  function initScratch() {
+    sctx = el.scratchCanvas.getContext("2d");
+    sctx.lineCap = "round";
+    sctx.lineJoin = "round";
+
+    // color swatches
+    el.crayonColors.innerHTML = "";
+    CRAYON_COLORS.forEach((c, i) => {
+      const s = document.createElement("div");
+      s.className = "crayon-swatch" + (i === 0 ? " selected" : "");
+      s.style.background = c;
+      s.onclick = () => {
+        crayonColor = c;
+        [...el.crayonColors.children].forEach(ch => ch.classList.remove("selected"));
+        s.classList.add("selected");
+      };
+      el.crayonColors.appendChild(s);
+    });
+
+    // pointer events cover mouse + touch
+    const pos = (e) => {
+      const r = el.scratchCanvas.getBoundingClientRect();
+      const sx = el.scratchCanvas.width / r.width;
+      const sy = el.scratchCanvas.height / r.height;
+      return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
+    };
+    el.scratchCanvas.addEventListener("pointerdown", (e) => {
+      drawing = true;
+      const p = pos(e);
+      sctx.strokeStyle = crayonColor;
+      sctx.lineWidth = 6;
+      sctx.beginPath();
+      sctx.moveTo(p.x, p.y);
+      el.scratchCanvas.setPointerCapture(e.pointerId);
+    });
+    el.scratchCanvas.addEventListener("pointermove", (e) => {
+      if (!drawing) return;
+      const p = pos(e);
+      sctx.lineTo(p.x, p.y);
+      sctx.stroke();
+    });
+    const stop = () => { drawing = false; };
+    el.scratchCanvas.addEventListener("pointerup", stop);
+    el.scratchCanvas.addEventListener("pointerleave", stop);
+  }
+
+  function clearScratch() {
+    if (sctx) sctx.clearRect(0, 0, el.scratchCanvas.width, el.scratchCanvas.height);
+  }
+
+  function openScratch() {
+    if (state !== "battle" || !currentQuestion) return;
+    scratchOpen = true;
+    // Formally pause the game: freeze the timer AND mark the state paused so
+    // nothing else can run. The scratchpad overlay stays fully interactive,
+    // so kids can keep drawing while the game is paused.
+    stopTimer();
+    paused = true;
+    prePauseState = "battle";
+    state = "paused";
+    el.scratchQuestion.textContent = "Work out:  " + currentQuestion.text;
+    el.scratch.classList.add("show");
+  }
+
+  function closeScratch() {
+    if (!scratchOpen) return;
+    scratchOpen = false;
+    el.scratch.classList.remove("show");
+    // unpause back into the battle and resume the countdown if still unanswered
+    paused = false;
+    state = prePauseState || "battle";
+    prePauseState = null;
+    if (state === "battle" && !questionAnswered) resumeTimer();
+  }
+
+  // =====================================================================
+  //  PAUSE / RESUME
+  //  Only pausable during active play or a battle. The running phase is
+  //  frozen by switching state to "paused"; a battle also has its
+  //  countdown timer stopped and resumed from where it left off.
+  // =====================================================================
+  function togglePause() {
+    if (paused) resumeGame();
+    else pauseGame();
+  }
+
+  function pauseGame() {
+    if (paused) return;
+    if (state !== "playing" && state !== "battle") return; // nothing to pause
+    paused = true;
+    prePauseState = state;
+    if (state === "battle") stopTimer(); // freeze the equation countdown
+    state = "paused";
+    el.pause.classList.add("show");
+  }
+
+  function resumeGame() {
+    if (!paused) return;
+    paused = false;
+    el.pause.classList.remove("show");
+    state = prePauseState;
+    prePauseState = null;
+    // if we were mid-question and it isn't answered yet, resume the countdown
+    if (state === "battle" && !questionAnswered) resumeTimer();
+  }
+
+  // ---- Input ----
+  function jump() {
+    if (state === "playing" && player.onGround) {
+      player.vy = JUMP_V;
+      player.onGround = false;
+      sfx.jump();
+    }
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); jump(); }
+    // P or Esc toggles pause (only while playing or in a battle).
+    // Ignored while the crayon scratchpad is open (it has its own Done button).
+    if (e.code === "KeyP" || e.code === "Escape") {
+      if (scratchOpen) return;
+      if (paused || state === "playing" || state === "battle") { e.preventDefault(); togglePause(); }
+    }
+  });
+  canvas.addEventListener("mousedown", jump);
+  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jump(); }, { passive: false });
+
+  // allow Enter to submit auth
+  el.authPass.addEventListener("keydown", (e) => { if (e.code === "Enter") doLogin(); });
+
+  // =====================================================================
+  //  BUTTONS
+  // =====================================================================
+  document.getElementById("signupBtn").onclick = doSignup;
+  document.getElementById("loginBtn").onclick = doLogin;
+  document.getElementById("logoutBtn").onclick = logout;
+  document.getElementById("leaderboardBtn").onclick = showLeaderboard;
+  document.getElementById("lbCloseBtn").onclick = () => el.leaderboard.classList.remove("show");
+  document.getElementById("pauseBtn").onclick = togglePause;
+  document.getElementById("resumeBtn").onclick = resumeGame;
+  document.getElementById("helpBtn").onclick = () => {
+    // pause active play so nothing runs behind the help screen
+    if (state === "playing" || state === "battle") pauseGame();
+    el.help.classList.add("show");
+  };
+  document.getElementById("helpCloseBtn").onclick = () => el.help.classList.remove("show");
+  document.getElementById("mathHelpBtn").onclick = showMathHelp;
+  document.getElementById("videoBtn").onclick = openVideo;
+  document.getElementById("crayonBtn").onclick = openScratch;
+  document.getElementById("scratchClearBtn").onclick = clearScratch;
+  document.getElementById("scratchDoneBtn").onclick = closeScratch;
+  initScratch();
+
+  document.getElementById("startBtn").onclick = () => {
+    el.start.classList.remove("show");
+    // keep saved level; reset the run's lives and score
+    lives = 3; score = 0;
+    buildLevel(level);
+    state = "playing";
+  };
+  document.getElementById("nextLevelBtn").onclick = () => {
+    el.levelClear.classList.remove("show");
+    buildLevel(level); // level was already incremented in levelCleared()
+    state = "playing";
+  };
+  document.getElementById("retryBtn").onclick = () => {
+    el.gameOver.classList.remove("show");
+    lives = 3; score = 0;
+    buildLevel(level); // resume from saved level, fresh lives/score
+    state = "playing";
+  };
+
+  function hideAllOverlays() {
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.help, el.scratch, el.leaderboard]
+      .forEach(o => o.classList.remove("show"));
+  }
+
+  // ---- Update ----
+  function update() {
+    if (state !== "playing") return;
+
+    worldOffset += scrollSpeed;
+
+    // remember where the player's feet were before moving this frame,
+    // so we can tell "landing on top of a rock" from "running into its side"
+    const prevFeet = player.y;
+
+    player.vy += GRAVITY;
+    player.y += player.vy;
+
+    // Is the player currently over a hole in the ground?
+    const overHole = holeUnderPlayer();
+
+    if (player.y >= GROUND_Y && !overHole) {
+      // solid ground: land normally
+      player.y = GROUND_Y; player.vy = 0; player.onGround = true;
+    } else if (player.y >= GROUND_Y && overHole) {
+      // over a gap: the player falls in and loses a life
+      player.onGround = false;
+      if (player.y >= GROUND_Y + 30) { // fully dropped into the pit
+        fallInHole(overHole);
+      }
+    }
+
+    const px = player.x, py = player.y - player.h;
+
+    for (const o of obstacles) {
+      const ox = o.x - worldOffset;
+      if (ox + o.w < 0) continue;
+      if (ox > W) break;
+      const oy = o.y;
+      const horizontallyOver = px + player.w > ox + 4 && px < ox + o.w - 4;
+      if (!horizontallyOver) continue;
+
+      // Rocks and cacti are landable. If the player is moving downward and
+      // their feet reach the top area, treat it as a safe landing on top.
+      // Cacti get a bigger tolerance so it's easy to land on them.
+      // Only rocks give a bonus life; a cactus is just safe to stand on.
+      const landTol = o.type === "cactus" ? 22 : 8;
+      if ((o.type === "rock" || o.type === "cactus") && player.vy >= 0 &&
+          prevFeet <= oy + landTol && player.y <= oy + o.h) {
+        player.y = oy;            // stand on top
+        player.vy = 0;
+        player.onGround = true;
+        // reward: +1 life the FIRST time you land on a rock (rocks only)
+        if (o.type === "rock" && !o.awarded) {
+          o.awarded = true;
+          lives++;
+          sfx.extraLife();
+          updateHUD();
+          persistProgress();
+        }
+        continue;                 // no life lost
+      }
+
+      // Otherwise, a real hit (spikes, bird, or the side of a rock/cactus)
+      if (py + player.h > oy + 4 && py < oy + o.h - 4) {
+        loseLifeFromObstacle(o);
+      }
+    }
+
+    for (const m of monsters) {
+      if (!m.alive) continue;
+      const mx = m.x - worldOffset;
+      if (mx <= player.x + player.w && mx >= player.x - 40) {
+        startBattle(m);
+        break;
+      }
+    }
+  }
+
+  let obstacleCooldown = 0;
+  function loseLifeFromObstacle(o) {
+    if (obstacleCooldown > 0) return;
+    lives--;
+    obstacleCooldown = 60;
+    sfx.hit();
+    updateHUD();
+    persistProgress();
+    if (lives <= 0) { gameOver(); }
+    else {
+      player.vy = JUMP_V * 0.8;
+      player.onGround = false;
+    }
+  }
+
+  // Returns the hole the player is horizontally over, or null.
+  function holeUnderPlayer() {
+    const pxLeft = player.x + 6;
+    const pxRight = player.x + player.w - 6;
+    for (const hole of holes) {
+      const hx = hole.x - worldOffset;
+      if (pxRight > hx && pxLeft < hx + hole.w) return hole;
+    }
+    return null;
+  }
+
+  // Called when the player has fallen into a pit.
+  function fallInHole(hole) {
+    if (hole.awardedFall) return; // only cost one life per fall
+    hole.awardedFall = true;
+    lives--;
+    sfx.hit();
+    updateHUD();
+    persistProgress();
+    if (lives <= 0) { gameOver(); return; }
+    // rescue: pop the player back up onto solid ground and give a moment
+    player.y = GROUND_Y;
+    player.vy = JUMP_V; // bounce back up out of the pit
+    player.onGround = false;
+    obstacleCooldown = 60;
+  }
+
+  // ---- Draw ----
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawClouds();
+
+    // Draw holes: paint a dark pit over the grass and (below) sky-fill the
+    // gap, then draw the ground line only across the solid parts.
+    const holeSpans = [];
+    for (const hole of holes) {
+      const hx = hole.x - worldOffset;
+      if (hx + hole.w < 0 || hx > W) continue;
+      holeSpans.push([hx, hx + hole.w]);
+      // sky-colored fill so the grass "disappears" into a gap
+      ctx.fillStyle = "#aee2ff";
+      ctx.fillRect(hx, GROUND_Y - 2, hole.w, H - GROUND_Y + 2);
+      // dark pit walls for depth
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(hx, GROUND_Y, 4, H - GROUND_Y);
+      ctx.fillRect(hx + hole.w - 4, GROUND_Y, 4, H - GROUND_Y);
+    }
+
+    // ground line, skipping the hole spans
+    ctx.strokeStyle = "#4caf50";
+    ctx.lineWidth = 4;
+    let cursor = 0;
+    holeSpans.sort((a, b) => a[0] - b[0]);
+    for (const [start, end] of holeSpans) {
+      if (start > cursor) {
+        ctx.beginPath();
+        ctx.moveTo(cursor, GROUND_Y);
+        ctx.lineTo(Math.min(start, W), GROUND_Y);
+        ctx.stroke();
+      }
+      cursor = Math.max(cursor, end);
+    }
+    if (cursor < W) {
+      ctx.beginPath();
+      ctx.moveTo(cursor, GROUND_Y);
+      ctx.lineTo(W, GROUND_Y);
+      ctx.stroke();
+    }
+
+    for (const o of obstacles) {
+      const ox = o.x - worldOffset;
+      if (ox + o.w < 0 || ox > W) continue;
+      drawObstacle(o, ox);
+    }
+
+    ctx.font = "44px serif";
+    ctx.textBaseline = "bottom";
+    for (const m of monsters) {
+      if (!m.alive) continue;
+      const mx = m.x - worldOffset;
+      if (mx + 44 < 0 || mx > W) continue;
+      ctx.fillText(m.emoji, mx, GROUND_Y);
+    }
+
+    drawHero(player.x, player.y - player.h);
+
+    const flagX = levelLength - worldOffset;
+    if (flagX < W && flagX > 0) {
+      ctx.fillStyle = "#ff5a8c";
+      ctx.fillRect(flagX, GROUND_Y - 60, 4, 60);
+      ctx.beginPath();
+      ctx.moveTo(flagX + 4, GROUND_Y - 60);
+      ctx.lineTo(flagX + 34, GROUND_Y - 50);
+      ctx.lineTo(flagX + 4, GROUND_Y - 40);
+      ctx.fill();
+    }
+
+    if (obstacleCooldown > 0) obstacleCooldown--;
+  }
+
+  function drawObstacle(o, ox) {
+    if (o.type === "bird") {
+      // simple flying bird you must duck under (don't jump into it)
+      const cy = o.y + o.h / 2;
+      ctx.fillStyle = "#455a64";
+      ctx.beginPath();
+      ctx.ellipse(ox + o.w / 2, cy, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // wings
+      ctx.strokeStyle = "#455a64";
+      ctx.lineWidth = 3;
+      const flap = Math.sin(worldOffset * 0.15) * 6;
+      ctx.beginPath();
+      ctx.moveTo(ox + 4, cy);
+      ctx.lineTo(ox - 6, cy - 8 - flap);
+      ctx.moveTo(ox + o.w - 4, cy);
+      ctx.lineTo(ox + o.w + 6, cy - 8 - flap);
+      ctx.stroke();
+      // beak
+      ctx.fillStyle = "#ffb300";
+      ctx.beginPath();
+      ctx.moveTo(ox + o.w, cy);
+      ctx.lineTo(ox + o.w + 8, cy - 2);
+      ctx.lineTo(ox + o.w, cy + 4);
+      ctx.fill();
+      return;
+    }
+    if (o.type === "rock") {
+      ctx.fillStyle = "#78909c";
+      roundRect(ox, o.y, o.w, o.h, 8);
+      ctx.fill();
+      ctx.fillStyle = "#90a4ae";
+      roundRect(ox + 6, o.y + 5, o.w - 16, o.h / 3, 4);
+      ctx.fill();
+      return;
+    }
+    if (o.type === "cactus") {
+      ctx.fillStyle = "#2e7d32";
+      roundRect(ox + o.w / 2 - 5, o.y, 10, o.h, 4); // stem
+      ctx.fill();
+      roundRect(ox, o.y + o.h * 0.35, 8, o.h * 0.4, 4); // left arm
+      ctx.fill();
+      roundRect(ox + o.w - 8, o.y + o.h * 0.25, 8, o.h * 0.4, 4); // right arm
+      ctx.fill();
+      return;
+    }
+    // spike (triangle)
+    ctx.fillStyle = "#8d6e63";
+    ctx.beginPath();
+    ctx.moveTo(ox, GROUND_Y);
+    ctx.lineTo(ox + o.w / 2, o.y);
+    ctx.lineTo(ox + o.w, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawHero(x, y) {
+    ctx.fillStyle = "#ff9f1c";
+    roundRect(x, y + 10, player.w, player.h - 10, 8);
+    ctx.fill();
+    ctx.fillStyle = "#ffd9a0";
+    ctx.beginPath();
+    ctx.arc(x + player.w / 2, y + 8, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#2b3a67";
+    ctx.beginPath();
+    ctx.arc(x + player.w / 2 - 4, y + 6, 2, 0, Math.PI * 2);
+    ctx.arc(x + player.w / 2 + 4, y + 6, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  const clouds = [
+    { x: 120, y: 60, s: 1 }, { x: 400, y: 100, s: 0.8 }, { x: 650, y: 50, s: 1.2 },
+  ];
+  function drawClouds() {
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    for (const c of clouds) {
+      let cx = (c.x - worldOffset * 0.2) % (W + 120);
+      if (cx < -120) cx += W + 120;
+      const y = c.y, s = c.s;
+      ctx.beginPath();
+      ctx.arc(cx, y, 18 * s, 0, Math.PI * 2);
+      ctx.arc(cx + 22 * s, y + 6, 22 * s, 0, Math.PI * 2);
+      ctx.arc(cx + 48 * s, y, 18 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // save progress if the tab is closed mid-game
+  window.addEventListener("beforeunload", persistProgress);
+
+  // ---- Main loop ----
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // ---- Startup: react to Firebase auth state ----
+  // If Firebase is available, let its auth listener drive the screen:
+  //  signed in -> enter the game, signed out -> show the login screen.
+  // If Firebase isn't available at all, just show the (offline) auth screen.
+  showAuth();
+  function startAuthListener(tries) {
+    const c = window.MathQuestCloud;
+    if (c && c.onAuthChange) {
+      if (!c.available) {
+        el.authMsg.textContent = "Offline: online accounts need an internet connection.";
+        return;
+      }
+      c.onAuthChange((user) => {
+        if (user) { enterGame(user); }
+        else if (currentUid !== null || state !== "auth") { showAuth(); }
+      });
+    } else if (tries > 0) {
+      // the module script may still be loading; retry briefly
+      setTimeout(() => startAuthListener(tries - 1), 150);
+    } else {
+      el.authMsg.textContent = "Offline: online accounts need an internet connection.";
+    }
+  }
+  startAuthListener(20);
+})();
+</script>
+</body>
+</html>
