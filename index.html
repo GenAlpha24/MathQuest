@@ -134,6 +134,12 @@
   .grade-btn { font-family:inherit; font-size:18px; font-weight:bold; cursor:pointer; border:none;
     border-radius:12px; padding:10px 16px; background:#fff; color:#2b3a67; box-shadow:0 4px 0 #cfd8ff; }
   .grade-btn.selected { background:#ff5a8c; color:#fff; box-shadow:0 4px 0 #c92a6a; }
+  #gradeSelect { font-family:inherit; font-size:18px; font-weight:bold; cursor:pointer; border:none;
+    border-radius:12px; padding:10px 40px 10px 16px; background:#fff; color:#2b3a67; box-shadow:0 4px 0 #cfd8ff;
+    -webkit-appearance:none; -moz-appearance:none; appearance:none; text-align:center; text-align-last:center;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='%232b3a67' d='M4 6l4 4 4-4z'/></svg>");
+    background-repeat:no-repeat; background-position:right 14px center; }
+  #gradeSelect:focus { outline:3px solid #ff5a8c; }
   #battle .monster-face { font-size: 60px; margin-bottom: 6px; }
   #battle .feedback { font-size: 20px; height: 26px; margin-top: 12px; }
   #battle .battle-tools { display:flex; gap:10px; margin-top:14px; }
@@ -236,7 +242,7 @@
       <p>Run and JUMP over the spikes. When you reach a monster, answer the math question before the timer runs out! Clear all monsters to advance.</p>
       <div id="gradePick">
         <p style="margin-bottom:8px;">Pick your grade (this sets the math difficulty):</p>
-        <div id="gradeButtons"></div>
+        <select id="gradeSelect"></select>
       </div>
       <div id="speedPick">
         <p style="margin-bottom:8px;">Pick the running speed:</p>
@@ -510,7 +516,7 @@
     hud: document.getElementById("hud"),
     whoName: document.getElementById("whoName"),
     gradeDisplay: document.getElementById("gradeDisplay"),
-    gradeButtons: document.getElementById("gradeButtons"),
+    gradeSelect: document.getElementById("gradeSelect"),
     speedDisplay: document.getElementById("speedDisplay"),
     speedButtons: document.getElementById("speedButtons"),
     level: document.getElementById("level"),
@@ -806,20 +812,20 @@
     "1": "Grade 1", "2": "Grade 2", "3": "Grade 3", "4": "Grade 4", "5": "Grade 5",
   };
   function renderGradeButtons() {
-    el.gradeButtons.innerHTML = "";
+    el.gradeSelect.innerHTML = "";
     for (const g of GRADE_ORDER) {
-      const b = document.createElement("button");
-      b.className = "grade-btn" + (g === grade ? " selected" : "");
-      b.textContent = GRADE_BTN_TEXT[g];
-      b.title = GRADE_LABELS[g];
-      b.onclick = () => {
-        grade = g;
-        persistProgress();
-        renderGradeButtons();
-        updateHUD();
-      };
-      el.gradeButtons.appendChild(b);
+      const opt = document.createElement("option");
+      opt.value = String(g);
+      opt.textContent = GRADE_BTN_TEXT[g];
+      opt.title = GRADE_LABELS[g];
+      if (g === grade) opt.selected = true;
+      el.gradeSelect.appendChild(opt);
     }
+    el.gradeSelect.onchange = () => {
+      grade = Number(el.gradeSelect.value);
+      persistProgress();
+      updateHUD();
+    };
   }
 
   // ---- Speed selection ----
