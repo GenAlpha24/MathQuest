@@ -87,6 +87,15 @@
   }
   #auth .row { display:flex; gap:10px; margin-top:8px; }
   #authMsg { min-height: 22px; color:#ffd43b; margin-top:10px; }
+  #authTabs { display:flex; gap:8px; margin-bottom:6px; }
+  .auth-tab {
+    font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer;
+    border: none; border-radius: 12px 12px 0 0; padding: 10px 22px;
+    background: rgba(255,255,255,0.25); color: #fff;
+  }
+  .auth-tab.selected { background: #ffd43b; color: #2b3a67; }
+  .auth-pane { display: flex; flex-direction: column; align-items: center; }
+  .auth-hint { font-size: 15px; margin: 4px 0 6px; max-width: 320px; }
 
   /* Battle box */
   #battle .question {
@@ -195,15 +204,29 @@
 
     <!-- Auth (login / signup) -->
     <div id="auth" class="overlay show">
-      <h2 id="authTitle">Log in to play</h2>
-      <p id="authSubtitle">Create an account or log in. Your progress and scores are saved to your account and appear on the global leaderboard.</p>
-      <input id="authName" placeholder="Display name (for sign up)" maxlength="16" autocomplete="off" />
-      <input id="authEmail" type="email" placeholder="Email" maxlength="60" autocomplete="off" />
-      <input id="authPass" type="password" placeholder="Password (6+ characters)" maxlength="32" autocomplete="off" />
-      <div class="row">
-        <button class="btn big" id="loginBtn">Log In</button>
-        <button class="btn" id="signupBtn">Sign Up</button>
+      <h2 id="authTitle">Welcome!</h2>
+      <div id="authTabs">
+        <button class="auth-tab selected" id="tabLogin">Log In</button>
+        <button class="auth-tab" id="tabSignup">Sign Up</button>
       </div>
+
+      <!-- Log In tab: username + password -->
+      <div id="loginPane" class="auth-pane">
+        <p class="auth-hint">Log in with your user ID and password.</p>
+        <input id="loginUserid" placeholder="User ID" maxlength="16" autocomplete="off" />
+        <input id="loginPass" type="password" placeholder="Password" maxlength="32" autocomplete="off" />
+        <button class="btn big" id="loginBtn">Log In</button>
+      </div>
+
+      <!-- Sign Up tab: username + email + password -->
+      <div id="signupPane" class="auth-pane" style="display:none;">
+        <p class="auth-hint">Create an account. Your user ID must be unique.</p>
+        <input id="signupUserid" placeholder="User ID (3-16 letters/numbers)" maxlength="16" autocomplete="off" />
+        <input id="signupEmail" type="email" placeholder="Email" maxlength="60" autocomplete="off" />
+        <input id="signupPass" type="password" placeholder="Password (6+ characters)" maxlength="32" autocomplete="off" />
+        <button class="btn big" id="signupBtn">Sign Up</button>
+      </div>
+
       <div id="authMsg"></div>
     </div>
 
@@ -341,7 +364,16 @@
     console.warn("Firebase init failed; the game will run in local-only mode.", e);
   }
 
-  const USERS = "users"; // one doc per player, keyed by Firebase UID
+  const USERS = "users";         // one doc per player, keyed by Firebase UID
+  const USERNAMES = "usernames"; // maps a unique userid -> { uid, email }
+
+  // A userid must be simple + safe to use as a Firestore doc id.
+  function normalizeUserid(raw) {
+    return String(raw || "").trim().toLowerCase();
+  }
+  function validUserid(userid) {
+    return /^[a-z0-9_]{3,16}$/.test(userid); // letters, numbers, underscore; 3-16
+  }
 
   // Turn Firebase's error codes into kid-friendly messages.
   function friendlyError(e) {
@@ -349,7 +381,7 @@
     if (code.includes("email-already-in-use")) return "That email already has an account. Try logging in.";
     if (code.includes("invalid-email")) return "That doesn't look like a valid email.";
     if (code.includes("weak-password")) return "Password should be at least 6 characters.";
-    if (code.includes("user-not-found") || code.includes("invalid-credential")) return "Wrong email or password.";
+    if (code.includes("user-not-found") || code.includes("invalid-credential")) return "Wrong user ID or password.";
     if (code.includes("wrong-password")) return "Wrong password. Try again.";
     if (code.includes("network")) return "Can't reach the internet. Check your connection.";
     return "Something went wrong. Please try again.";
@@ -360,32 +392,62 @@
 
     // ---- Auth ----
     // Register a callback that fires whenever the logged-in user changes.
+    // We expose the userid as the name (stored on the profile / displayName).
     onAuthChange(cb) {
       if (!auth) { cb(null); return; }
       onAuthStateChanged(auth, (user) => {
-        cb(user ? { uid: user.uid, name: user.displayName || (user.email || "").split("@")[0], email: user.email } : null);
+        cb(user ? { uid: user.uid, name: user.displayName || (user.email || "").split("@")[0] } : null);
       });
     },
 
-    async signup({ email, password, name }) {
-      if (!auth) return { ok: false, error: "Cloud login is unavailable." };
+    // Sign up with a UNIQUE user id + a real email + password.
+    // The email is used by Firebase Auth; login later uses userid+password.
+    async signup({ userid, email, password }) {
+      if (!auth || !db) return { ok: false, error: "Cloud sign-up is unavailable." };
+      const id = normalizeUserid(userid);
+      if (!validUserid(id)) return { ok: false, error: "User ID: 3-16 letters, numbers, or _ (no spaces)." };
+      if (!email || !email.includes("@")) return { ok: false, error: "Please enter a valid email." };
+      if (password.length < 6) return { ok: false, error: "Password should be at least 6 characters." };
+
+      // 1) Check the userid isn't already taken.
+      const unameRef = doc(db, USERNAMES, id);
       try {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        if (name) await updateProfile(cred.user, { displayName: name.slice(0, 16) });
-        // create the player's profile document keyed by their unique UID
+        const taken = await getDoc(unameRef);
+        if (taken.exists()) return { ok: false, error: "That user ID is already taken. Try another." };
+      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+
+      // 2) Create the auth account with the real email.
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(cred.user, { displayName: id });
+      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+
+      // 3) Save the username -> {uid, email} mapping + the profile doc.
+      try {
+        await setDoc(unameRef, { uid: cred.user.uid, email });
         await setDoc(doc(db, USERS, cred.user.uid), {
           uid: cred.user.uid,
-          name: (name || email.split("@")[0]).slice(0, 16),
+          name: id,
+          email,
           best: 0, level: 1, grade: 1, speed: 2,
           created: serverTimestamp(), updated: serverTimestamp(),
         });
-        return { ok: true };
       } catch (e) { return { ok: false, error: friendlyError(e) }; }
+
+      return { ok: true };
     },
 
-    async login({ email, password }) {
-      if (!auth) return { ok: false, error: "Cloud login is unavailable." };
+    // Log in with user id + password: look up the email, then sign in.
+    async login({ userid, password }) {
+      if (!auth || !db) return { ok: false, error: "Cloud login is unavailable." };
+      const id = normalizeUserid(userid);
+      if (!id) return { ok: false, error: "Please enter your user ID." };
       try {
+        const snap = await getDoc(doc(db, USERNAMES, id));
+        if (!snap.exists()) return { ok: false, error: "No account with that user ID." };
+        const email = snap.data().email;
+        if (!email) return { ok: false, error: "This account is missing its email. Please sign up again." };
         await signInWithEmailAndPassword(auth, email, password);
         return { ok: true };
       } catch (e) { return { ok: false, error: friendlyError(e) }; }
@@ -457,9 +519,15 @@
     best: document.getElementById("best"),
     monstersLeft: document.getElementById("monstersLeft"),
     auth: document.getElementById("auth"),
-    authName: document.getElementById("authName"),
-    authEmail: document.getElementById("authEmail"),
-    authPass: document.getElementById("authPass"),
+    tabLogin: document.getElementById("tabLogin"),
+    tabSignup: document.getElementById("tabSignup"),
+    loginPane: document.getElementById("loginPane"),
+    signupPane: document.getElementById("signupPane"),
+    loginUserid: document.getElementById("loginUserid"),
+    loginPass: document.getElementById("loginPass"),
+    signupUserid: document.getElementById("signupUserid"),
+    signupEmail: document.getElementById("signupEmail"),
+    signupPass: document.getElementById("signupPass"),
     authMsg: document.getElementById("authMsg"),
     start: document.getElementById("start"),
     startName: document.getElementById("startName"),
@@ -613,31 +681,41 @@
 
   const cloud = () => window.MathQuestCloud;
 
+  // Switch between the Log In and Sign Up tabs.
+  function showAuthTab(which) {
+    const login = which === "login";
+    el.loginPane.style.display = login ? "flex" : "none";
+    el.signupPane.style.display = login ? "none" : "flex";
+    el.tabLogin.classList.toggle("selected", login);
+    el.tabSignup.classList.toggle("selected", !login);
+    el.authMsg.textContent = "";
+  }
+
   async function doSignup() {
-    const name = el.authName.value.trim();
-    const email = el.authEmail.value.trim();
-    const pass = el.authPass.value;
+    const userid = el.signupUserid.value.trim();
+    const email = el.signupEmail.value.trim();
+    const pass = el.signupPass.value;
     if (!cloud() || !cloud().available) { el.authMsg.textContent = "Online sign-up needs an internet connection."; return; }
-    if (name.length < 2) { el.authMsg.textContent = "Please enter a display name (2+ characters)."; return; }
+    if (!userid) { el.authMsg.textContent = "Please enter a user ID."; return; }
     if (!email.includes("@")) { el.authMsg.textContent = "Please enter a valid email."; return; }
     if (pass.length < 6) { el.authMsg.textContent = "Password needs at least 6 characters."; return; }
 
     el.authMsg.textContent = "Creating your account…";
-    const res = await cloud().signup({ email, password: pass, name });
+    const res = await cloud().signup({ userid, email, password: pass });
     if (!res.ok) { el.authMsg.textContent = res.error; return; }
     el.authMsg.textContent = "";
     // onAuthChange will fire and complete the sign-in via enterGame().
   }
 
   async function doLogin() {
-    const email = el.authEmail.value.trim();
-    const pass = el.authPass.value;
+    const userid = el.loginUserid.value.trim();
+    const pass = el.loginPass.value;
     if (!cloud() || !cloud().available) { el.authMsg.textContent = "Online login needs an internet connection."; return; }
-    if (!email.includes("@")) { el.authMsg.textContent = "Please enter your email."; return; }
+    if (!userid) { el.authMsg.textContent = "Please enter your user ID."; return; }
     if (!pass) { el.authMsg.textContent = "Please enter your password."; return; }
 
     el.authMsg.textContent = "Logging in…";
-    const res = await cloud().login({ email, password: pass });
+    const res = await cloud().login({ userid, password: pass });
     if (!res.ok) { el.authMsg.textContent = res.error; return; }
     el.authMsg.textContent = "";
     // onAuthChange will fire and complete the sign-in via enterGame().
@@ -663,7 +741,8 @@
 
     cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting });
 
-    el.authName.value = ""; el.authEmail.value = ""; el.authPass.value = "";
+    el.loginUserid.value = ""; el.loginPass.value = "";
+    el.signupUserid.value = ""; el.signupEmail.value = ""; el.signupPass.value = "";
     el.whoName.textContent = currentUser;
     el.startName.textContent = currentUser;
     el.topbar.style.display = "flex";
@@ -1335,14 +1414,17 @@
   canvas.addEventListener("mousedown", jump);
   canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jump(); }, { passive: false });
 
-  // allow Enter to submit auth
-  el.authPass.addEventListener("keydown", (e) => { if (e.code === "Enter") doLogin(); });
+  // allow Enter to submit the active auth tab
+  el.loginPass.addEventListener("keydown", (e) => { if (e.code === "Enter") doLogin(); });
+  el.signupPass.addEventListener("keydown", (e) => { if (e.code === "Enter") doSignup(); });
 
   // =====================================================================
   //  BUTTONS
   // =====================================================================
   document.getElementById("signupBtn").onclick = doSignup;
   document.getElementById("loginBtn").onclick = doLogin;
+  el.tabLogin.onclick = () => showAuthTab("login");
+  el.tabSignup.onclick = () => showAuthTab("signup");
   document.getElementById("logoutBtn").onclick = logout;
   document.getElementById("leaderboardBtn").onclick = showLeaderboard;
   document.getElementById("lbCloseBtn").onclick = () => el.leaderboard.classList.remove("show");
