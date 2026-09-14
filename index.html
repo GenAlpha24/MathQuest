@@ -955,18 +955,13 @@
       return { text: `${ea} ${eOp} ${eb} = ?`, answer: eAns, opts: shuffle([...opt]), a: ea, b: eb, op: eOp === "−" ? "-" : "+" };
     }
 
-    // ---- Grade 3 topic questions ----
-    // Based on the Mashup Math 3rd grade curriculum: besides add/sub/multiply,
-    // third graders practice place value (to thousands), comparing multi-digit
-    // numbers with < > =, and rounding to the nearest 10 or 100.
-    // Mix these topics in with the arithmetic questions below.
-    if (grade === 3) {
-      const roll = Math.random();
-      if (roll < 0.20) return makeG3PlaceValue();
-      if (roll < 0.35) return makeG3Compare();
-      if (roll < 0.50) return makeG3Rounding(lv);
-      // else fall through to arithmetic (add / subtract / multiply)
-    }
+    // ---- Grade-specific topic questions ----
+    // Beyond plain arithmetic, each grade practices extra skills drawn from the
+    // Mashup Math grade-level curriculum (place value, comparing, rounding,
+    // telling time, factors, order of operations). We roll a chance to serve a
+    // topic question; otherwise we fall through to the arithmetic below.
+    const topicQ = maybeTopicQuestion(lv);
+    if (topicQ) return topicQ;
 
     // +1 difficulty every 2 levels. Grade 3 climbs more gently (every 3 levels).
     const bump = grade === 3
@@ -1030,39 +1025,73 @@
     return { text: `${a} ${opSymbols[op]} ${b} = ?`, answer, opts, a, b, op };
   }
 
-  // ---- Grade 3 topic generators (Mashup Math 3rd grade skills) ----
+  // =====================================================================
+  //  GRADE-LEVEL TOPIC QUESTIONS (Mashup Math K-8 skills)
+  //  Each grade gets a mix of extra topics on top of plain arithmetic.
+  //  maybeTopicQuestion() rolls a chance to return a topic question; if it
+  //  returns null, makeQuestion() falls through to its arithmetic path.
+  // =====================================================================
+  function maybeTopicQuestion(lv) {
+    const r = Math.random();
+    switch (grade) {
+      case 1: // Grade 1: place value (tens/ones) + comparing small numbers
+        if (r < 0.18) return makePlaceValue(2);     // 2-digit numbers
+        if (r < 0.30) return makeCompare(1, 20);
+        return null;
+      case 2: // Grade 2: place value (hundreds), rounding to 10, compare, time
+        if (r < 0.15) return makePlaceValue(3);     // 3-digit numbers
+        if (r < 0.27) return makeRounding(10, 100); // round to nearest 10
+        if (r < 0.37) return makeCompare(10, 200);
+        if (r < 0.47) return makeTelling();         // telling time
+        return null;
+      case 3: // Grade 3: place value to thousands, compare, round to 10/100
+        if (r < 0.20) return makePlaceValue(4);
+        if (r < 0.35) return makeCompare(100, 9999);
+        if (r < 0.50) return makeRounding([10, 100], 1000);
+        return null;
+      case 4: // Grade 4: bigger place value, rounding, factors, order of ops
+        if (r < 0.15) return makePlaceValue(5);
+        if (r < 0.28) return makeRounding([10, 100, 1000], 10000);
+        if (r < 0.40) return makeFactors();
+        if (r < 0.52) return makeOrderOfOps(false);
+        return null;
+      case 5: // Grade 5: order of operations, factors, rounding large numbers
+        if (r < 0.20) return makeOrderOfOps(true);
+        if (r < 0.32) return makeFactors();
+        if (r < 0.44) return makeRounding([100, 1000], 100000);
+        return null;
+      default:
+        return null;
+    }
+  }
 
-  // Place value: "In 4,382, which digit is in the hundreds place?" (to thousands)
-  function makeG3PlaceValue() {
-    const places = [
-      { name: "ones", pow: 1 },
-      { name: "tens", pow: 10 },
-      { name: "hundreds", pow: 100 },
-      { name: "thousands", pow: 1000 },
-    ];
-    const num = rand(1000, 9999);           // a 4-digit number
-    const digits = String(num).split("").map(Number); // [thousands..ones]
-    const idx = rand(0, 3);                 // which place to ask about
-    const place = places[3 - idx];          // idx 0 => ones
-    const answer = digits[3 - idx];         // the digit sitting in that place
-    // options: the correct digit plus other digits from the number, then
-    // fillers 0-9 until we have 4 unique choices
+  const PLACE_NAMES = ["ones", "tens", "hundreds", "thousands", "ten thousands"];
+
+  // Place value: "In 4,382, which digit is in the hundreds place?"
+  // digitsCount controls how many digits the number has (2..5).
+  function makePlaceValue(digitsCount) {
+    const min = Math.pow(10, digitsCount - 1);
+    const max = Math.pow(10, digitsCount) - 1;
+    const num = rand(min, max);
+    const digits = String(num).split("").map(Number); // left..right
+    const idx = rand(0, digitsCount - 1);              // 0 => ones place
+    const placeName = PLACE_NAMES[idx];
+    const answer = digits[digits.length - 1 - idx];    // digit in that place
     const options = new Set([answer]);
     for (const d of digits) { if (options.size < 4) options.add(d); }
     let f = 0;
     while (options.size < 4 && f <= 9) { options.add(f); f++; }
     return {
-      text: `In ${num.toLocaleString()}, which digit is in the ${place.name} place?`,
+      text: `In ${num.toLocaleString()}, which digit is in the ${placeName} place?`,
       answer, opts: shuffle([...options]),
-      topic: "placeValue", num, place: place.name,
+      topic: "placeValue", num, place: placeName,
     };
   }
 
-  // Compare two multi-digit numbers with <, >, or =
-  function makeG3Compare() {
-    const a = rand(100, 9999);
-    // sometimes make them equal so "=" is a real possibility
-    const b = Math.random() < 0.15 ? a : rand(100, 9999);
+  // Compare two numbers in [min,max] with <, >, or =
+  function makeCompare(min, max) {
+    const a = rand(min, max);
+    const b = Math.random() < 0.15 ? a : rand(min, max);
     const answer = a < b ? "<" : a > b ? ">" : "=";
     return {
       text: `Compare:  ${a.toLocaleString()}  ?  ${b.toLocaleString()}`,
@@ -1071,14 +1100,15 @@
     };
   }
 
-  // Round to the nearest 10 or 100 (numbers up to 1,000)
-  function makeG3Rounding(lv) {
-    const toHundred = Math.random() < 0.5;
-    const nearest = toHundred ? 100 : 10;
-    const num = rand(nearest === 100 ? 101 : 11, 1000);
+  // Round to the nearest 10/100/1000. `nearestArg` is a single value or an
+  // array of choices; `maxNum` caps the number being rounded.
+  function makeRounding(nearestArg, maxNum) {
+    const nearest = Array.isArray(nearestArg)
+      ? nearestArg[rand(0, nearestArg.length - 1)]
+      : nearestArg;
+    const num = rand(nearest + 1, maxNum);
     const answer = Math.round(num / nearest) * nearest;
     const options = new Set([answer]);
-    // plausible wrong answers: neighboring multiples + a common mistake
     options.add(Math.floor(num / nearest) * nearest);
     options.add(Math.ceil(num / nearest) * nearest);
     options.add(answer + nearest);
@@ -1089,9 +1119,84 @@
     let f = answer + nearest * 2;
     while (opts.size < 4) { opts.add(f); f += nearest; }
     return {
-      text: `Round ${num.toLocaleString()} to the nearest ${nearest}.`,
+      text: `Round ${num.toLocaleString()} to the nearest ${nearest.toLocaleString()}.`,
       answer, opts: shuffle([...opts]),
       topic: "rounding", num, nearest,
+    };
+  }
+
+  // Factors: "Which number is a factor of 24?" (Grade 4-5)
+  function makeFactors() {
+    // pick a composite number with several factors
+    const bases = [12, 16, 18, 20, 24, 28, 30, 36, 40, 48];
+    const num = bases[rand(0, bases.length - 1)];
+    const factors = [];
+    for (let i = 2; i < num; i++) if (num % i === 0) factors.push(i);
+    const answer = factors[rand(0, factors.length - 1)];
+    // wrong options: numbers that are NOT factors of num
+    const opts = new Set([answer]);
+    let guard = 0;
+    while (opts.size < 4 && guard++ < 100) {
+      const w = rand(2, num - 1);
+      if (num % w !== 0) opts.add(w);
+    }
+    return {
+      text: `Which of these is a factor of ${num}?`,
+      answer, opts: shuffle([...opts]),
+      topic: "factors", num,
+    };
+  }
+
+  // Order of operations: "3 + 4 × 2 = ?" (Grade 4 no parens, Grade 5 parens)
+  function makeOrderOfOps(useParens) {
+    const a = rand(2, 9), b = rand(2, 9), c = rand(2, 6);
+    let text, answer;
+    if (useParens && Math.random() < 0.5) {
+      answer = (a + b) * c;
+      text = `(${a} + ${b}) × ${c} = ?`;
+    } else if (Math.random() < 0.5) {
+      answer = a + b * c;
+      text = `${a} + ${b} × ${c} = ?`;
+    } else {
+      answer = a * b - c;
+      text = `${a} × ${b} − ${c} = ?`;
+    }
+    const options = new Set([answer]);
+    const spread = Math.max(3, Math.round(answer * 0.3));
+    let guard = 0;
+    while (options.size < 4 && guard++ < 100) {
+      const w = answer + rand(-spread, spread);
+      if (w >= 0 && w !== answer) options.add(w);
+    }
+    let f = answer + 1;
+    while (options.size < 4) { if (f !== answer && f >= 0) options.add(f); f++; }
+    return {
+      text, answer, opts: shuffle([...options]),
+      topic: "orderOfOps",
+    };
+  }
+
+  // Telling time: "What time is shown: 4:15?" style (Grade 2)
+  function makeTelling() {
+    const hour = rand(1, 12);
+    const minutes = [0, 15, 30, 45][rand(0, 3)];
+    const mm = String(minutes).padStart(2, "0");
+    const answer = `${hour}:${mm}`;
+    const words = minutes === 0 ? `${hour} o'clock`
+      : minutes === 15 ? `quarter past ${hour}`
+      : minutes === 30 ? `half past ${hour}`
+      : `quarter to ${hour === 12 ? 1 : hour + 1}`;
+    const opts = new Set([answer]);
+    let guard = 0;
+    while (opts.size < 4 && guard++ < 100) {
+      const h2 = rand(1, 12);
+      const m2 = [0, 15, 30, 45][rand(0, 3)];
+      opts.add(`${h2}:${String(m2).padStart(2, "0")}`);
+    }
+    return {
+      text: `Which clock time is "${words}"?`,
+      answer, opts: shuffle([...opts]),
+      topic: "time", words,
     };
   }
 
@@ -1324,7 +1429,7 @@
   function buildHint(q) {
     const { a, b, op, answer } = q;
 
-    // Grade 3 topic questions have their own explanations.
+    // Grade-level topic questions have their own explanations.
     if (q.topic === "placeValue") {
       return `Place value tells you what each digit is worth.\n` +
              `Reading ${q.num.toLocaleString()} from the right: ones, tens, hundreds, thousands.\n` +
@@ -1337,10 +1442,24 @@
              `The open side of < or > always points to the bigger number.`;
     }
     if (q.topic === "rounding") {
-      const digit = Math.floor((q.num % (q.nearest * 10)) / q.nearest);
-      return `To round ${q.num.toLocaleString()} to the nearest ${q.nearest}:\n` +
-             `look at the digit just to the right of the ${q.nearest === 100 ? "hundreds" : "tens"} place.\n` +
+      return `To round ${q.num.toLocaleString()} to the nearest ${q.nearest.toLocaleString()}:\n` +
+             `look at the digit just to the right of that place.\n` +
              `5 or more rounds up, 4 or less rounds down → ${answer.toLocaleString()}.`;
+    }
+    if (q.topic === "factors") {
+      return `A factor divides a number evenly, with nothing left over.\n` +
+             `Check: does ${q.num} ÷ (the choice) give a whole number?\n` +
+             `${q.num} ÷ ${answer} = ${q.num / answer}, so ${answer} is a factor.`;
+    }
+    if (q.topic === "orderOfOps") {
+      return `Follow the order of operations (PEMDAS):\n` +
+             `do anything in parentheses first, then × and ÷, then + and −.\n` +
+             `Working left to right within each step gives ${answer}.`;
+    }
+    if (q.topic === "time") {
+      return `Read the hour first, then the minutes.\n` +
+             `"${q.words}" matches ${answer}.\n` +
+             `Quarter past = :15, half past = :30, quarter to = :45.`;
     }
 
     if (op === "+") {
@@ -1373,9 +1492,12 @@
   }
 
   const TOPIC_WORD = {
-    placeValue: "place value to thousands",
-    compare: "comparing multi-digit numbers",
-    rounding: "rounding to the nearest ten and hundred",
+    placeValue: "place value",
+    compare: "comparing numbers greater than less than",
+    rounding: "rounding numbers",
+    factors: "factors of a number",
+    orderOfOps: "order of operations PEMDAS",
+    time: "telling time on a clock",
   };
   function openVideo() {
     if (!currentQuestion) return;
