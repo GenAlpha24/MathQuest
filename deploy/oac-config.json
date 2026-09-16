@@ -1,0 +1,7 @@
+{
+  "Name": "math-quest-oac",
+  "Description": "OAC for math-quest game S3 origin",
+  "SigningProtocol": "sigv4",
+  "SigningBehavior": "always",
+  "OriginAccessControlOriginType": "s3"
+}

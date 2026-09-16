@@ -302,7 +302,7 @@
       <h2>❓ How to Play</h2>
       <div style="text-align:left; max-width:520px; font-size:16px; line-height:1.5;">
         <p><b>Goal:</b> Run across the level, jump over spikes, and beat every monster to clear the level.</p>
-        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Landing on a rock also earns a bonus life ❤️ (once per rock). Watch out for flying birds, stay on the ground to pass under them! And jump over the holes in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
+        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Landing on a rock also earns a bonus life ❤️ (once per rock). Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
         <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out. Right answer beats the monster (and answering fast gives bonus points). A wrong answer or running out of time costs a life.</p>
         <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life. ❤️</p>
         <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
@@ -503,6 +503,9 @@
   };
 </script>
 
+<!-- Question bank: generators + per-grade topic table (see questions.js) -->
+<script src="questions.js"></script>
+
 <script>
 (function () {
   const canvas = document.getElementById("game");
@@ -672,6 +675,9 @@
     levelClear:() => melody([[523,0.12],[659,0.12],[784,0.12],[1047,0.22]], "triangle", 0.16),
     gameOver:  () => melody([[392,0.2],[311,0.2],[262,0.35]], "triangle", 0.16),
     extraLife: () => melody([[784,0.1],[988,0.1],[1319,0.2]], "sine", 0.16),
+    erupt:     () => melody([[180,0.08],[300,0.08],[480,0.14]], "sine", 0.10),   // geyser bursts up
+    whoosh:    () => tone(160, 0.14, "sine", 0.07),                              // spikeball swings past
+    splash:    () => melody([[440,0.08],[280,0.10],[180,0.14]], "sine", 0.13),   // fall in the pond
   };
 
   // =====================================================================
@@ -848,11 +854,15 @@
 
   // ---- Level building ----
   // Obstacle shape: { type, x, y, w, h }
-  //   type "spike": ground triangle  -> jump over it
-  //   type "rock":  ground block      -> jump over it
-  //   type "bird":  flying, up high   -> stay on the ground to pass under
-  //   type "cactus": tall skinny plant -> jump over it
+  //   type "spike":  ground triangle   -> jump over it
+  //   type "rock":   ground block       -> jump over it (or land on top)
+  //   type "cactus": tall skinny plant  -> jump over it (or land on top)
+  //   type "bird":   flying, up high    -> stay on the ground to pass under
+  //   type "saw":    spinning blade      -> jump over it
+  //   type "fire":   flame on the ground -> jump over it
+  //   type "bat":    low flier that bobs -> jump over / time it
   // x/y/w/h describe the collision box; y is the TOP of the box.
+  // Only "rock" and "cactus" are landable; every other type is a hazard.
   function makeObstacle(type, x) {
     if (type === "bird") {
       const h = 26;
@@ -868,6 +878,67 @@
       const h = 28 + Math.floor(Math.random() * 14);
       return { type, x, y: GROUND_Y - h, w: 22, h };
     }
+    if (type === "saw") {
+      // a spinning blade sitting on the ground; jump over it
+      const r = 18 + Math.floor(Math.random() * 8); // radius 18-25
+      return { type, x, y: GROUND_Y - r * 2, w: r * 2, h: r * 2, r, spin: 0 };
+    }
+    if (type === "fire") {
+      // a flame flickering on the ground; jump over it
+      const h = 30 + Math.floor(Math.random() * 14);
+      return { type, x, y: GROUND_Y - h, w: 26, h, flicker: Math.random() * 6 };
+    }
+    if (type === "bat") {
+      // a low flier that bobs up and down; time your run/jump
+      const h = 22;
+      const baseY = GROUND_Y - player.h - 6 - Math.floor(Math.random() * 18);
+      return { type, x, y: baseY, w: 30, h, baseY, bob: Math.random() * Math.PI * 2 };
+    }
+    if (type === "log") {
+      // a wide, low rolling log; needs a well-timed jump. `roll` animates
+      // the rolling lines; collision uses the full box.
+      const w = 46 + Math.floor(Math.random() * 20); // 46-65 wide
+      const h = 24;
+      return { type, x, y: GROUND_Y - h, w, h, roll: 0 };
+    }
+    if (type === "spikeball") {
+      // a spiked ball swinging on a chain from above. It swings left/right;
+      // `swing` drives the angle and its x-offset is applied at draw/collide.
+      const r = 16;
+      const anchorY = GROUND_Y - player.h - 55; // chain hangs from up here
+      return {
+        type, x, y: anchorY, w: r * 2, h: r * 2, r,
+        anchorY, swing: Math.random() * Math.PI * 2, swingX: 0,
+      };
+    }
+    if (type === "geyser") {
+      // an eruption from the ground: safe while resting, deadly while up.
+      // `phase` cycles; `active` is set each frame based on the phase.
+      const maxH = 46 + Math.floor(Math.random() * 20);
+      return {
+        type, x, y: GROUND_Y - maxH, w: 24, h: maxH, maxH,
+        phase: Math.random() * Math.PI * 2, active: false, curH: 0,
+      };
+    }
+    if (type === "spring") {
+      // a bouncy pad. Landing on it is SAFE and launches you extra high;
+      // handy for clearing tall obstacles. `squash` animates the press.
+      const h = 14;
+      return { type, x, y: GROUND_Y - h, w: 34, h, squash: 0 };
+    }
+    if (type === "boulder") {
+      // a big rolling boulder that rolls toward the player faster than the
+      // world scrolls, so it closes in. Jump over it. `roll` spins it.
+      const r = 22 + Math.floor(Math.random() * 8); // radius 22-29
+      return { type, x, y: GROUND_Y - r * 2, w: r * 2, h: r * 2, r, roll: 0, extra: 0 };
+    }
+    if (type === "icicle") {
+      // hangs from the ceiling and DROPS when the player gets close, then
+      // falls to the ground. States: "hanging" -> "falling" -> "fallen".
+      const h = 30 + Math.floor(Math.random() * 14);
+      const topY = 8; // hangs near the top of the screen
+      return { type, x, y: topY, w: 16, h, topY, phase: "hanging", vy: 0 };
+    }
     // spike (default)
     const h = 28 + Math.floor(Math.random() * 20);
     return { type: "spike", x, y: GROUND_Y - h, w: 26, h };
@@ -880,10 +951,26 @@
     worldOffset = 0;
     player.y = GROUND_Y; player.vy = 0; player.onGround = true;
 
-    // Weighted pool: rocks are repeated so they appear more often.
-    // birds appear from level 2 on.
-    const groundTypes = ["rock", "rock", "rock", "spike", "cactus"];
-    const types = lv >= 2 ? groundTypes.concat(["bird"]) : groundTypes;
+    // Weighted pool: rocks are repeated so they appear more often. New
+    // obstacle types unlock as the level rises so early levels stay gentle.
+    //   lv 1:  rocks, spikes, cacti
+    //   lv 2+: + birds, + fire
+    //   lv 3+: + saw blades, + rolling logs
+    //   lv 4+: + bats
+    //   lv 5+: + geysers
+    //   lv 6+: + swinging spikeballs
+    //   lv 7+: + springs (bouncy, safe to land on)
+    //   lv 8+: + rolling boulders
+    //   lv 9+: + falling icicles
+    let types = ["rock", "rock", "rock", "spike", "cactus"];
+    if (lv >= 2) types = types.concat(["bird", "fire"]);
+    if (lv >= 3) types = types.concat(["saw", "log"]);
+    if (lv >= 4) types = types.concat(["bat"]);
+    if (lv >= 5) types = types.concat(["geyser"]);
+    if (lv >= 6) types = types.concat(["spikeball"]);
+    if (lv >= 7) types = types.concat(["spring"]);
+    if (lv >= 8) types = types.concat(["boulder"]);
+    if (lv >= 9) types = types.concat(["icicle"]);
 
     // fewer monsters, and the count grows slowly as levels rise
     const monsterCount = 1 + Math.ceil(lv / 2);
@@ -904,6 +991,15 @@
           holes.push({ x: x, w: holeW, awardedFall: false });
           x += holeW + 200; // clear landing space after the hole
         }
+
+        // From level 3, sometimes add a pond/lake: a wider water gap you
+        // must jump over. Falling in the water costs a life, same as a pit.
+        // It reuses the hole system with a `water` flag for the visuals.
+        else if (lv >= 3 && Math.random() < 0.25) {
+          const pondW = 34 + Math.floor(Math.random() * 16); // 34-50 wide
+          holes.push({ x: x, w: pondW, awardedFall: false, water: true });
+          x += pondW + 210; // clear landing space after the pond
+        }
       }
       monsters.push({ x: x, emoji: MONSTER_EMOJIS[(lv + i) % MONSTER_EMOJIS.length], alive: true });
       x += 320;
@@ -923,290 +1019,12 @@
   }
 
   // ---- Math questions ----
-  // Difficulty is driven by the player's GRADE (1..5). The current game
-  // level (lv) adds a small bump so later levels feel a bit harder, but
-  // the grade sets the overall band and which operations can appear.
+  // The question bank lives in questions.js (loaded before this script).
+  // The engine just asks it for a question and a hint; it doesn't know how
+  // questions are generated. makeQuestion returns a question object:
+  //   { text, answer, opts:[...], topic?, ...extra fields for hints }
   function makeQuestion(lv) {
-    let a, b, op, answer;
-
-    // ---- Early learners (Pre-K, TK, Kindergarten) ----
-    // Very small numbers, no level bump, and only 3 answer choices.
-    if (grade <= 0) {
-      const maxNum = grade === -2 ? 3 : grade === -1 ? 5 : 5; // Pre-K:3, TK/K:5
-      const useSub = grade === 0 && Math.random() < 0.4;      // K adds subtraction
-      let ea, eb, eOp, eAns;
-      if (useSub) {
-        ea = rand(1, maxNum); eb = rand(0, ea);
-        eOp = "−"; eAns = ea - eb;
-      } else {
-        // keep the sum within maxNum so answers stay tiny
-        ea = rand(0, maxNum); eb = rand(0, Math.max(0, maxNum - ea));
-        eOp = "+"; eAns = ea + eb;
-      }
-      // 3 unique small options including the answer
-      const opt = new Set([eAns]);
-      let g2 = 0;
-      while (opt.size < 3 && g2++ < 50) {
-        const w = eAns + rand(-2, 2);
-        if (w >= 0 && w !== eAns) opt.add(w);
-      }
-      let f = eAns + 1;
-      while (opt.size < 3) { if (f !== eAns && f >= 0) opt.add(f); f++; }
-      return { text: `${ea} ${eOp} ${eb} = ?`, answer: eAns, opts: shuffle([...opt]), a: ea, b: eb, op: eOp === "−" ? "-" : "+" };
-    }
-
-    // ---- Grade-specific topic questions ----
-    // Beyond plain arithmetic, each grade practices extra skills drawn from the
-    // Mashup Math grade-level curriculum (place value, comparing, rounding,
-    // telling time, factors, order of operations). We roll a chance to serve a
-    // topic question; otherwise we fall through to the arithmetic below.
-    const topicQ = maybeTopicQuestion(lv);
-    if (topicQ) return topicQ;
-
-    // +1 difficulty every 2 levels. Grade 3 climbs more gently (every 3 levels).
-    const bump = grade === 3
-      ? Math.floor((lv - 1) / 3)
-      : Math.floor((lv - 1) / 2);
-
-    // Which operations are allowed for this grade.
-    //  + : addition, - : subtraction, * : multiplication, / : division
-    let allowedOps;
-    if (grade <= 1)      allowedOps = ["+", "-"];
-    else if (grade === 2) allowedOps = ["+", "-"];
-    else if (grade === 3) allowedOps = ["+", "-", "*"];
-    else if (grade === 4) allowedOps = ["+", "-", "*", "/"];
-    else                  allowedOps = ["+", "-", "*", "/"];
-
-    op = allowedOps[Math.floor(Math.random() * allowedOps.length)];
-
-    // Number range for add/sub grows with grade.
-    let range;
-    if (grade <= 1)      range = 10;
-    else if (grade === 2) range = 20;
-    else if (grade === 3) range = 30;
-    else if (grade === 4) range = 100;
-    else                  range = 200;
-    range += bump * 5;
-
-    if (op === "+") {
-      a = rand(1, range); b = rand(1, range);
-      answer = a + b;
-    } else if (op === "-") {
-      a = rand(1, range); b = rand(1, a); // no negative answers
-      answer = a - b;
-    } else if (op === "*") {
-      // multiplication table size grows with grade
-      const maxFactor = (grade === 3 ? 5 : grade === 4 ? 12 : 15) + bump;
-      a = rand(2, maxFactor); b = rand(2, maxFactor);
-      answer = a * b;
-    } else { // division with a whole-number answer
-      const maxDivisor = (grade === 4 ? 10 : 12) + bump;
-      b = rand(2, maxDivisor);
-      answer = rand(2, maxDivisor);
-      a = b * answer; // ensures a / b is exact
-    }
-
-    const opSymbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
-
-    // Build 4 unique, non-negative options including the answer.
-    const spread = Math.max(5, Math.round(answer * 0.3));
-    const options = new Set([answer]);
-    let guard = 0;
-    while (options.size < 4 && guard++ < 100) {
-      const delta = rand(-spread, spread);
-      const wrong = answer + delta;
-      if (wrong >= 0 && wrong !== answer) options.add(wrong);
-    }
-    // Fallback in case the loop couldn't find enough (very small answers)
-    let filler = answer + 1;
-    while (options.size < 4) { if (filler !== answer && filler >= 0) options.add(filler); filler++; }
-
-    const opts = shuffle([...options]);
-    return { text: `${a} ${opSymbols[op]} ${b} = ?`, answer, opts, a, b, op };
-  }
-
-  // =====================================================================
-  //  GRADE-LEVEL TOPIC QUESTIONS (Mashup Math K-8 skills)
-  //  Each grade gets a mix of extra topics on top of plain arithmetic.
-  //  maybeTopicQuestion() rolls a chance to return a topic question; if it
-  //  returns null, makeQuestion() falls through to its arithmetic path.
-  // =====================================================================
-  function maybeTopicQuestion(lv) {
-    const r = Math.random();
-    switch (grade) {
-      case 1: // Grade 1: place value (tens/ones) + comparing small numbers
-        if (r < 0.18) return makePlaceValue(2);     // 2-digit numbers
-        if (r < 0.30) return makeCompare(1, 20);
-        return null;
-      case 2: // Grade 2: place value (hundreds), rounding to 10, compare, time
-        if (r < 0.15) return makePlaceValue(3);     // 3-digit numbers
-        if (r < 0.27) return makeRounding(10, 100); // round to nearest 10
-        if (r < 0.37) return makeCompare(10, 200);
-        if (r < 0.47) return makeTelling();         // telling time
-        return null;
-      case 3: // Grade 3: place value to thousands, compare, round to 10/100
-        if (r < 0.20) return makePlaceValue(4);
-        if (r < 0.35) return makeCompare(100, 9999);
-        if (r < 0.50) return makeRounding([10, 100], 1000);
-        return null;
-      case 4: // Grade 4: bigger place value, rounding, factors, order of ops
-        if (r < 0.15) return makePlaceValue(5);
-        if (r < 0.28) return makeRounding([10, 100, 1000], 10000);
-        if (r < 0.40) return makeFactors();
-        if (r < 0.52) return makeOrderOfOps(false);
-        return null;
-      case 5: // Grade 5: order of operations, factors, rounding large numbers
-        if (r < 0.20) return makeOrderOfOps(true);
-        if (r < 0.32) return makeFactors();
-        if (r < 0.44) return makeRounding([100, 1000], 100000);
-        return null;
-      default:
-        return null;
-    }
-  }
-
-  const PLACE_NAMES = ["ones", "tens", "hundreds", "thousands", "ten thousands"];
-
-  // Place value: "In 4,382, which digit is in the hundreds place?"
-  // digitsCount controls how many digits the number has (2..5).
-  function makePlaceValue(digitsCount) {
-    const min = Math.pow(10, digitsCount - 1);
-    const max = Math.pow(10, digitsCount) - 1;
-    const num = rand(min, max);
-    const digits = String(num).split("").map(Number); // left..right
-    const idx = rand(0, digitsCount - 1);              // 0 => ones place
-    const placeName = PLACE_NAMES[idx];
-    const answer = digits[digits.length - 1 - idx];    // digit in that place
-    const options = new Set([answer]);
-    for (const d of digits) { if (options.size < 4) options.add(d); }
-    let f = 0;
-    while (options.size < 4 && f <= 9) { options.add(f); f++; }
-    return {
-      text: `In ${num.toLocaleString()}, which digit is in the ${placeName} place?`,
-      answer, opts: shuffle([...options]),
-      topic: "placeValue", num, place: placeName,
-    };
-  }
-
-  // Compare two numbers in [min,max] with <, >, or =
-  function makeCompare(min, max) {
-    const a = rand(min, max);
-    const b = Math.random() < 0.15 ? a : rand(min, max);
-    const answer = a < b ? "<" : a > b ? ">" : "=";
-    return {
-      text: `Compare:  ${a.toLocaleString()}  ?  ${b.toLocaleString()}`,
-      answer, opts: shuffle(["<", ">", "="]),
-      topic: "compare", a, b,
-    };
-  }
-
-  // Round to the nearest 10/100/1000. `nearestArg` is a single value or an
-  // array of choices; `maxNum` caps the number being rounded.
-  function makeRounding(nearestArg, maxNum) {
-    const nearest = Array.isArray(nearestArg)
-      ? nearestArg[rand(0, nearestArg.length - 1)]
-      : nearestArg;
-    const num = rand(nearest + 1, maxNum);
-    const answer = Math.round(num / nearest) * nearest;
-    const options = new Set([answer]);
-    options.add(Math.floor(num / nearest) * nearest);
-    options.add(Math.ceil(num / nearest) * nearest);
-    options.add(answer + nearest);
-    options.add(answer - nearest);
-    const clean = [...options].filter(v => v >= 0 && v !== answer);
-    const opts = new Set([answer]);
-    for (const v of shuffle(clean)) { if (opts.size < 4) opts.add(v); }
-    let f = answer + nearest * 2;
-    while (opts.size < 4) { opts.add(f); f += nearest; }
-    return {
-      text: `Round ${num.toLocaleString()} to the nearest ${nearest.toLocaleString()}.`,
-      answer, opts: shuffle([...opts]),
-      topic: "rounding", num, nearest,
-    };
-  }
-
-  // Factors: "Which number is a factor of 24?" (Grade 4-5)
-  function makeFactors() {
-    // pick a composite number with several factors
-    const bases = [12, 16, 18, 20, 24, 28, 30, 36, 40, 48];
-    const num = bases[rand(0, bases.length - 1)];
-    const factors = [];
-    for (let i = 2; i < num; i++) if (num % i === 0) factors.push(i);
-    const answer = factors[rand(0, factors.length - 1)];
-    // wrong options: numbers that are NOT factors of num
-    const opts = new Set([answer]);
-    let guard = 0;
-    while (opts.size < 4 && guard++ < 100) {
-      const w = rand(2, num - 1);
-      if (num % w !== 0) opts.add(w);
-    }
-    return {
-      text: `Which of these is a factor of ${num}?`,
-      answer, opts: shuffle([...opts]),
-      topic: "factors", num,
-    };
-  }
-
-  // Order of operations: "3 + 4 × 2 = ?" (Grade 4 no parens, Grade 5 parens)
-  function makeOrderOfOps(useParens) {
-    const a = rand(2, 9), b = rand(2, 9), c = rand(2, 6);
-    let text, answer;
-    if (useParens && Math.random() < 0.5) {
-      answer = (a + b) * c;
-      text = `(${a} + ${b}) × ${c} = ?`;
-    } else if (Math.random() < 0.5) {
-      answer = a + b * c;
-      text = `${a} + ${b} × ${c} = ?`;
-    } else {
-      answer = a * b - c;
-      text = `${a} × ${b} − ${c} = ?`;
-    }
-    const options = new Set([answer]);
-    const spread = Math.max(3, Math.round(answer * 0.3));
-    let guard = 0;
-    while (options.size < 4 && guard++ < 100) {
-      const w = answer + rand(-spread, spread);
-      if (w >= 0 && w !== answer) options.add(w);
-    }
-    let f = answer + 1;
-    while (options.size < 4) { if (f !== answer && f >= 0) options.add(f); f++; }
-    return {
-      text, answer, opts: shuffle([...options]),
-      topic: "orderOfOps",
-    };
-  }
-
-  // Telling time: "What time is shown: 4:15?" style (Grade 2)
-  function makeTelling() {
-    const hour = rand(1, 12);
-    const minutes = [0, 15, 30, 45][rand(0, 3)];
-    const mm = String(minutes).padStart(2, "0");
-    const answer = `${hour}:${mm}`;
-    const words = minutes === 0 ? `${hour} o'clock`
-      : minutes === 15 ? `quarter past ${hour}`
-      : minutes === 30 ? `half past ${hour}`
-      : `quarter to ${hour === 12 ? 1 : hour + 1}`;
-    const opts = new Set([answer]);
-    let guard = 0;
-    while (opts.size < 4 && guard++ < 100) {
-      const h2 = rand(1, 12);
-      const m2 = [0, 15, 30, 45][rand(0, 3)];
-      opts.add(`${h2}:${String(m2).padStart(2, "0")}`);
-    }
-    return {
-      text: `Which clock time is "${words}"?`,
-      answer, opts: shuffle([...opts]),
-      topic: "time", words,
-    };
-  }
-
-  function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
+    return window.MathQuest.Questions.make(grade, lv);
   }
 
   // =====================================================================
@@ -1424,85 +1242,19 @@
   //  costs a life. The video button opens a kid-friendly search for the
   //  right kind of lesson so the link is always valid.
   // =====================================================================
-  const OP_WORD = { "+": "addition", "-": "subtraction", "*": "multiplication", "/": "division" };
-
-  function buildHint(q) {
-    const { a, b, op, answer } = q;
-
-    // Grade-level topic questions have their own explanations.
-    if (q.topic === "placeValue") {
-      return `Place value tells you what each digit is worth.\n` +
-             `Reading ${q.num.toLocaleString()} from the right: ones, tens, hundreds, thousands.\n` +
-             `The digit in the ${q.place} place is ${answer}.`;
-    }
-    if (q.topic === "compare") {
-      const word = answer === "<" ? "less than" : answer === ">" ? "greater than" : "equal to";
-      return `Compare the numbers place by place, starting from the left.\n` +
-             `${q.a.toLocaleString()} is ${word} ${q.b.toLocaleString()}.\n` +
-             `The open side of < or > always points to the bigger number.`;
-    }
-    if (q.topic === "rounding") {
-      return `To round ${q.num.toLocaleString()} to the nearest ${q.nearest.toLocaleString()}:\n` +
-             `look at the digit just to the right of that place.\n` +
-             `5 or more rounds up, 4 or less rounds down → ${answer.toLocaleString()}.`;
-    }
-    if (q.topic === "factors") {
-      return `A factor divides a number evenly, with nothing left over.\n` +
-             `Check: does ${q.num} ÷ (the choice) give a whole number?\n` +
-             `${q.num} ÷ ${answer} = ${q.num / answer}, so ${answer} is a factor.`;
-    }
-    if (q.topic === "orderOfOps") {
-      return `Follow the order of operations (PEMDAS):\n` +
-             `do anything in parentheses first, then × and ÷, then + and −.\n` +
-             `Working left to right within each step gives ${answer}.`;
-    }
-    if (q.topic === "time") {
-      return `Read the hour first, then the minutes.\n` +
-             `"${q.words}" matches ${answer}.\n` +
-             `Quarter past = :15, half past = :30, quarter to = :45.`;
-    }
-
-    if (op === "+") {
-      return `Addition means putting groups together.\n` +
-             `Start at ${a}, then count up ${b} more.\n` +
-             `${a} + ${b} = ${answer}.`;
-    }
-    if (op === "-") {
-      return `Subtraction means taking away.\n` +
-             `Start at ${a}, then count back ${b}.\n` +
-             `${a} − ${b} = ${answer}.`;
-    }
-    if (op === "*") {
-      return `Multiplication is repeated addition.\n` +
-             `${a} × ${b} means adding ${a} together ${b} times:\n` +
-             `${Array(Math.min(b, 6)).fill(a).join(" + ")}${b > 6 ? " + …" : ""} = ${answer}.`;
-    }
-    // division
-    return `Division means sharing into equal groups.\n` +
-           `${a} ÷ ${b} asks: how many groups of ${b} fit in ${a}?\n` +
-           `Because ${b} × ${answer} = ${a}, the answer is ${answer}.`;
-  }
-
+  // Hint text is built by the question bank (questions.js) so the engine
+  // stays out of the math. See MathQuest.Questions.hint().
   function showMathHelp() {
     if (state !== "battle" || !currentQuestion || questionAnswered) return;
     hintUsed = true; // no speed bonus once help is opened
-    el.hint.textContent = buildHint(currentQuestion);
+    el.hint.textContent = window.MathQuest.Questions.hint(currentQuestion);
     el.hint.style.whiteSpace = "pre-line"; // keep the line breaks from \n
     el.hint.classList.add("show");
   }
 
-  const TOPIC_WORD = {
-    placeValue: "place value",
-    compare: "comparing numbers greater than less than",
-    rounding: "rounding numbers",
-    factors: "factors of a number",
-    orderOfOps: "order of operations PEMDAS",
-    time: "telling time on a clock",
-  };
   function openVideo() {
     if (!currentQuestion) return;
-    const q = currentQuestion;
-    const word = TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
+    const word = window.MathQuest.Questions.videoTopic(currentQuestion);
     const query = encodeURIComponent(`how to do ${word} for kids`);
     // Opens a YouTube search in a new tab (always a valid link).
     window.open(`https://www.youtube.com/results?search_query=${query}`, "_blank", "noopener");
@@ -1729,12 +1481,83 @@
     const px = player.x, py = player.y - player.h;
 
     for (const o of obstacles) {
-      const ox = o.x - worldOffset;
-      if (ox + o.w < 0) continue;
-      if (ox > W) break;
-      const oy = o.y;
+      // Only play obstacle sounds when it's roughly on screen, so we don't
+      // hear things happening far away.
+      const onScreen = (o.x - worldOffset) > -60 && (o.x - worldOffset) < W + 60;
+
+      // advance animation state for moving obstacles
+      if (o.type === "saw") o.spin += 0.3;
+      if (o.type === "bat") {
+        o.bob += 0.08;
+        o.y = o.baseY + Math.sin(o.bob) * 14; // bob up and down
+      }
+      if (o.type === "log") o.roll += 0.25;
+      if (o.type === "spikeball") {
+        const prevX = o.swingX;
+        o.swing += 0.05; // a touch slower so it's easier to time
+        o.swingX = Math.sin(o.swing) * 34; // swings left/right of its anchor
+        // whoosh as it passes through the lowest/center point of the swing
+        if (onScreen && prevX < 0 && o.swingX >= 0) sfx.whoosh();
+      }
+      if (o.type === "geyser") {
+        o.phase += 0.03; // slower cycle -> ~3.5s, so kids get a clear window
+        // Deadly only near the top of the cycle (sin > 0.5 ~= a third of the
+        // time), giving a generous "resting" window to run past safely.
+        const s = Math.sin(o.phase);
+        const wasActive = o.active;
+        o.active = s > 0.5;
+        o.curH = o.active ? o.maxH * ((s - 0.5) / 0.5) : 0;
+        if (onScreen && o.active && !wasActive) sfx.erupt(); // rising edge
+      }
+      if (o.type === "spring" && o.squash > 0) o.squash -= 0.08; // relax press
+      if (o.type === "boulder") {
+        o.roll += 0.2;
+        // rolls toward the player: creeps left on top of the world scroll
+        o.extra += scrollSpeed * 0.5;
+      }
+      if (o.type === "icicle") {
+        const distX = (o.x - worldOffset) - player.x;
+        if (o.phase === "hanging" && distX < 140 && distX > -10) {
+          o.phase = "falling"; // player is near -> let go
+        }
+        if (o.phase === "falling") {
+          o.vy += GRAVITY;
+          o.y += o.vy;
+          if (o.y >= GROUND_Y - o.h) { o.y = GROUND_Y - o.h; o.phase = "fallen"; }
+        }
+      }
+
+      // cull based on the base position (order is preserved), then apply
+      // the spikeball's swing only to the collision geometry.
+      const baseX = o.x - worldOffset;
+      if (baseX + o.w + 40 < 0) continue;
+      if (baseX - 40 > W) break;
+
+      // geyser only exists as a hazard while erupting; its box grows upward
+      if (o.type === "geyser" && !o.active) continue;
+      // an icicle is only dangerous once it starts falling
+      if (o.type === "icicle" && o.phase === "hanging") continue;
+      // horizontal shift: spikeball swings, boulder creeps toward the player
+      const shift = o.type === "spikeball" ? o.swingX
+                  : o.type === "boulder"   ? -o.extra
+                  : 0;
+      const ox = baseX + shift;
+      const oy = o.type === "geyser" ? GROUND_Y - o.curH : o.y;
+      const oh = o.type === "geyser" ? o.curH : o.h;
+
       const horizontallyOver = px + player.w > ox + 4 && px < ox + o.w - 4;
       if (!horizontallyOver) continue;
+
+      // A spring is landable AND launches the player high (safe, no life lost).
+      if (o.type === "spring" && player.vy >= 0 &&
+          prevFeet <= oy + 10 && player.y <= oy + oh) {
+        player.y = oy;
+        player.vy = JUMP_V * 1.5; // extra-high bounce
+        player.onGround = false;
+        o.squash = 1;             // visual press
+        sfx.jump();
+        continue;
+      }
 
       // Rocks and cacti are landable. If the player is moving downward and
       // their feet reach the top area, treat it as a safe landing on top.
@@ -1742,7 +1565,7 @@
       // Only rocks give a bonus life; a cactus is just safe to stand on.
       const landTol = o.type === "cactus" ? 22 : 8;
       if ((o.type === "rock" || o.type === "cactus") && player.vy >= 0 &&
-          prevFeet <= oy + landTol && player.y <= oy + o.h) {
+          prevFeet <= oy + landTol && player.y <= oy + oh) {
         player.y = oy;            // stand on top
         player.vy = 0;
         player.onGround = true;
@@ -1757,8 +1580,9 @@
         continue;                 // no life lost
       }
 
-      // Otherwise, a real hit (spikes, bird, or the side of a rock/cactus)
-      if (py + player.h > oy + 4 && py < oy + o.h - 4) {
+      // Otherwise, a real hit (spikes, saw, fire, bird, bat, log, geyser,
+      // swinging spikeball, boulder, falling icicle, or the side of a rock/cactus)
+      if (py + player.h > oy + 4 && py < oy + oh - 4) {
         loseLifeFromObstacle(o);
       }
     }
@@ -1804,7 +1628,7 @@
     if (hole.awardedFall) return; // only cost one life per fall
     hole.awardedFall = true;
     lives--;
-    sfx.hit();
+    if (hole.water && sfx.splash) sfx.splash(); else sfx.hit();
     updateHUD();
     persistProgress();
     if (lives <= 0) { gameOver(); return; }
@@ -1827,13 +1651,32 @@
       const hx = hole.x - worldOffset;
       if (hx + hole.w < 0 || hx > W) continue;
       holeSpans.push([hx, hx + hole.w]);
-      // sky-colored fill so the grass "disappears" into a gap
-      ctx.fillStyle = "#aee2ff";
-      ctx.fillRect(hx, GROUND_Y - 2, hole.w, H - GROUND_Y + 2);
-      // dark pit walls for depth
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      ctx.fillRect(hx, GROUND_Y, 4, H - GROUND_Y);
-      ctx.fillRect(hx + hole.w - 4, GROUND_Y, 4, H - GROUND_Y);
+      if (hole.water) {
+        // a pond/lake: blue water with a lighter surface and shimmer
+        ctx.fillStyle = "#2196f3";
+        ctx.fillRect(hx, GROUND_Y - 2, hole.w, H - GROUND_Y + 2);
+        ctx.fillStyle = "#64b5f6"; // brighter surface band
+        ctx.fillRect(hx, GROUND_Y - 2, hole.w, 6);
+        // shimmer lines that drift with the world scroll
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 2;
+        for (let s = 0; s < 2; s++) {
+          const sy = GROUND_Y + 6 + s * 7;
+          const off = (worldOffset * 0.5 + s * 13) % (hole.w || 1);
+          ctx.beginPath();
+          ctx.moveTo(hx + off, sy);
+          ctx.lineTo(hx + Math.min(off + 10, hole.w), sy);
+          ctx.stroke();
+        }
+      } else {
+        // sky-colored fill so the grass "disappears" into a gap
+        ctx.fillStyle = "#aee2ff";
+        ctx.fillRect(hx, GROUND_Y - 2, hole.w, H - GROUND_Y + 2);
+        // dark pit walls for depth
+        ctx.fillStyle = "rgba(0,0,0,0.18)";
+        ctx.fillRect(hx, GROUND_Y, 4, H - GROUND_Y);
+        ctx.fillRect(hx + hole.w - 4, GROUND_Y, 4, H - GROUND_Y);
+      }
     }
 
     // ground line, skipping the hole spans
@@ -1858,7 +1701,11 @@
     }
 
     for (const o of obstacles) {
-      const ox = o.x - worldOffset;
+      // The boulder creeps left, so shift its draw x to match collision.
+      // (The spikeball applies its own swing inside drawObstacle so the
+      //  chain can hang from a fixed anchor.)
+      const shift = o.type === "boulder" ? -(o.extra || 0) : 0;
+      const ox = o.x - worldOffset + shift;
       if (ox + o.w < 0 || ox > W) continue;
       drawObstacle(o, ox);
     }
@@ -1931,6 +1778,202 @@
       roundRect(ox, o.y + o.h * 0.35, 8, o.h * 0.4, 4); // left arm
       ctx.fill();
       roundRect(ox + o.w - 8, o.y + o.h * 0.25, 8, o.h * 0.4, 4); // right arm
+      ctx.fill();
+      return;
+    }
+    if (o.type === "saw") {
+      // spinning circular blade with teeth
+      const cx = ox + o.r, cy = o.y + o.r;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(o.spin || 0);
+      ctx.fillStyle = "#b0bec5";
+      const teeth = 10;
+      ctx.beginPath();
+      for (let i = 0; i < teeth * 2; i++) {
+        const ang = (Math.PI * i) / teeth;
+        const rad = i % 2 === 0 ? o.r : o.r - 5;
+        ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#607d8b"; // hub
+      ctx.beginPath();
+      ctx.arc(0, 0, o.r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    if (o.type === "fire") {
+      // a flickering flame: outer orange + inner yellow
+      const flame = Math.sin(worldOffset * 0.3 + (o.flicker || 0)) * 4;
+      const baseY = o.y + o.h;
+      ctx.fillStyle = "#ff7043";
+      ctx.beginPath();
+      ctx.moveTo(ox, baseY);
+      ctx.quadraticCurveTo(ox - 2, o.y + o.h / 2, ox + o.w / 2, o.y - flame);
+      ctx.quadraticCurveTo(ox + o.w + 2, o.y + o.h / 2, ox + o.w, baseY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#ffca28";
+      ctx.beginPath();
+      ctx.moveTo(ox + o.w * 0.25, baseY);
+      ctx.quadraticCurveTo(ox + o.w * 0.2, o.y + o.h * 0.6, ox + o.w / 2, o.y + o.h * 0.25 - flame);
+      ctx.quadraticCurveTo(ox + o.w * 0.8, o.y + o.h * 0.6, ox + o.w * 0.75, baseY);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    }
+    if (o.type === "bat") {
+      // small dark flier with flapping wings
+      const cy = o.y + o.h / 2;
+      const flap = Math.sin(worldOffset * 0.2) * 7;
+      ctx.fillStyle = "#4a148c";
+      ctx.beginPath();
+      ctx.arc(ox + o.w / 2, cy, o.h / 2.6, 0, Math.PI * 2); // body
+      ctx.fill();
+      ctx.beginPath(); // wings
+      ctx.moveTo(ox + o.w / 2 - 4, cy);
+      ctx.lineTo(ox - 4, cy - flap);
+      ctx.lineTo(ox + o.w / 2 - 4, cy + 6);
+      ctx.moveTo(ox + o.w / 2 + 4, cy);
+      ctx.lineTo(ox + o.w + 4, cy - flap);
+      ctx.lineTo(ox + o.w / 2 + 4, cy + 6);
+      ctx.fill();
+      ctx.fillStyle = "#ff5252"; // eyes
+      ctx.beginPath();
+      ctx.arc(ox + o.w / 2 - 3, cy - 1, 1.6, 0, Math.PI * 2);
+      ctx.arc(ox + o.w / 2 + 3, cy - 1, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    if (o.type === "log") {
+      // a brown rolling log with grain lines that turn as it rolls
+      const cy = o.y + o.h / 2;
+      ctx.fillStyle = "#795548";
+      roundRect(ox, o.y, o.w, o.h, o.h / 2);
+      ctx.fill();
+      // rolling end-cap rings
+      ctx.strokeStyle = "#5d4037";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const r = (o.h / 2) - 3 - i * 4;
+        if (r <= 0) break;
+        const wobble = Math.cos((o.roll || 0) + i) * 3;
+        ctx.beginPath();
+        ctx.arc(ox + o.h / 2 + wobble, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      return;
+    }
+    if (o.type === "geyser") {
+      // ground vent; while erupting, a column of water/steam shoots up
+      ctx.fillStyle = "#6d4c41"; // stone vent lip
+      roundRect(ox - 3, GROUND_Y - 6, o.w + 6, 6, 3);
+      ctx.fill();
+      if (o.active && o.curH > 2) {
+        const topY = GROUND_Y - o.curH;
+        ctx.fillStyle = "#4fc3f7";
+        roundRect(ox + 3, topY, o.w - 6, o.curH, 8);
+        ctx.fill();
+        // spray droplets near the top
+        ctx.fillStyle = "#b3e5fc";
+        for (let i = 0; i < 3; i++) {
+          const dx = ox + 4 + Math.random() * (o.w - 8);
+          ctx.beginPath();
+          ctx.arc(dx, topY + Math.random() * 8, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return;
+    }
+    if (o.type === "spikeball") {
+      // a spiked ball on a chain, swinging from an anchor above
+      const cx = ox + o.w / 2 + (o.swingX || 0);
+      const cy = o.y + o.r;
+      const anchorX = ox + o.w / 2; // chain hangs from the fixed anchor
+      const anchorTop = (o.anchorY != null ? o.anchorY : GROUND_Y - player.h - 55) - 15;
+      // chain
+      ctx.strokeStyle = "#9e9e9e";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(anchorX, anchorTop);
+      ctx.lineTo(cx, cy);
+      ctx.stroke();
+      // spikes around the ball
+      ctx.fillStyle = "#455a64";
+      const spikes = 8;
+      for (let i = 0; i < spikes; i++) {
+        const ang = (Math.PI * 2 * i) / spikes;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * o.r, cy + Math.sin(ang) * o.r);
+        ctx.lineTo(cx + Math.cos(ang + 0.2) * (o.r + 7), cy + Math.sin(ang + 0.2) * (o.r + 7));
+        ctx.lineTo(cx + Math.cos(ang - 0.2) * (o.r + 7), cy + Math.sin(ang - 0.2) * (o.r + 7));
+        ctx.closePath();
+        ctx.fill();
+      }
+      // ball body
+      ctx.fillStyle = "#37474f";
+      ctx.beginPath();
+      ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    if (o.type === "spring") {
+      // a coiled spring pad; squashes down briefly when bounced on
+      const press = (o.squash || 0) * 8;
+      const topY = o.y + press;
+      ctx.strokeStyle = "#9e9e9e"; // coils
+      ctx.lineWidth = 3;
+      const coilTop = topY + 4, coilBot = GROUND_Y - 2;
+      const coils = 3;
+      ctx.beginPath();
+      for (let i = 0; i <= coils; i++) {
+        const yy = coilTop + ((coilBot - coilTop) * i) / coils;
+        ctx.moveTo(ox, yy);
+        ctx.lineTo(ox + o.w, yy - 4);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#e53935"; // top pad
+      roundRect(ox - 2, topY, o.w + 4, 6, 3);
+      ctx.fill();
+      return;
+    }
+    if (o.type === "boulder") {
+      // a large grey rolling boulder; the whole draw shifts with its creep
+      const bx = ox; // ox already includes the boulder's leftward shift
+      const cx = bx + o.r, cy = o.y + o.r;
+      ctx.fillStyle = "#8d8d8d";
+      ctx.beginPath();
+      ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
+      ctx.fill();
+      // a couple of rotating cracks so it reads as rolling
+      ctx.strokeStyle = "#6d6d6d";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const ang = (o.roll || 0) + (i * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(ang) * o.r, cy + Math.sin(ang) * o.r);
+        ctx.stroke();
+      }
+      return;
+    }
+    if (o.type === "icicle") {
+      // a downward-pointing ice spike; hangs at top, then falls
+      ctx.fillStyle = "#81d4fa";
+      ctx.beginPath();
+      ctx.moveTo(ox, o.y);
+      ctx.lineTo(ox + o.w, o.y);
+      ctx.lineTo(ox + o.w / 2, o.y + o.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#b3e5fc"; // highlight
+      ctx.beginPath();
+      ctx.moveTo(ox + o.w / 2, o.y);
+      ctx.lineTo(ox + o.w * 0.7, o.y);
+      ctx.lineTo(ox + o.w / 2, o.y + o.h * 0.7);
+      ctx.closePath();
       ctx.fill();
       return;
     }
