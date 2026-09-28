@@ -6,29 +6,38 @@
 <title>Math Quest: Monster Battles</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
   body {
     font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
     background: linear-gradient(#7ec8ff, #bfe9ff);
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-height: 100vh;
-    padding: 16px;
+    justify-content: flex-start;
+    height: 100vh;          /* fill the viewport exactly */
+    height: 100dvh;         /* dynamic viewport height on mobile browsers */
+    overflow: hidden;       /* no page/sidebar scroll */
+    padding: 8px;
     user-select: none;
   }
   h1 {
     color: #ff5a8c;
     text-shadow: 2px 2px 0 #fff;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     text-align: center;
+    font-size: clamp(20px, 4.5vw, 34px);  /* scale the title to the screen */
+    flex: 0 0 auto;
   }
   #topbar {
     display: flex;
     gap: 12px;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-weight: bold;
     color: #2b3a67;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: center;
   }
   #topbar .who { background:#fff; padding:6px 12px; border-radius:12px; box-shadow:0 3px 0 #cfd8ff; }
   #hud {
@@ -37,9 +46,10 @@
     font-size: 18px;
     font-weight: bold;
     color: #2b3a67;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     flex-wrap: wrap;
     justify-content: center;
+    flex: 0 0 auto;
   }
   .hud-box {
     background: #fff;
@@ -47,13 +57,26 @@
     border-radius: 12px;
     box-shadow: 0 3px 0 #cfd8ff;
   }
-  #gameWrap { position: relative; }
-  canvas {
+  /* The game area takes whatever vertical space is left after the header/HUD
+     and centers the canvas inside it. JS sizes #game to fit while keeping the
+     2:1 aspect ratio, so the whole app fits on screen with no page scroll. */
+  #gameWrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Sized by JS to the canvas's displayed box; overlays pin to this. */
+  #gameStage { position: relative; }
+  canvas#game {
     background: linear-gradient(#aee2ff 60%, #7dd87d 60%);
     border: 6px solid #2b3a67;
     border-radius: 16px;
     display: block;
-    max-width: 100%;
+    width: 100%;
+    height: 100%;
   }
   /* Overlays */
   .overlay {
@@ -105,6 +128,22 @@
     padding: 14px 28px;
     border-radius: 14px;
     margin-bottom: 14px;
+    white-space: pre-line;   /* honor line breaks in multi-line (graph) questions */
+  }
+  /* Longer, multi-line questions (e.g. graph readings) use a smaller,
+     left-aligned, monospaced layout so the rows line up neatly. */
+  #battle .question.multiline {
+    font-size: 18px;
+    line-height: 1.4;
+    text-align: left;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    max-width: 460px;
+  }
+  #graphCanvas {
+    background: #fff;
+    border-radius: 14px;
+    margin-bottom: 12px;
+    max-width: 100%;
   }
   #battle .answers {
     display: grid;
@@ -177,10 +216,11 @@
   #leaderboard .you td { font-weight:bold; color:#ff5a8c; }
 
   #controls-hint {
-    margin-top: 10px;
+    margin-top: 6px;
     color: #2b3a67;
     font-size: 14px;
     text-align: center;
+    flex: 0 0 auto;
   }
 </style>
 </head>
@@ -206,6 +246,7 @@
   </div>
 
   <div id="gameWrap">
+   <div id="gameStage">
     <canvas id="game" width="800" height="400"></canvas>
 
     <!-- Auth (login / signup) -->
@@ -260,6 +301,7 @@
         <div id="timerText">Time: <span id="timerSecs">15</span>s</div>
         <div id="timerBar"><div id="timerFill"></div></div>
       </div>
+      <canvas id="graphCanvas" width="380" height="220" style="display:none;"></canvas>
       <div class="question" id="question">2 + 2 = ?</div>
       <div class="answers" id="answers"></div>
       <div class="battle-tools">
@@ -329,6 +371,7 @@
       </table>
       <button class="btn big" id="lbCloseBtn" style="margin-top:16px;">Close</button>
     </div>
+   </div>
   </div>
 
   <div id="controls-hint">Controls: press <b>Space</b> or <b>↑</b> to jump &nbsp;•&nbsp; on touch, <b>tap the game</b> to jump</div>
@@ -558,6 +601,7 @@
     scratchCanvas: document.getElementById("scratchCanvas"),
     crayonColors: document.getElementById("crayonColors"),
     monsterFace: document.getElementById("monsterFace"),
+    graphCanvas: document.getElementById("graphCanvas"),
     levelClearText: document.getElementById("levelClearText"),
     gameOverText: document.getElementById("gameOverText"),
     timerSecs: document.getElementById("timerSecs"),
@@ -577,15 +621,42 @@
   let currentUid = null;
   let currentUser = null; // display name
 
+  // In-memory copy of the cache map. Parsing localStorage on every save was a
+  // synchronous main-thread cost that caused tiny frame freezes during play,
+  // so we parse it once and keep it in memory.
+  let cacheMap = null;
   function loadCache() {
-    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }
-    catch { return {}; }
+    if (cacheMap) return cacheMap;
+    try { cacheMap = JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }
+    catch { cacheMap = {}; }
+    return cacheMap;
   }
-  function saveCache(map) { localStorage.setItem(CACHE_KEY, JSON.stringify(map)); }
+
+  // Writing to localStorage is synchronous and can block a frame. We defer and
+  // coalesce writes so they happen during idle time, never mid-animation.
+  let cacheWriteQueued = false;
+  function scheduleCacheWrite() {
+    if (cacheWriteQueued) return;
+    cacheWriteQueued = true;
+    const flush = () => {
+      cacheWriteQueued = false;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMap || {})); } catch {}
+    };
+    // requestIdleCallback runs in spare time; fall back to a short timeout.
+    if (window.requestIdleCallback) requestIdleCallback(flush, { timeout: 1000 });
+    else setTimeout(flush, 200);
+  }
+  // Force any pending cache write to disk right now (used on unload/logout).
+  function flushCacheNow() {
+    cacheWriteQueued = false;
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMap || {})); } catch {}
+  }
+  function saveCache(map) { cacheMap = map; scheduleCacheWrite(); }
   function cacheProfile(uid, profile) {
     const map = loadCache();
     map[uid] = Object.assign({}, map[uid], profile);
-    saveCache(map);
+    cacheMap = map;
+    scheduleCacheWrite(); // deferred, non-blocking
   }
   function getCached(uid) { return loadCache()[uid] || null; }
 
@@ -625,6 +696,11 @@
   const QUESTION_SECONDS = 15;
   let currentQuestion = null; // the active question object {a,b,op,answer,...}
   let hintUsed = false;       // whether Math Help was used this question
+  // Starting Grade 3, each monster asks a small "quiz" of different-variety
+  // questions before it is defeated. These track that per-battle quiz.
+  let battleQuestionsNeeded = 1; // how many correct answers beat this monster
+  let battleQuestionsDone = 0;   // how many correct so far in this battle
+  let lastQuestionKind = null;   // topic/type of the previous question (for variety)
 
   // ---- Pause state ----
   let paused = false;
@@ -773,7 +849,7 @@
   }
 
   async function logout() {
-    await persistProgress();
+    await persistProgress({ immediate: true });
     stopTimer();
     paused = false;
     prePauseState = null;
@@ -787,20 +863,39 @@
   // =====================================================================
   //  SAVE / LOAD PROGRESS  (Firestore users/{uid}, plus local cache)
   // =====================================================================
-  function persistProgress() {
+  // Local cache is always updated instantly (cheap, in-memory + deferred disk
+  // write). The Firestore write is debounced so rapid in-game events (hits,
+  // bonuses) don't fire a network write every frame, which caused jank.
+  let cloudSaveTimer = null;
+  function scheduleCloudSave(profile) {
+    if (!(cloud() && cloud().available)) return;
+    if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = setTimeout(() => {
+      cloudSaveTimer = null;
+      cloud().saveProfile(currentUid, profile);
+    }, 1200);
+  }
+
+  // Update progress. During play this is non-blocking: memory + a debounced
+  // cloud write. Pass {immediate:true} on lifecycle events to write right away.
+  function persistProgress(opts) {
     if (!currentUid) return Promise.resolve();
     bestScore = Math.max(bestScore, score);
     const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting };
-    cacheProfile(currentUid, profile); // instant local cache
-    if (cloud() && cloud().available) {
-      return cloud().saveProfile(currentUid, profile); // writes to Firestore
+    cacheProfile(currentUid, profile); // instant local cache (deferred disk)
+    if (opts && opts.immediate) {
+      if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
+      flushCacheNow();
+      if (cloud() && cloud().available) return cloud().saveProfile(currentUid, profile);
+      return Promise.resolve();
     }
+    scheduleCloudSave(profile); // debounced network write
     return Promise.resolve();
   }
 
   // Kept for call sites; saving the profile also updates the global board,
   // since the leaderboard reads from users/{uid}.
-  function submitBestToCloud() { persistProgress(); }
+  function submitBestToCloud() { persistProgress({ immediate: true }); }
 
   // ---- Grade selection ----
   const GRADE_LABELS = {
@@ -1023,8 +1118,119 @@
   // The engine just asks it for a question and a hint; it doesn't know how
   // questions are generated. makeQuestion returns a question object:
   //   { text, answer, opts:[...], topic?, ...extra fields for hints }
+  // A question's "kind" is its topic (place value, data, etc.) or, for plain
+  // arithmetic, the operation. Used to guarantee variety within a battle.
+  function questionKind(q) {
+    return q.topic || ("op:" + q.op);
+  }
+
   function makeQuestion(lv) {
     return window.MathQuest.Questions.make(grade, lv);
+  }
+
+  // Build a question that differs in variety from `avoidKind` when possible.
+  // Grade 3+ battles use this so the two (or more) questions per monster are
+  // different types. Gives up after a few tries so it never loops forever.
+  function makeDistinctQuestion(lv, avoidKind) {
+    let q = makeQuestion(lv);
+    for (let i = 0; i < 12 && avoidKind && questionKind(q) === avoidKind; i++) {
+      q = makeQuestion(lv);
+    }
+    return q;
+  }
+
+  // Draw a bar graph or scaled picture graph for a data question.
+  // graph = { type:"bar"|"picture", label, unit, perIcon?, names[], values[] }
+  const GRAPH_COLORS = ["#ff6b6b", "#4dabf7", "#51cf66", "#ffd43b", "#b197fc"];
+  function drawGraph(graph) {
+    const cv = el.graphCanvas;
+    const ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = "#2b3a67";
+    ctx.font = "bold 16px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(graph.label, W / 2, 8);
+
+    const names = graph.names, values = graph.values;
+    const maxVal = Math.max(...values, 1);
+
+    // Plot area
+    const padL = 44, padR = 16, padT = 34, padB = 34;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const baseY = padT + plotH;
+    const slot = plotW / names.length;
+    const barW = Math.min(56, slot * 0.55);
+
+    if (graph.type === "bar") {
+      // Y axis with gridlines/labels at nice steps
+      const step = niceStep(maxVal);
+      const top = Math.ceil(maxVal / step) * step;
+      ctx.strokeStyle = "#dfe3ee";
+      ctx.fillStyle = "#6b7794";
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      for (let v = 0; v <= top; v += step) {
+        const y = baseY - (v / top) * plotH;
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.fillText(String(v), padL - 6, y);
+      }
+      // axes
+      ctx.strokeStyle = "#2b3a67";
+      ctx.beginPath();
+      ctx.moveTo(padL, padT); ctx.lineTo(padL, baseY); ctx.lineTo(W - padR, baseY);
+      ctx.stroke();
+      // bars
+      names.forEach((n, i) => {
+        const cx = padL + slot * i + slot / 2;
+        const h = (values[i] / top) * plotH;
+        ctx.fillStyle = GRAPH_COLORS[i % GRAPH_COLORS.length];
+        ctx.fillRect(cx - barW / 2, baseY - h, barW, h);
+        // name label
+        ctx.fillStyle = "#2b3a67";
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(n, cx, baseY + 6);
+      });
+    } else {
+      // picture graph: rows of icons, each icon = perIcon units
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const rowH = plotH / names.length;
+      const iconSize = Math.min(22, rowH * 0.6);
+      names.forEach((n, i) => {
+        const y = padT + rowH * i + rowH / 2;
+        ctx.fillStyle = "#2b3a67";
+        ctx.font = "13px system-ui, sans-serif";
+        ctx.fillText(n, 6, y);
+        const count = Math.round(values[i] / graph.perIcon);
+        const icon = graph.icon || "⚽";
+        ctx.font = iconSize + "px serif";
+        for (let k = 0; k < count; k++) {
+          ctx.fillText(icon, padL + 8 + k * (iconSize + 4), y);
+        }
+      });
+      // legend
+      const legendIcon = graph.icon || "⚽";
+      ctx.fillStyle = "#6b7794";
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`each ${legendIcon} = ${graph.perIcon} ${graph.unit}`, W / 2, H - 6);
+    }
+  }
+
+  // Choose a readable axis step (5/10/25/50...) for a given max value.
+  function niceStep(maxVal) {
+    const candidates = [1, 2, 5, 10, 25, 50, 100];
+    for (const c of candidates) { if (maxVal / c <= 6) return c; }
+    return Math.ceil(maxVal / 6);
   }
 
   // =====================================================================
@@ -1035,16 +1241,34 @@
     currentMonster = monster;
     el.monsterFace.textContent = monster.emoji;
     el.feedback.textContent = "";
+    // Starting Grade 3, a monster takes at least 2 questions of different
+    // variety to defeat. Earlier grades keep the single-question battle.
+    battleQuestionsNeeded = grade >= 3 ? 2 : 1;
+    battleQuestionsDone = 0;
+    lastQuestionKind = null;
     loadQuestion();
     el.battle.classList.add("show");
   }
 
   function loadQuestion() {
-    const q = makeQuestion(level);
+    // For multi-question battles (Grade 3+), pick a different variety than last.
+    const q = battleQuestionsNeeded > 1
+      ? makeDistinctQuestion(level, lastQuestionKind)
+      : makeQuestion(level);
     currentQuestion = q;
+    lastQuestionKind = questionKind(q);
     questionAnswered = false;
     hintUsed = false;
+    // Show "Question 1 of 2" style progress only when more than one is needed.
+    if (battleQuestionsNeeded > 1) {
+      el.feedback.textContent = `Question ${battleQuestionsDone + 1} of ${battleQuestionsNeeded}`;
+    }
     el.question.textContent = q.text;
+    // Multi-line questions need the compact, left-aligned layout.
+    el.question.classList.toggle("multiline", q.text.includes("\n"));
+    // Draw a real chart for data questions; hide the canvas otherwise.
+    if (q.graph) { drawGraph(q.graph); el.graphCanvas.style.display = "block"; }
+    else { el.graphCanvas.style.display = "none"; }
     el.hint.textContent = "";
     el.hint.classList.remove("show");
     clearScratch(); // fresh pad for each new question
@@ -1120,14 +1344,26 @@
       // bonus points for answering quickly (no speed bonus if a hint was used)
       const speedBonus = hintUsed ? 0 : Math.round(timeLeft);
       score += 10 + speedBonus;
+      battleQuestionsDone++;
       sfx.correct();
-      el.feedback.textContent = hintUsed
-        ? `Correct! +10 (used a hint) ✅`
-        : `Correct! +${10 + speedBonus} (speed bonus ${speedBonus}) ✅`;
-      currentMonster.alive = false;
-      persistProgress();
-      updateHUD();
-      setTimeout(endBattle, 800);
+
+      if (battleQuestionsDone >= battleQuestionsNeeded) {
+        // All questions for this monster answered — it's defeated.
+        el.feedback.textContent = hintUsed
+          ? `Correct! +10 (used a hint) ✅`
+          : `Correct! +${10 + speedBonus} (speed bonus ${speedBonus}) ✅`;
+        currentMonster.alive = false;
+        persistProgress();
+        updateHUD();
+        setTimeout(endBattle, 800);
+      } else {
+        // More questions to go — show progress and load the next variety.
+        const gained = hintUsed ? 10 : 10 + speedBonus;
+        el.feedback.textContent = `Correct! +${gained} ✅  Next question...`;
+        persistProgress();
+        updateHUD();
+        setTimeout(loadQuestion, 900);
+      }
     } else {
       lives--;
       sfx.wrong();
@@ -2029,8 +2265,33 @@
     }
   }
 
-  // save progress if the tab is closed mid-game
-  window.addEventListener("beforeunload", persistProgress);
+  // ---- Responsive canvas sizing ----
+  // The canvas keeps its internal 800x400 resolution (so all game math is
+  // unchanged), but we scale its *displayed* size to fit the space left in
+  // #gameWrap while preserving the 2:1 aspect ratio. This keeps the whole app
+  // on screen with no page scroll on any device.
+  const gameWrap = document.getElementById("gameWrap");
+  const gameStage = document.getElementById("gameStage");
+  function fitCanvas() {
+    const aspect = W / H;                 // 800 / 400 = 2
+    const availW = gameWrap.clientWidth;
+    const availH = gameWrap.clientHeight;
+    if (availW <= 0 || availH <= 0) return;
+    let cssW = availW;
+    let cssH = cssW / aspect;
+    if (cssH > availH) { cssH = availH; cssW = cssH * aspect; }
+    // Size the stage; the canvas fills it (100%) and overlays pin to it.
+    gameStage.style.width = Math.floor(cssW) + "px";
+    gameStage.style.height = Math.floor(cssH) + "px";
+  }
+  window.addEventListener("resize", fitCanvas);
+  window.addEventListener("orientationchange", fitCanvas);
+  // Re-fit whenever the game area changes size (HUD wrapping, etc.).
+  if (window.ResizeObserver) { new ResizeObserver(fitCanvas).observe(gameWrap); }
+  fitCanvas();
+
+  // save progress if the tab is closed mid-game (flush the deferred write now)
+  window.addEventListener("beforeunload", () => { flushCacheNow(); });
 
   // ---- Main loop ----
   function loop() {

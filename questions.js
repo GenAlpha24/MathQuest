@@ -147,6 +147,140 @@
     };
   }
 
+  // Division facts — e.g. "45 ÷ 9 = ?"  (Grade 3, from the "divide by 9" sheet)
+  // divisor is fixed (default 9) so it mirrors a timed facts drill.
+  function makeDivisionFact(divisor) {
+    const d = divisor || 9;
+    const quotient = rand(0, 9);      // 0..9 like the practice sheet
+    const dividend = d * quotient;    // exact division, no remainder
+    const answer = quotient;
+    const options = new Set([answer]);
+    let guard = 0;
+    while (options.size < 4 && guard++ < 50) {
+      const w = answer + rand(-3, 3);
+      if (w >= 0 && w !== answer) options.add(w);
+    }
+    let f = 0;
+    while (options.size < 4 && f <= 9) { options.add(f); f++; }
+    return {
+      text: `${dividend} ÷ ${d} = ?`,
+      answer, opts: shuffle([...options]),
+      topic: "divisionFact", a: dividend, b: d,
+    };
+  }
+
+  // Multiplication facts — e.g. "7 × 2 = ?"  (Grade 3, from the "×2" sheet)
+  // factor is fixed (default 2) so it mirrors a timed facts drill.
+  function makeMultiplicationFact(factor) {
+    const f2 = factor || 2;
+    const other = rand(0, 9);         // 0..9 like the practice sheet
+    const answer = f2 * other;
+    const options = new Set([answer]);
+    let guard = 0;
+    while (options.size < 4 && guard++ < 50) {
+      const w = answer + f2 * rand(-2, 2);
+      if (w >= 0 && w !== answer) options.add(w);
+    }
+    let step = answer + f2;
+    while (options.size < 4) { if (step >= 0 && step !== answer) options.add(step); step += f2; }
+    return {
+      text: `${other} × ${f2} = ?`,
+      answer, opts: shuffle([...options]),
+      topic: "multiplicationFact", a: other, b: f2,
+    };
+  }
+
+  // Data / graphs — read a small picture graph or bar graph and answer a
+  // question about it (Grade 3, "Represent and Interpret Data").
+  const KID_NAMES = ["Kyle", "Matt", "Jay", "Jason", "Mia", "Sam", "Ana", "Leo"];
+  const GRAPH_THINGS = [
+    { label: "Goals Scored", unit: "goals", perIcon: 2, icon: "⚽" },
+    { label: "Books Read", unit: "books", perIcon: 2, icon: "📖" },
+    { label: "Stickers Collected", unit: "stickers", perIcon: 5, icon: "⭐" },
+    { label: "Laps Run", unit: "laps", perIcon: 2, icon: "🏃" },
+  ];
+  // Returns a question object with a structured `graph` field the engine
+  // draws as a real chart:
+  //   graph = { type:"bar"|"picture", label, unit, perIcon?, names[], values[] }
+  function makeDataGraph() {
+    const usePicture = Math.random() < 0.5;
+    const thing = GRAPH_THINGS[rand(0, GRAPH_THINGS.length - 1)];
+    const names = shuffle([...KID_NAMES]).slice(0, 3);
+
+    if (usePicture) {
+      // scaled picture graph: each icon = perIcon units
+      const per = thing.perIcon;
+      const icons = names.map(() => rand(1, 4));       // 1..4 icons each
+      const values = icons.map(c => c * per);
+
+      const kind = rand(0, 2);
+      let question, answer;
+      if (kind === 0) {
+        const who = rand(0, 2);
+        question = `How many ${thing.unit} did ${names[who]} get?`;
+        answer = values[who];
+      } else if (kind === 1) {
+        const maxIdx = values.indexOf(Math.max(...values));
+        question = `Who got the most ${thing.unit}?`;
+        answer = names[maxIdx];
+      } else {
+        // sort two distinct kids for a "how many more" question
+        let i = 0, j = 1;
+        if (values[i] < values[j]) { [i, j] = [j, i]; }
+        question = `How many more ${thing.unit} did ${names[i]} get than ${names[j]}?`;
+        answer = values[i] - values[j];
+      }
+
+      const opts = buildGraphOptions(answer, values, names, kind);
+      return {
+        text: question, answer, opts, topic: "data",
+        graph: { type: "picture", label: thing.label, unit: thing.unit, perIcon: per, icon: thing.icon, names, values },
+      };
+    }
+
+    // bar graph: values shown directly on the axis
+    const values = names.map(() => rand(1, 5) * 25); // 25,50,...125
+    const kind = rand(0, 2);
+    let question, answer;
+    if (kind === 0) {
+      const minIdx = values.indexOf(Math.min(...values));
+      question = `Which had the fewest ${thing.unit}?`;
+      answer = names[minIdx];
+    } else if (kind === 1) {
+      const who = rand(0, 2);
+      question = `How many ${thing.unit} for ${names[who]}?`;
+      answer = values[who];
+    } else {
+      let i = 0, j = 1;
+      if (values[i] < values[j]) { [i, j] = [j, i]; }
+      question = `How many more ${thing.unit} did ${names[i]} have than ${names[j]}?`;
+      answer = values[i] - values[j];
+    }
+    const opts = buildGraphOptions(answer, values, names, kind === 0 ? 1 : kind === 1 ? 0 : 2);
+    return {
+      text: question, answer, opts, topic: "data",
+      graph: { type: "bar", label: thing.label, unit: thing.unit, names, values },
+    };
+  }
+
+  // Build 4 options for a graph question. When the answer is a name we use
+  // the other names as distractors; when it's a number we use nearby values.
+  function buildGraphOptions(answer, values, names, kind) {
+    const opts = new Set([answer]);
+    if (typeof answer === "string") {
+      for (const n of shuffle([...names])) { if (opts.size < 4) opts.add(n); }
+    } else {
+      for (const v of shuffle([...values])) { if (opts.size < 4 && v !== answer) opts.add(v); }
+      let step = 1;
+      while (opts.size < 4) {
+        if (answer + step >= 0) opts.add(answer + step);
+        if (opts.size < 4 && answer - step >= 0) opts.add(answer - step);
+        step++;
+      }
+    }
+    return shuffle([...opts]);
+  }
+
   // Telling time: "quarter past 4" -> 4:15 (Grade 2)
   function makeTelling() {
     const hour = rand(1, 12);
@@ -277,10 +411,13 @@
       { upTo: 0.37, gen: () => makeCompare(10, 200) },
       { upTo: 0.47, gen: () => makeTelling() },
     ],
-    3: [ // place value to thousands, compare, round to 10/100
-      { upTo: 0.20, gen: () => makePlaceValue(4) },
-      { upTo: 0.35, gen: () => makeCompare(100, 9999) },
-      { upTo: 0.50, gen: () => makeRounding([10, 100], 1000) },
+    3: [ // facts drills (÷9, ×2), data graphs, place value, compare, rounding
+      { upTo: 0.16, gen: () => makeDivisionFact(9) },
+      { upTo: 0.32, gen: () => makeMultiplicationFact(2) },
+      { upTo: 0.46, gen: () => makeDataGraph() },
+      { upTo: 0.58, gen: () => makePlaceValue(4) },
+      { upTo: 0.68, gen: () => makeCompare(100, 9999) },
+      { upTo: 0.78, gen: () => makeRounding([10, 100], 1000) },
     ],
     4: [ // bigger place value, rounding, factors, order of operations
       { upTo: 0.15, gen: () => makePlaceValue(5) },
@@ -354,6 +491,21 @@
              `"${q.words}" matches ${answer}.\n` +
              `Quarter past = :15, half past = :30, quarter to = :45.`;
     }
+    if (q.topic === "divisionFact") {
+      return `Division asks how many equal groups fit.\n` +
+             `${q.a} ÷ ${q.b}: think "${q.b} times what equals ${q.a}?"\n` +
+             `Because ${q.b} × ${answer} = ${q.a}, the answer is ${answer}.`;
+    }
+    if (q.topic === "multiplicationFact") {
+      return `Multiplying by ${q.b} means counting by ${q.b}s.\n` +
+             `${q.a} × ${q.b} is ${q.a} groups of ${q.b}.\n` +
+             `Count: ${Array.from({length: Math.min(q.a, 6)}, (_, i) => (i + 1) * q.b).join(", ")}${q.a > 6 ? ", …" : ""} → ${answer}.`;
+    }
+    if (q.topic === "data") {
+      return `Read the graph carefully.\n` +
+             `For a picture graph, multiply the number of icons by what each icon is worth.\n` +
+             `Then compare the rows to answer the question. The answer is ${answer}.`;
+    }
 
     // Arithmetic explanations.
     if (op === "+") {
@@ -386,6 +538,9 @@
     factors: "factors of a number",
     orderOfOps: "order of operations PEMDAS",
     time: "telling time on a clock",
+    divisionFact: "division facts dividing by 9",
+    multiplicationFact: "multiplication facts times 2",
+    data: "reading picture graphs and bar graphs for kids",
   };
   function videoTopic(q) {
     return TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
