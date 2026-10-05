@@ -68,15 +68,20 @@
     align-items: center;
     justify-content: center;
   }
-  /* Sized by JS to the canvas's displayed box; overlays pin to this. */
-  #gameStage { position: relative; }
+  /* The stage fills the game area; the canvas art is centered within it
+     (letterboxed) and overlays pin to the full stage so they get max height. */
+  #gameStage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   canvas#game {
     background: linear-gradient(#aee2ff 60%, #7dd87d 60%);
     border: 6px solid #2b3a67;
     border-radius: 16px;
     display: block;
-    width: 100%;
-    height: 100%;
+    /* width/height set by JS (fitCanvas) to keep the 2:1 ratio */
   }
   /* Overlays */
   .overlay {
@@ -122,12 +127,12 @@
 
   /* Battle box */
   #battle .question {
-    font-size: 40px;
+    font-size: 32px;
     background: #fff;
     color: #2b3a67;
-    padding: 14px 28px;
+    padding: 10px 24px;
     border-radius: 14px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
     white-space: pre-line;   /* honor line breaks in multi-line (graph) questions */
   }
   /* Longer, multi-line questions (e.g. graph readings) use a smaller,
@@ -142,15 +147,21 @@
   #graphCanvas {
     background: #fff;
     border-radius: 14px;
-    margin-bottom: 12px;
-    max-width: 100%;
+    margin-bottom: 8px;
+    max-width: 85%;
+    /* cap height on short screens so the answer buttons stay in view */
+    max-height: 30vh;
+    height: auto;
+    object-fit: contain;
   }
   #battle .answers {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 10px;
     width: 320px;
+    max-width: 85%;
   }
+  #battle .answers .btn { padding: 12px; font-size: 20px; }
   .btn {
     font-family: inherit;
     font-size: 22px;
@@ -179,9 +190,13 @@
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='%232b3a67' d='M4 6l4 4 4-4z'/></svg>");
     background-repeat:no-repeat; background-position:right 14px center; }
   #gradeSelect:focus { outline:3px solid #ff5a8c; }
-  #battle .monster-face { font-size: 60px; margin-bottom: 6px; }
-  #battle .feedback { font-size: 20px; height: 26px; margin-top: 12px; }
-  #battle .battle-tools { display:flex; gap:10px; margin-top:14px; }
+  #battle .monster-face { font-size: 44px; margin-bottom: 2px; }
+  #battle .feedback { font-size: 18px; min-height: 22px; margin-top: 8px; }
+  #battle .battle-tools { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+  /* Keep the battle overlay compact and let it scroll gracefully only if
+     truly needed, with the answers kept prominent. */
+  #battle { padding: 12px; gap: 2px; }
+  #battle h2 { font-size: 22px; margin-bottom: 6px; }
   #battle .hint {
     background: #fff; color:#2b3a67; border-radius:12px;
     padding: 0 16px; max-width: 360px; font-size: 16px; line-height: 1.4;
@@ -203,8 +218,8 @@
   .crayon-swatch.selected { border-color: #2b3a67; transform: scale(1.15); }
 
   /* Timer bar */
-  #timerWrap { width: 320px; margin-bottom: 14px; }
-  #timerText { font-size: 16px; margin-bottom: 4px; }
+  #timerWrap { width: 320px; max-width: 80%; margin-bottom: 8px; }
+  #timerText { font-size: 15px; margin-bottom: 3px; }
   #timerBar { height: 14px; background: rgba(255,255,255,0.3); border-radius: 10px; overflow: hidden; }
   #timerFill { height: 100%; width: 100%; background: #51cf66; transition: width .1s linear; }
 
@@ -2277,12 +2292,19 @@
     const availW = gameWrap.clientWidth;
     const availH = gameWrap.clientHeight;
     if (availW <= 0 || availH <= 0) return;
+
+    // The STAGE uses the full available area so overlays (battle answers,
+    // etc.) get as much height as possible and never need scrolling.
+    gameStage.style.width = Math.floor(availW) + "px";
+    gameStage.style.height = Math.floor(availH) + "px";
+
+    // The CANVAS art keeps its 2:1 ratio, centered (letterboxed) inside the
+    // stage, so the game never looks stretched even when the stage is taller.
     let cssW = availW;
     let cssH = cssW / aspect;
     if (cssH > availH) { cssH = availH; cssW = cssH * aspect; }
-    // Size the stage; the canvas fills it (100%) and overlays pin to it.
-    gameStage.style.width = Math.floor(cssW) + "px";
-    gameStage.style.height = Math.floor(cssH) + "px";
+    canvas.style.width = Math.floor(cssW) + "px";
+    canvas.style.height = Math.floor(cssH) + "px";
   }
   window.addEventListener("resize", fitCanvas);
   window.addEventListener("orientationchange", fitCanvas);
