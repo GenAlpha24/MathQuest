@@ -359,9 +359,9 @@
       <h2>❓ How to Play</h2>
       <div style="text-align:left; max-width:520px; font-size:16px; line-height:1.5;">
         <p><b>Goal:</b> Run across the level, jump over spikes, and beat every monster to clear the level.</p>
-        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Landing on a rock also earns a bonus life ❤️ (once per rock). Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
+        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
         <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out. Right answer beats the monster (and answering fast gives bonus points). A wrong answer or running out of time costs a life.</p>
-        <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life. ❤️</p>
+        <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life, and grabbing a shiny blue gem 💎 gives +1 life too. ❤️</p>
         <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
         <p style="margin-top:10px;"><b>Pause:</b> Press the ⏸ Pause button or the <b>P</b> / <b>Esc</b> key anytime.</p>
         <p style="margin-top:10px;"><b>Saving:</b> Your level, grade, and best score are saved to your account automatically.</p>
@@ -699,6 +699,17 @@
 
   let obstacles = [];
   let holes = []; // gaps in the ground: { x, w, awardedFall }
+  let gems = [];  // collectible gems: { x, y, collected, color } -> +1 life on touch
+  // Gem colors: each has a body fill and a matching glow.
+  const GEM_COLORS = [
+    { body: "#4dd2ff", glow: "rgba(80, 220, 255, 0.9)" },  // cyan
+    { body: "#ff6b9d", glow: "rgba(255, 107, 157, 0.9)" }, // pink
+    { body: "#8d6bff", glow: "rgba(141, 107, 255, 0.9)" }, // purple
+    { body: "#51cf66", glow: "rgba(81, 207, 102, 0.9)" },  // green
+    { body: "#ffd43b", glow: "rgba(255, 212, 59, 0.9)" },  // yellow
+    { body: "#ff8c42", glow: "rgba(255, 140, 66, 0.9)" },  // orange
+    { body: "#ff5a5a", glow: "rgba(255, 90, 90, 0.9)" },   // red
+  ];
   let monsters = [];
   let worldOffset = 0;
   let levelLength = 0;
@@ -1057,6 +1068,7 @@
   function buildLevel(lv) {
     obstacles = [];
     holes = [];
+    gems = [];
     monsters = [];
     worldOffset = 0;
     player.y = GROUND_Y; player.vy = 0; player.onGround = true;
@@ -1072,7 +1084,7 @@
     //   lv 7+: + springs (bouncy, safe to land on)
     //   lv 8+: + rolling boulders
     //   lv 9+: + falling icicles
-    let types = ["rock", "rock", "rock", "spike", "cactus"];
+    let types = ["rock", "rock", "spike", "cactus"];
     if (lv >= 2) types = types.concat(["bird", "fire"]);
     if (lv >= 3) types = types.concat(["saw", "log"]);
     if (lv >= 4) types = types.concat(["bat"]);
@@ -1109,6 +1121,17 @@
           const pondW = 34 + Math.floor(Math.random() * 16); // 34-50 wide
           holes.push({ x: x, w: pondW, awardedFall: false, water: true });
           x += pondW + 210; // clear landing space after the pond
+        }
+
+        // Occasionally float a gem to collect. Touching it gives +1 life.
+        // Kept rare so lives don't pile up. Placed in the gap between things,
+        // at a low-ish height reachable with a small hop (or by running
+        // through if it sits near the ground).
+        if (Math.random() < 0.22) {
+          const gemGap = 120 + Math.floor(Math.random() * 80);
+          const gy = GROUND_Y - (20 + Math.floor(Math.random() * 60)); // 20-80 above ground
+          const color = GEM_COLORS[Math.floor(Math.random() * GEM_COLORS.length)];
+          gems.push({ x: x - gemGap, y: gy, collected: false, color });
         }
       }
       monsters.push({ x: x, emoji: MONSTER_EMOJIS[(lv + i) % MONSTER_EMOJIS.length], alive: true });
@@ -1813,21 +1836,13 @@
       // Rocks and cacti are landable. If the player is moving downward and
       // their feet reach the top area, treat it as a safe landing on top.
       // Cacti get a bigger tolerance so it's easy to land on them.
-      // Only rocks give a bonus life; a cactus is just safe to stand on.
+      // Landing is just safe footing now, no bonus life.
       const landTol = o.type === "cactus" ? 22 : 8;
       if ((o.type === "rock" || o.type === "cactus") && player.vy >= 0 &&
           prevFeet <= oy + landTol && player.y <= oy + oh) {
         player.y = oy;            // stand on top
         player.vy = 0;
         player.onGround = true;
-        // reward: +1 life the FIRST time you land on a rock (rocks only)
-        if (o.type === "rock" && !o.awarded) {
-          o.awarded = true;
-          lives++;
-          sfx.extraLife();
-          updateHUD();
-          persistProgress();
-        }
         continue;                 // no life lost
       }
 
@@ -1835,6 +1850,24 @@
       // swinging spikeball, boulder, falling icicle, or the side of a rock/cactus)
       if (py + player.h > oy + 4 && py < oy + oh - 4) {
         loseLifeFromObstacle(o);
+      }
+    }
+
+    // Collect gems: touching one gives +1 life (once each).
+    const GEM = 24; // gem size in px
+    for (const gem of gems) {
+      if (gem.collected) continue;
+      const gx = gem.x - worldOffset;
+      if (gx + GEM < 0) continue;
+      if (gx > W) break;
+      // box overlap between the player and the gem
+      if (px + player.w > gx && px < gx + GEM &&
+          py + player.h > gem.y - GEM && py < gem.y) {
+        gem.collected = true;
+        lives++;
+        sfx.extraLife();
+        updateHUD();
+        persistProgress();
       }
     }
 
@@ -1959,6 +1992,14 @@
       const ox = o.x - worldOffset + shift;
       if (ox + o.w < 0 || ox > W) continue;
       drawObstacle(o, ox);
+    }
+
+    // gems (collectibles) — draw a shiny diamond with a gentle float + sparkle
+    for (const gem of gems) {
+      if (gem.collected) continue;
+      const gx = gem.x - worldOffset;
+      if (gx + 24 < 0 || gx > W) continue;
+      drawGem(gx, gem.y, gem.color);
     }
 
     ctx.font = "44px serif";
@@ -2236,6 +2277,39 @@
     ctx.lineTo(ox + o.w, GROUND_Y);
     ctx.closePath();
     ctx.fill();
+  }
+
+  // A collectible gem: a shiny cyan diamond with a soft glow + sparkle.
+  // (gx, gyBottom) is the gem's screen x and its bottom y.
+  function drawGem(gx, gyBottom, color) {
+    const c = color || GEM_COLORS[0];  // fallback for any older gems
+    const s = 24;                      // gem size
+    const cx = gx + s / 2;             // center x
+    const cy = gyBottom - s / 2 + Math.sin(worldOffset * 0.08) * 3; // gentle bob
+    ctx.save();
+    // glow
+    ctx.shadowColor = c.glow;
+    ctx.shadowBlur = 12;
+    // diamond body
+    ctx.fillStyle = c.body;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s / 2);        // top
+    ctx.lineTo(cx + s / 2, cy);        // right
+    ctx.lineTo(cx, cy + s / 2);        // bottom
+    ctx.lineTo(cx - s / 2, cy);        // left
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // facets / highlight
+    ctx.fillStyle = "rgba(255,255,255,0.65)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s / 2);
+    ctx.lineTo(cx + s / 4, cy - s / 6);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx - s / 4, cy - s / 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawHero(x, y) {
