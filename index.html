@@ -2655,12 +2655,32 @@
   window.addEventListener("beforeunload", () => { flushCacheNow(); });
 
   // ---- Main loop ----
-  function loop() {
-    update();
+  // Fixed-timestep loop. The game's physics/animation advance a fixed amount
+  // per update() call, which assumed a steady 60fps. On slower displays that
+  // made the game run in slow motion. Here we measure real elapsed time and
+  // run update() once per 1/60s of it (catching up if a frame was slow), then
+  // draw once. This keeps a true 60 simulation-steps per second regardless of
+  // the actual render frame rate, so the game runs at a consistent speed.
+  const STEP_MS = 1000 / 60;      // one simulation step = 1/60 second
+  const MAX_STEPS = 5;            // cap catch-up so a long pause can't freeze
+  let lastTime = performance.now();
+  let acc = 0;
+  function loop(now) {
+    let elapsed = now - lastTime;
+    lastTime = now;
+    if (elapsed > 250) elapsed = 250; // ignore huge gaps (tab was backgrounded)
+    acc += elapsed;
+    let steps = 0;
+    while (acc >= STEP_MS && steps < MAX_STEPS) {
+      update();
+      acc -= STEP_MS;
+      steps++;
+    }
+    if (steps === MAX_STEPS) acc = 0; // we fell behind; drop the backlog
     draw();
     requestAnimationFrame(loop);
   }
-  loop();
+  requestAnimationFrame(loop);
 
   // ---- Startup: react to Firebase auth state ----
   // If Firebase is available, let its auth listener drive the screen:
