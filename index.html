@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Math Quest: Monster Battles</title>
+<title>Monster Runs</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -40,6 +40,13 @@
     justify-content: flex-end;   /* account menu sits top-right */
     padding-right: 4px;
   }
+  /* Mute button */
+  #muteBtn {
+    font-size: 18px; line-height: 1; cursor: pointer;
+    background: #fff; border: none; border-radius: 14px; padding: 8px 12px;
+    box-shadow: 0 3px 0 #cfd8ff;
+  }
+  #muteBtn.muted { background: #ffe3e3; box-shadow: 0 3px 0 #ffc9c9; }
   /* Account dropdown */
   #accountMenu { position: relative; }
   #accountBtn {
@@ -186,6 +193,13 @@
     max-width: 85%;
   }
   #battle .answers .btn { padding: 12px; font-size: 20px; }
+  #typeAnswer { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  #typeInput {
+    font-family: inherit; font-size: 20px; font-weight: bold; text-align: center;
+    width: 160px; max-width: 45vw; padding: 10px 12px; border: none; border-radius: 12px;
+    color: #2b3a67;
+  }
+  #typeInput:focus { outline: 3px solid #ffd43b; }
   .btn {
     font-family: inherit;
     font-size: 22px;
@@ -206,7 +220,8 @@
   #gradePick, #speedPick, #colorPick, #hairPick, #genderPick, #gemMatchPick { margin: 4px 0 14px; }
   #hairButtons, #genderButtons, #gemMatchButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
   #gradeButtons, #speedButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
-  #colorButtons { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #colorButtons, #hairColorButtons, #eyeColorButtons { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #hairColorPick, #eyeColorPick { margin: 4px 0 14px; }
   .color-swatch {
     width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
     border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
@@ -271,9 +286,10 @@
 </style>
 </head>
 <body>
-  <h1>Math Quest: Monster Battles</h1>
+  <h1>Monster Runs</h1>
 
   <div id="topbar" style="display:none;">
+    <button id="muteBtn" title="Mute / unmute background music" aria-label="Mute music">🎵</button>
     <div id="accountMenu">
       <button id="accountBtn" aria-haspopup="true" aria-expanded="false">
         <span id="accountAvatar">🙂</span>
@@ -282,6 +298,7 @@
       </button>
       <div id="accountDropdown" role="menu">
         <button class="menu-item" id="pauseBtn">⏸ Pause</button>
+        <button class="menu-item" id="musicBtn">🎵 Music: On</button>
         <button class="menu-item" id="leaderboardBtn">🏆 Leaderboard</button>
         <button class="menu-item" id="helpBtn">❓ Help</button>
         <div class="menu-sep"></div>
@@ -298,6 +315,7 @@
     <div class="hud-box">Score: <span id="score">0</span></div>
     <div class="hud-box">Best: <span id="best">0</span></div>
     <div class="hud-box">Monsters left: <span id="monstersLeft">0</span></div>
+    <div class="hud-box">💎 Mega: <span id="megaCount">0</span></div>
   </div>
 
   <div id="gameWrap">
@@ -356,6 +374,14 @@
         <p style="margin-bottom:8px;">Hair:</p>
         <div id="hairButtons"></div>
       </div>
+      <div id="hairColorPick">
+        <p style="margin-bottom:8px;">Hair color:</p>
+        <div id="hairColorButtons"></div>
+      </div>
+      <div id="eyeColorPick">
+        <p style="margin-bottom:8px;">Eye color:</p>
+        <div id="eyeColorButtons"></div>
+      </div>
       <div id="genderPick">
         <p style="margin-bottom:8px;">Character:</p>
         <div id="genderButtons"></div>
@@ -375,6 +401,11 @@
       <canvas id="graphCanvas" width="380" height="220" style="display:none;"></canvas>
       <div class="question" id="question">2 + 2 = ?</div>
       <div class="answers" id="answers"></div>
+      <div id="typeAnswer">
+        <input id="typeInput" type="text" inputmode="numeric" autocomplete="off"
+               placeholder="or type your answer" maxlength="8" />
+        <button class="btn" id="typeSubmit">Enter</button>
+      </div>
       <div class="battle-tools">
         <button class="btn small" id="mathHelpBtn">💡 Math Help</button>
         <button class="btn small" id="crayonBtn">🖍️ Crayon</button>
@@ -415,9 +446,10 @@
       <h2>❓ How to Play</h2>
       <div style="text-align:left; max-width:520px; font-size:16px; line-height:1.5;">
         <p><b>Goal:</b> Run across the level, jump over spikes, and beat every monster to clear the level.</p>
-        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
-        <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out. Right answer beats the monster (and answering fast gives bonus points). A wrong answer or running out of time costs a life.</p>
-        <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life, and grabbing a shiny blue gem 💎 gives +1 life too. ❤️</p>
+        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. Jump over the green poisonous mist, don't breathe it! Hop over the wiggly worms and the big bears too. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
+        <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out, either tap a choice, or press <b>T</b> to jump to the type box, type your answer, and press Enter. Every correct answer earns you a life ❤️ (and answering fast gives bonus points), and 5 correct answers in a row earns a bonus life! 🔥 A wrong answer or running out of time costs a life and breaks your streak.</p>
+        <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life, and grabbing a gem 💎 gives +1 life too. ❤️</p>
+        <p style="margin-top:10px;"><b>Mega gem:</b> Collect <b>most</b> of the gems in a level and a rainbow <b>mega-rare gem</b> ✨ appears near the finish, a mega gem is worth 4 gems (+4 lives)! And if you reach the end having collected most of the gems, you earn the mega gem anyway as a bonus. You also earn a mega gem each time you stockpile lots of lives (every 10 lives). Your mega gem count is shown in the HUD.</p>
         <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
         <p style="margin-top:10px;"><b>Pause:</b> Press the ⏸ Pause button or the <b>P</b> / <b>Esc</b> key anytime.</p>
         <p style="margin-top:10px;"><b>Saving:</b> Your level, grade, and best score are saved to your account automatically.</p>
@@ -587,7 +619,7 @@
     },
 
     // Save the player's progress. Only writes their OWN doc (uid must match auth).
-    async saveProfile(uid, { name, best, level, grade, speed, heroColor, heroHair, heroGender, gemMatchColor }) {
+    async saveProfile(uid, { name, best, level, grade, speed, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn }) {
       if (!db || !uid) return false;
       try {
         await setDoc(doc(db, USERS, uid), {
@@ -598,9 +630,13 @@
           grade: (grade === undefined || grade === null) ? 1 : Number(grade),
           speed: Number(speed) || 2,
           heroColor: heroColor || null,
+          hairColor: hairColor || null,
+          eyeColor: eyeColor || null,
           heroHair: !!heroHair,
           heroGender: heroGender === "girl" ? "girl" : "boy",
           gemMatchColor: !!gemMatchColor,
+          megaGemsCollected: Number(megaGemsCollected) || 0,
+          musicOn: musicOn === undefined ? true : !!musicOn,
           updated: serverTimestamp(),
         }, { merge: true });
         return true;
@@ -642,6 +678,8 @@
     speedButtons: document.getElementById("speedButtons"),
     colorButtons: document.getElementById("colorButtons"),
     hairButtons: document.getElementById("hairButtons"),
+    hairColorButtons: document.getElementById("hairColorButtons"),
+    eyeColorButtons: document.getElementById("eyeColorButtons"),
     genderButtons: document.getElementById("genderButtons"),
     gemMatchButtons: document.getElementById("gemMatchButtons"),
     level: document.getElementById("level"),
@@ -649,6 +687,7 @@
     score: document.getElementById("score"),
     best: document.getElementById("best"),
     monstersLeft: document.getElementById("monstersLeft"),
+    megaCount: document.getElementById("megaCount"),
     auth: document.getElementById("auth"),
     tabLogin: document.getElementById("tabLogin"),
     tabSignup: document.getElementById("tabSignup"),
@@ -673,6 +712,7 @@
     lbStatus: document.getElementById("lbStatus"),
     question: document.getElementById("question"),
     answers: document.getElementById("answers"),
+    typeInput: document.getElementById("typeInput"),
     hint: document.getElementById("hint"),
     feedback: document.getElementById("feedback"),
     scratch: document.getElementById("scratch"),
@@ -764,6 +804,12 @@
   // Hero body color (chosen on the start screen, saved to the profile).
   const HERO_COLORS = ["#ff9f1c", "#ff6b9d", "#4dabf7", "#51cf66", "#b197fc", "#ff5a5a", "#20c997", "#2b3a67"];
   let heroColor = HERO_COLORS[0];
+  // Hair color palette (common natural + fun shades).
+  const HAIR_COLORS = ["#5a3a1a", "#2b2b2b", "#000000", "#c9962b", "#d94f3d", "#f4c542", "#ff6b9d", "#8d6bff"];
+  let hairColor = HAIR_COLORS[0];
+  // Eye color palette.
+  const EYE_COLORS = ["#2b3a67", "#000000", "#5a3a1a", "#2e7d32", "#1e88e5", "#8d6bff", "#d94f3d", "#20c997"];
+  let eyeColor = EYE_COLORS[0];
   let heroHair = false;      // whether the character has hair
   let heroGender = "boy";    // "boy" or "girl" (adds a small visual cue)
   let gemMatchColor = false; // if true, all gems use the hero's chosen color
@@ -781,6 +827,13 @@
   let obstacles = [];
   let holes = []; // gaps in the ground: { x, w, awardedFall }
   let gems = [];  // collectible gems: { x, y, collected, color } -> +1 life on touch
+  let megaGem = null; // the mega-rare gem: appears after ALL gems in a level are collected
+  let megaGemsCollected = 0; // lifetime count of mega gems (saved to profile)
+  const MEGA_PER_GAME = 4;   // at most 4 mega gems may be earned per game/run
+  let megaGemsThisRun = 0;   // how many earned in the current run (reset each run)
+  // Life-milestone reward: hitting a high life count earns a mega gem.
+  const LIFE_MILESTONE_STEP = 10;   // first at 10 lives, then 20, 30, ...
+  let lifeMilestoneReached = 0;     // highest milestone already rewarded
   // Gem colors: each has a body fill and a matching glow.
   const GEM_COLORS = [
     { body: "#4dd2ff", glow: "rgba(80, 220, 255, 0.9)" },  // cyan
@@ -807,6 +860,8 @@
   // questions before it is defeated. These track that per-battle quiz.
   let battleQuestionsNeeded = 1; // how many correct answers beat this monster
   let battleQuestionsDone = 0;   // how many correct so far in this battle
+  let correctStreak = 0;         // consecutive correct answers (5 in a row = bonus life)
+  const STREAK_BONUS_AT = 5;     // every 5-in-a-row earns an extra life
   let lastQuestionKind = null;   // topic/type of the previous question (for variety)
 
   // ---- Pause state ----
@@ -862,6 +917,85 @@
     whoosh:    () => tone(160, 0.14, "sine", 0.07),                              // spikeball swings past
     splash:    () => melody([[440,0.08],[280,0.10],[180,0.14]], "sine", 0.13),   // fall in the pond
   };
+
+  // =====================================================================
+  //  BACKGROUND MUSIC (generated chiptune loop, no audio files)
+  //  A cheerful looping melody + bassline played through its own gain node
+  //  so it can be muted independently of the sound effects.
+  // =====================================================================
+  let musicGain = null;      // dedicated volume node for the music
+  let musicTimer = null;     // the note scheduler
+  let musicOn = true;        // user preference (saved to profile)
+  let musicStep = 0;         // position in the loop
+
+  // Note frequencies (Hz). A simple major-key tune in C.
+  const N = { "C4":261.6,"D4":293.7,"E4":329.6,"F4":349.2,"G4":392.0,"A4":440.0,"B4":493.9,
+              "C5":523.3,"D5":587.3,"E5":659.3,"G5":784.0,
+              "C3":130.8,"E3":164.8,"G3":196.0,"A3":220.0,"F3":174.6 };
+  // Melody line (one note per 8th-note step; null = rest).
+  const MUSIC_MELODY = [
+    "E4","G4","C5","G4", "A4","C5","B4","G4",
+    "F4","A4","C5","A4", "G4","E4","D4","G4",
+    "E4","G4","C5","E5", "D5","C5","B4","G4",
+    "A4","C5","G4","E4", "F4","D4","C4","G4",
+  ];
+  // Bass line (one note per quarter note = every 2 steps).
+  const MUSIC_BASS = ["C3","G3","A3","E3","F3","C3","F3","G3"];
+  const STEP_DUR = 0.18; // seconds per 8th-note step
+
+  function startMusic() {
+    if (!musicOn) return;
+    const ac = getAudio();
+    if (!ac) return;
+    if (musicTimer) return;          // already playing
+    if (!musicGain) {
+      musicGain = ac.createGain();
+      musicGain.gain.value = 0.08;   // gentle, sits under the sound effects
+      musicGain.connect(ac.destination);
+    }
+    musicStep = 0;
+    // Schedule a couple of steps ahead on a timer so it loops seamlessly.
+    const scheduleAhead = () => {
+      const ac2 = getAudio();
+      if (!ac2 || !musicOn) return;
+      const t = ac2.currentTime + 0.05;
+      const mel = MUSIC_MELODY[musicStep % MUSIC_MELODY.length];
+      if (mel && N[mel]) playMusicNote(N[mel], STEP_DUR * 0.9, "square", 0.6);
+      if (musicStep % 2 === 0) {
+        const bass = MUSIC_BASS[(musicStep / 2) % MUSIC_BASS.length];
+        if (bass && N[bass]) playMusicNote(N[bass], STEP_DUR * 1.8, "triangle", 0.9);
+      }
+      musicStep++;
+    };
+    scheduleAhead();
+    musicTimer = setInterval(scheduleAhead, STEP_DUR * 1000);
+  }
+
+  function stopMusic() {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  }
+
+  // A music note routed through the music gain node (so it can be muted).
+  function playMusicNote(freq, dur, type, vol) {
+    const ac = getAudio();
+    if (!ac || !musicGain) return;
+    const t = ac.currentTime + 0.02;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.02);   // soft attack
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur); // decay
+    osc.connect(g).connect(musicGain);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  function setMusic(on) {
+    musicOn = on;
+    if (on) startMusic(); else stopMusic();
+  }
 
   // =====================================================================
   //  AUTH FLOW
@@ -933,12 +1067,16 @@
     speedSetting = profile.speed || 2;
     scrollSpeed = SPEED_VALUES[speedSetting];
     heroColor = (profile.heroColor && HERO_COLORS.includes(profile.heroColor)) ? profile.heroColor : HERO_COLORS[0];
+    hairColor = (profile.hairColor && HAIR_COLORS.includes(profile.hairColor)) ? profile.hairColor : HAIR_COLORS[0];
+    eyeColor = (profile.eyeColor && EYE_COLORS.includes(profile.eyeColor)) ? profile.eyeColor : EYE_COLORS[0];
     heroHair = !!profile.heroHair;
     heroGender = (profile.heroGender === "girl") ? "girl" : "boy";
     gemMatchColor = !!profile.gemMatchColor;
+    megaGemsCollected = profile.megaGemsCollected || 0;
+    musicOn = (profile.musicOn === undefined || profile.musicOn === null) ? true : !!profile.musicOn;
     score = 0;
 
-    cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, heroHair, heroGender, gemMatchColor });
+    cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn });
 
     el.loginUserid.value = ""; el.loginPass.value = "";
     el.signupUserid.value = ""; el.signupEmail.value = ""; el.signupPass.value = "";
@@ -950,6 +1088,8 @@
     renderSpeedButtons();
     renderColorButtons();
     renderHairButtons();
+    renderHairColorButtons();
+    renderEyeColorButtons();
     renderGenderButtons();
     renderGemMatchButtons();
     updateHUD();
@@ -961,10 +1101,15 @@
     hideAllOverlays();
     el.start.classList.add("show");
     state = "start";
+
+    // kick off background music per the saved preference, and sync the label
+    if (typeof updateMusicLabel === "function") updateMusicLabel();
+    setMusic(musicOn);
   }
 
   async function logout() {
     await persistProgress({ immediate: true });
+    stopMusic();
     stopTimer();
     paused = false;
     prePauseState = null;
@@ -996,7 +1141,7 @@
   function persistProgress(opts) {
     if (!currentUid) return Promise.resolve();
     bestScore = Math.max(bestScore, score);
-    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, heroHair, heroGender, gemMatchColor };
+    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn };
     cacheProfile(currentUid, profile); // instant local cache (deferred disk)
     if (opts && opts.immediate) {
       if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
@@ -1076,6 +1221,40 @@
         renderColorButtons();
       };
       el.colorButtons.appendChild(s);
+    });
+  }
+
+  // ---- Hair color selection ----
+  function renderHairColorButtons() {
+    el.hairColorButtons.innerHTML = "";
+    HAIR_COLORS.forEach(col => {
+      const s = document.createElement("button");
+      s.className = "color-swatch" + (col === hairColor ? " selected" : "");
+      s.style.background = col;
+      s.title = "Choose this hair color";
+      s.onclick = () => {
+        hairColor = col;
+        persistProgress();
+        renderHairColorButtons();
+      };
+      el.hairColorButtons.appendChild(s);
+    });
+  }
+
+  // ---- Eye color selection ----
+  function renderEyeColorButtons() {
+    el.eyeColorButtons.innerHTML = "";
+    EYE_COLORS.forEach(col => {
+      const s = document.createElement("button");
+      s.className = "color-swatch" + (col === eyeColor ? " selected" : "");
+      s.style.background = col;
+      s.title = "Choose this eye color";
+      s.onclick = () => {
+        eyeColor = col;
+        persistProgress();
+        renderEyeColorButtons();
+      };
+      el.eyeColorButtons.appendChild(s);
     });
   }
 
@@ -1214,6 +1393,26 @@
       const topY = 8; // hangs near the top of the screen
       return { type, x, y: topY, w: 16, h, topY, phase: "hanging", vy: 0 };
     }
+    if (type === "mist") {
+      // a low poisonous gas cloud hugging the ground; jump over it so you
+      // don't breathe it. Kept short enough to clear with a normal jump.
+      const h = 30 + Math.floor(Math.random() * 10); // 30-40 tall
+      const w = 54 + Math.floor(Math.random() * 24); // 54-78 wide
+      return { type, x, y: GROUND_Y - h, w, h, puff: Math.random() * Math.PI * 2 };
+    }
+    if (type === "worm") {
+      // a little wiggly worm crawling on the ground; jump over it.
+      const w = 30 + Math.floor(Math.random() * 14); // 30-44 wide
+      const h = 14;
+      return { type, x, y: GROUND_Y - h, w, h, wiggle: Math.random() * Math.PI * 2 };
+    }
+    if (type === "bear") {
+      // a big bear sitting on the ground; jump over it. Kept jumpable.
+      const h = 40 + Math.floor(Math.random() * 8); // 40-47 tall
+      const w = 44;
+      return { type, x, y: GROUND_Y - h, w, h, sway: Math.random() * Math.PI * 2 };
+    }
+
     // spike (default)
     const h = 28 + Math.floor(Math.random() * 20);
     return { type: "spike", x, y: GROUND_Y - h, w: 26, h };
@@ -1223,6 +1422,7 @@
     obstacles = [];
     holes = [];
     gems = [];
+    megaGem = null;
     monsters = [];
     worldOffset = 0;
     player.y = GROUND_Y; player.vy = 0; player.onGround = true;
@@ -1239,10 +1439,10 @@
     //   lv 8+: + rolling boulders
     //   lv 9+: + falling icicles
     let types = ["rock", "rock", "spike", "cactus"];
-    if (lv >= 2) types = types.concat(["bird", "fire"]);
+    if (lv >= 2) types = types.concat(["bird", "fire", "worm"]);
     if (lv >= 3) types = types.concat(["saw", "log"]);
-    if (lv >= 4) types = types.concat(["bat"]);
-    if (lv >= 5) types = types.concat(["geyser"]);
+    if (lv >= 4) types = types.concat(["bat", "mist"]);
+    if (lv >= 5) types = types.concat(["geyser", "bear"]);
     if (lv >= 6) types = types.concat(["spikeball"]);
     if (lv >= 7) types = types.concat(["spring"]);
     if (lv >= 8) types = types.concat(["boulder"]);
@@ -1303,6 +1503,28 @@
     el.score.textContent = score;
     el.best.textContent = Math.max(bestScore, score);
     el.monstersLeft.textContent = monsters.filter(m => m.alive).length;
+    el.megaCount.textContent = megaGemsCollected;
+    checkLifeMilestone();
+  }
+
+  // Reward a mega gem for stockpiling lives. The first time the life count
+  // reaches a milestone (10, then 20, 30, ...) we award one mega gem. Each
+  // milestone pays out once, tracked by lifeMilestoneReached.
+  function checkLifeMilestone() {
+    if (!currentUid) return; // only while a player is logged in
+    const milestone = Math.floor(lives / LIFE_MILESTONE_STEP) * LIFE_MILESTONE_STEP;
+    if (milestone >= LIFE_MILESTONE_STEP && milestone > lifeMilestoneReached) {
+      lifeMilestoneReached = milestone;
+      if (megaGemsThisRun >= MEGA_PER_GAME) return; // cap: 4 mega gems per game
+      megaGemsThisRun++;
+      megaGemsCollected++;
+      lives += 4;            // a mega gem is worth 4 gems (+4 lives)
+      el.megaCount.textContent = megaGemsCollected;
+      el.lives.textContent = lives;
+      sfx.levelClear();
+      setTimeout(sfx.extraLife, 400);
+      persistProgress();
+    }
   }
 
   // ---- Math questions ----
@@ -1472,6 +1694,7 @@
       b.onclick = () => answerQuestion(opt, q.answer);
       el.answers.appendChild(b);
     });
+    el.typeInput.value = ""; // fresh type-in box each question
     startTimer();
   }
 
@@ -1516,6 +1739,7 @@
     if (questionAnswered) return;
     questionAnswered = true;
     lives--;
+    correctStreak = 0; // running out of time breaks the streak
     sfx.timeup();
     el.feedback.textContent = "Time's up! The monster hits you. ⏰";
     updateHUD();
@@ -1527,6 +1751,29 @@
     }
   }
 
+  // Handle a typed answer: accept it only if it matches one of the options,
+  // then route it through the normal answerQuestion flow.
+  function submitTypedAnswer() {
+    if (state !== "battle" || !currentQuestion || questionAnswered) return;
+    const raw = el.typeInput.value.trim();
+    if (raw === "") return; // nothing typed yet
+    // Find a matching option (compare as number when possible, else as text).
+    const match = currentQuestion.opts.find(opt => {
+      const a = String(opt).trim().toLowerCase();
+      const b = raw.toLowerCase();
+      if (a === b) return true;
+      const na = Number(opt), nb = Number(raw);
+      return !isNaN(na) && !isNaN(nb) && na === nb;
+    });
+    if (match === undefined) {
+      // not one of the choices — gently nudge, don't penalize
+      el.feedback.textContent = "Type one of the answer choices, or tap a button.";
+      el.typeInput.value = "";
+      return;
+    }
+    answerQuestion(match, currentQuestion.answer);
+  }
+
   function answerQuestion(chosen, correct) {
     if (questionAnswered) return;
     questionAnswered = true;
@@ -1536,14 +1783,26 @@
       // bonus points for answering quickly (no speed bonus if a hint was used)
       const speedBonus = hintUsed ? 0 : Math.round(timeLeft);
       score += 10 + speedBonus;
+      lives++; // reward: a correct answer earns a life
       battleQuestionsDone++;
       sfx.correct();
+      sfx.extraLife();
+
+      // Streak bonus: 5 correct answers in a row earns an extra life.
+      correctStreak++;
+      let streakBonus = false;
+      if (correctStreak % STREAK_BONUS_AT === 0) {
+        lives++; // bonus life for the streak
+        streakBonus = true;
+        setTimeout(sfx.extraLife, 250);
+      }
+      const streakMsg = streakBonus ? ` 🔥 ${correctStreak} in a row! +1 bonus life!` : "";
 
       if (battleQuestionsDone >= battleQuestionsNeeded) {
         // All questions for this monster answered — it's defeated.
-        el.feedback.textContent = hintUsed
-          ? `Correct! +10 (used a hint) ✅`
-          : `Correct! +${10 + speedBonus} (speed bonus ${speedBonus}) ✅`;
+        el.feedback.textContent = (hintUsed
+          ? `Correct! +10 and +1 life ❤️ ✅`
+          : `Correct! +${10 + speedBonus} and +1 life ❤️ ✅`) + streakMsg;
         currentMonster.alive = false;
         persistProgress();
         updateHUD();
@@ -1551,13 +1810,14 @@
       } else {
         // More questions to go — show progress and load the next variety.
         const gained = hintUsed ? 10 : 10 + speedBonus;
-        el.feedback.textContent = `Correct! +${gained} ✅  Next question...`;
+        el.feedback.textContent = `Correct! +${gained} and +1 life ❤️ ✅${streakMsg}  Next question...`;
         persistProgress();
         updateHUD();
         setTimeout(loadQuestion, 900);
       }
     } else {
       lives--;
+      correctStreak = 0; // a wrong answer breaks the streak
       sfx.wrong();
       el.feedback.textContent = "Oops! The monster hits you. ❌";
       persistProgress();
@@ -1582,6 +1842,24 @@
 
   function levelCleared() {
     state = "levelClear";
+
+    // End-of-level mega-gem bonus: if you collected MOST of the level's gems
+    // but didn't already grab the floating mega gem, award one now so the
+    // reward is never missed just because you ran past it.
+    let megaBonus = false;
+    const total = gems.length;
+    if (total > 0) {
+      const got = gems.filter(g => g.collected).length;
+      const needed = Math.max(1, Math.ceil(total * 0.8));
+      const alreadyGotMega = megaGem && megaGem.collected;
+      if (got >= needed && !alreadyGotMega && megaGemsThisRun < MEGA_PER_GAME) {
+        megaGemsThisRun++;
+        megaGemsCollected++;
+        lives += 4;           // a mega gem is worth 4 gems (+4 lives)
+        megaBonus = true;
+      }
+    }
+
     level++; // advance and save the new level so it persists
     lives++; // reward: gain a life for clearing the level
     updateHUD();
@@ -1589,7 +1867,10 @@
     submitBestToCloud(); // update global leaderboard
     sfx.levelClear();
     setTimeout(sfx.extraLife, 500); // little "1-up" jingle after the fanfare
-    el.levelClearText.textContent = `Awesome! You beat every monster and earned an extra life! ❤️ Score: ${score}. Next up: level ${level}.`;
+    if (megaBonus) setTimeout(sfx.extraLife, 900); // extra chime for the mega bonus
+    el.levelClearText.textContent = megaBonus
+      ? `Amazing! You collected most of the gems and earned a MEGA gem 💎✨ (worth 4 gems, +4 lives), plus a life for clearing the level! Score: ${score}. Next up: level ${level}.`
+      : `Awesome! You beat every monster and earned an extra life! ❤️ Score: ${score}. Next up: level ${level}.`;
     el.levelClear.classList.add("show");
   }
 
@@ -1816,6 +2097,13 @@
   }
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); jump(); }
+    // T focuses the type-answer box during a battle, so you can just type.
+    if (e.code === "KeyT" && state === "battle" && !questionAnswered) {
+      e.preventDefault();
+      el.typeInput.focus();
+      el.typeInput.select();
+      return;
+    }
     // P or Esc toggles pause (only while playing or in a battle).
     // Ignored while the crayon scratchpad is open (it has its own Done button).
     if (e.code === "KeyP" || e.code === "Escape") {
@@ -1861,6 +2149,18 @@
   document.getElementById("leaderboardBtn").onclick = showLeaderboard;
   document.getElementById("lbCloseBtn").onclick = () => el.leaderboard.classList.remove("show");
   document.getElementById("pauseBtn").onclick = togglePause;
+  const musicBtn = document.getElementById("musicBtn");
+  const muteBtn = document.getElementById("muteBtn");
+  // Keep both the dropdown item and the standalone mute button in sync.
+  function updateMusicLabel() {
+    musicBtn.textContent = musicOn ? "🎵 Music: On" : "🔇 Music: Off";
+    muteBtn.textContent = musicOn ? "🎵" : "🔇";
+    muteBtn.classList.toggle("muted", !musicOn);
+    muteBtn.setAttribute("aria-label", musicOn ? "Mute music" : "Unmute music");
+  }
+  function toggleMusic() { setMusic(!musicOn); updateMusicLabel(); persistProgress(); }
+  musicBtn.onclick = toggleMusic;
+  muteBtn.onclick = toggleMusic;
   document.getElementById("resumeBtn").onclick = resumeGame;
   document.getElementById("helpBtn").onclick = () => {
     // pause active play so nothing runs behind the help screen
@@ -1870,6 +2170,11 @@
   document.getElementById("helpCloseBtn").onclick = () => el.help.classList.remove("show");
   document.getElementById("mathHelpBtn").onclick = showMathHelp;
   document.getElementById("videoBtn").onclick = openVideo;
+  document.getElementById("typeSubmit").onclick = submitTypedAnswer;
+  el.typeInput.addEventListener("keydown", (e) => {
+    if (e.code === "Enter") { e.preventDefault(); submitTypedAnswer(); }
+    e.stopPropagation(); // don't let Space/Arrow in the box trigger a jump
+  });
   document.getElementById("crayonBtn").onclick = openScratch;
   document.getElementById("scratchClearBtn").onclick = clearScratch;
   document.getElementById("scratchDoneBtn").onclick = closeScratch;
@@ -1879,6 +2184,9 @@
     el.start.classList.remove("show");
     // keep saved level; reset the run's lives and score
     lives = 3; score = 0;
+    lifeMilestoneReached = 0; // fresh run: life-milestone rewards reset
+    megaGemsThisRun = 0;      // fresh run: up to 4 mega gems again
+    correctStreak = 0;        // fresh run: reset the answer streak
     buildLevel(level);
     state = "playing";
   };
@@ -1890,6 +2198,9 @@
   document.getElementById("retryBtn").onclick = () => {
     el.gameOver.classList.remove("show");
     lives = 3; score = 0;
+    lifeMilestoneReached = 0; // fresh run: life-milestone rewards reset
+    megaGemsThisRun = 0;      // fresh run: up to 4 mega gems again
+    correctStreak = 0;        // fresh run: reset the answer streak
     buildLevel(level); // resume from saved level, fresh lives/score
     state = "playing";
   };
@@ -1940,6 +2251,9 @@
         o.y = o.baseY + Math.sin(o.bob) * 14; // bob up and down
       }
       if (o.type === "log") o.roll += 0.25;
+      if (o.type === "mist") o.puff += 0.1; // gentle swirling animation
+      if (o.type === "worm") o.wiggle += 0.2; // wiggling animation
+      if (o.type === "bear") o.sway += 0.08;  // gentle breathing/sway
       if (o.type === "spikeball") {
         const prevX = o.swingX;
         o.swing += 0.05; // a touch slower so it's easier to time
@@ -2040,6 +2354,33 @@
         gem.collected = true;
         lives++;
         sfx.extraLife();
+        updateHUD();
+        persistProgress();
+        // If you've collected MOST of the level's gems, spawn the mega-rare
+        // gem ahead of the player (near the finish) as a reward to grab.
+        // "Most" = at least 80% of the gems in this level.
+        const totalGems = gems.length;
+        const got = gems.filter(g => g.collected).length;
+        const needed = Math.max(1, Math.ceil(totalGems * 0.8));
+        if (totalGems > 0 && !megaGem && got >= needed && megaGemsThisRun < MEGA_PER_GAME) {
+          const spawnX = worldOffset + player.x + W; // just off-screen ahead
+          megaGem = { x: spawnX, y: GROUND_Y - 55, collected: false };
+        }
+      }
+    }
+
+    // Collect the mega-rare gem (big reward: +3 lives, counts as a collectible)
+    if (megaGem && !megaGem.collected) {
+      const MG = 44;
+      const mgx = megaGem.x - worldOffset;
+      if (px + player.w > mgx && px < mgx + MG &&
+          py + player.h > megaGem.y - MG && py < megaGem.y) {
+        megaGem.collected = true;
+        megaGemsThisRun++;
+        megaGemsCollected++;
+        lives += 4;            // a mega gem is worth 4 gems (+4 lives)
+        sfx.levelClear();      // celebratory fanfare
+        setTimeout(sfx.extraLife, 400);
         updateHUD();
         persistProgress();
       }
@@ -2178,6 +2519,12 @@
       drawGem(gx, gem.y, gemColor);
     }
 
+    // the mega-rare gem (big, rainbow, extra sparkly)
+    if (megaGem && !megaGem.collected) {
+      const mgx = megaGem.x - worldOffset;
+      if (mgx + 44 >= 0 && mgx <= W) drawMegaGem(mgx, megaGem.y);
+    }
+
     ctx.font = "44px serif";
     ctx.textBaseline = "bottom";
     for (const m of monsters) {
@@ -2289,6 +2636,107 @@
       ctx.quadraticCurveTo(ox + o.w * 0.2, o.y + o.h * 0.6, ox + o.w / 2, o.y + o.h * 0.25 - flame);
       ctx.quadraticCurveTo(ox + o.w * 0.8, o.y + o.h * 0.6, ox + o.w * 0.75, baseY);
       ctx.closePath();
+      ctx.fill();
+      return;
+    }
+    if (o.type === "mist") {
+      // a poisonous green gas cloud: several soft, translucent blobs that
+      // gently swirl. Jump over it so you don't breathe it.
+      const p = o.puff || 0;
+      ctx.save();
+      const cy = o.y + o.h * 0.55;
+      // layered puffs
+      const blobs = [
+        [ox + o.w * 0.20, cy, o.h * 0.55],
+        [ox + o.w * 0.45, o.y + o.h * 0.4, o.h * 0.6],
+        [ox + o.w * 0.70, cy, o.h * 0.55],
+        [ox + o.w * 0.88, o.y + o.h * 0.5, o.h * 0.42],
+        [ox + o.w * 0.05, o.y + o.h * 0.5, o.h * 0.42],
+      ];
+      ctx.fillStyle = "rgba(120, 200, 70, 0.55)";
+      blobs.forEach(([bx, by, br], i) => {
+        const wob = Math.sin(p + i) * 2.5;
+        ctx.beginPath();
+        ctx.arc(bx, by + wob, br, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      // brighter toxic core
+      ctx.fillStyle = "rgba(170, 230, 90, 0.5)";
+      blobs.forEach(([bx, by, br], i) => {
+        const wob = Math.cos(p + i) * 2;
+        ctx.beginPath();
+        ctx.arc(bx, by + wob, br * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      // tiny rising bubbles for a "toxic" feel
+      ctx.fillStyle = "rgba(90, 160, 50, 0.6)";
+      for (let i = 0; i < 3; i++) {
+        const bx = ox + o.w * (0.3 + i * 0.25);
+        const by = o.y - ((p * 6 + i * 10) % (o.h));
+        ctx.beginPath();
+        ctx.arc(bx, by, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
+    if (o.type === "worm") {
+      // a wiggly segmented worm crawling along the ground
+      const w = o.wiggle || 0;
+      const segs = Math.max(4, Math.round(o.w / 9));
+      const r = o.h / 2;
+      const baseY = o.y + o.h / 2;
+      for (let i = 0; i < segs; i++) {
+        const sx = ox + r + (i * (o.w - o.h)) / (segs - 1);
+        const sy = baseY + Math.sin(w + i * 0.9) * 3; // wiggle each segment
+        ctx.fillStyle = i === segs - 1 ? "#ff7aa8" : "#ff9ec2"; // head a bit darker
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+        if (i === segs - 1) {
+          // eyes on the head (front segment)
+          ctx.fillStyle = "#2b3a67";
+          ctx.beginPath();
+          ctx.arc(sx + 2, sy - 2, 1.6, 0, Math.PI * 2);
+          ctx.arc(sx + 5, sy - 2, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return;
+    }
+    if (o.type === "bear") {
+      // a chunky brown bear sitting on the ground
+      const sway = Math.sin(o.sway || 0) * 1.5;
+      const cx = ox + o.w / 2;
+      const bodyTop = o.y + o.h * 0.3;
+      // ears
+      ctx.fillStyle = "#6d4c41";
+      ctx.beginPath();
+      ctx.arc(cx - o.w * 0.28, bodyTop - 2, 6, 0, Math.PI * 2);
+      ctx.arc(cx + o.w * 0.28, bodyTop - 2, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // body
+      ctx.fillStyle = "#8d6e63";
+      roundRect(ox + 4, bodyTop, o.w - 8, o.h * 0.7, 12);
+      ctx.fill();
+      // head
+      ctx.beginPath();
+      ctx.arc(cx, bodyTop + 2 + sway, o.w * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      // snout
+      ctx.fillStyle = "#d7ccc8";
+      ctx.beginPath();
+      ctx.ellipse(cx, bodyTop + 8 + sway, 7, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // nose
+      ctx.fillStyle = "#3e2723";
+      ctx.beginPath();
+      ctx.arc(cx, bodyTop + 6 + sway, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      // eyes
+      ctx.beginPath();
+      ctx.arc(cx - 6, bodyTop - 1 + sway, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 6, bodyTop - 1 + sway, 2, 0, Math.PI * 2);
       ctx.fill();
       return;
     }
@@ -2488,12 +2936,61 @@
     ctx.restore();
   }
 
+  // The mega-rare gem: a big diamond with a shifting rainbow fill, strong
+  // glow, and sparkles. Appears only after every gem in the level is grabbed.
+  function drawMegaGem(gx, gyBottom) {
+    const s = 44;
+    const cx = gx + s / 2;
+    const cy = gyBottom - s / 2 + Math.sin(worldOffset * 0.09) * 4; // float
+    const t = worldOffset * 0.04;
+    ctx.save();
+    // rotating rainbow gradient across the gem
+    const grad = ctx.createLinearGradient(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2);
+    const hue = (t * 60) % 360;
+    grad.addColorStop(0,   `hsl(${hue}, 90%, 60%)`);
+    grad.addColorStop(0.5, `hsl(${(hue + 120) % 360}, 90%, 60%)`);
+    grad.addColorStop(1,   `hsl(${(hue + 240) % 360}, 90%, 60%)`);
+    ctx.shadowColor = `hsl(${hue}, 95%, 60%)`;
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s / 2);
+    ctx.lineTo(cx + s / 2, cy - s / 8);
+    ctx.lineTo(cx + s / 3, cy + s / 2);
+    ctx.lineTo(cx - s / 3, cy + s / 2);
+    ctx.lineTo(cx - s / 2, cy - s / 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // bright facet
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s / 2);
+    ctx.lineTo(cx + s / 5, cy - s / 6);
+    ctx.lineTo(cx, cy + s / 8);
+    ctx.lineTo(cx - s / 5, cy - s / 6);
+    ctx.closePath();
+    ctx.fill();
+    // twinkling sparkles around it
+    for (let i = 0; i < 4; i++) {
+      const a = t * 2 + (i * Math.PI) / 2;
+      const sx = cx + Math.cos(a) * (s / 2 + 8);
+      const sy = cy + Math.sin(a) * (s / 2 + 8);
+      const tw = 1.5 + Math.abs(Math.sin(t * 3 + i)) * 2.5;
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(sx, sy, tw, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawHero(x, y) {
     ctx.fillStyle = heroColor;
     roundRect(x, y + 10, player.w, player.h - 10, 8);
     ctx.fill();
     const hx = x + player.w / 2, hy = y + 8, hr = 12;
-    const HAIR = "#5a3a1a";
+    const HAIR = hairColor;
     const isGirlHair = heroHair && heroGender === "girl";
 
     // Girl's ponytail is drawn BEHIND the head so it peeks out to the side.
@@ -2585,7 +3082,7 @@
       ctx.fill();
     }
     // eyes
-    ctx.fillStyle = "#2b3a67";
+    ctx.fillStyle = eyeColor;
     ctx.beginPath();
     ctx.arc(hx - 4, hy - 2, 2, 0, Math.PI * 2);
     ctx.arc(hx + 4, hy - 2, 2, 0, Math.PI * 2);
