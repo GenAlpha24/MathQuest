@@ -2,7 +2,7 @@
 
 Stack is locked: single-file `index.html` (inline JS, Firebase SDK 10.12.2 ES modules, no build), `firestore.rules`, emulator tests in `rules-test/`. No Cloud Functions here, so nothing conflicts with Phase 2 (Vertex AI functions will use the Admin SDK and bypass rules; the new `inviteQuota` collection and link name fields are independent of `games/`).
 
-Nothing is pushed, deployed or run against `mathquest-ca395`. The owner deploys rules after merge.
+Nothing is pushed, deployed or run against `mathquest-ca395`. Deploy order is in section 7 (rules first, then publish the client).
 
 ## 1. Item 1b first: privacy hole (rules)
 
@@ -99,8 +99,12 @@ match /inviteQuota/{qid} {
 }
 ```
 
+As implemented, the quota-bump and link-create rules also require `lastLinkId` not to contain `/`, and link creates (a), (b) and (c2) carry `keys().hasOnly([...])` allowlists matching the exact client write shapes.
+
 - Link create (a) gains: `&& getAfter(quotaPath(request.auth.uid)).data.lastLinkId == linkId && getAfter(quotaPath(request.auth.uid)).data.count == (exists(quotaPath(request.auth.uid)) ? get(quotaPath(request.auth.uid)).data.count : 0) + 1`. `lastLinkId == linkId` stops one quota bump from covering two links in a batch. An invite without a quota write fails (`getAfter` of a missing doc errors, which denies). `qid` is a parameter of `quotaOk` because it is only in scope inside the `match`.
-- Step 0 for the implementer, before writing any tests: compile the rules in the emulator and confirm `string(int)` and `request.time.year()/month()/day()` are accepted (not verified by me). Fallback if `string(int)` is rejected: key on `string(int(math.floor(request.time.toMillis() / 86400000)))`, still derived from `request.time`; if that is also rejected, stop and report.- Client `inviteStudent`: `runTransaction` (add to the import list): read the quota doc, compute `count`, then `tx.set(quota)` and `tx.set(link)`. It accepts a read-miss as 0. On limit/permission failure: `getDoc(quota)`; if `count >= 30` show "You've sent a lot of invites today, try again tomorrow."; else if the link id already exists "You're already linked with, or have already invited, that student."; otherwise (count < 30 and no existing link, i.e. clock/timezone denial) "Couldn't send. Check your device date and time, then try again." The client computes the quota id with UTC: `const d=new Date(); const day=d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate();` and uses the same `day` for the doc id `{uid}_{day}` and the `day` field. Tests use one `utcDayKey()` helper read once per test to avoid 00:00 UTC flakes.`n- Overlay accept (item 2): after `res.ok` call `renderMyInvites(listEl,msgEl)` and set `msgEl.textContent="Linked ✓"`, since no `onMyStatus` snapshot fires for a link-only accept.
+- Step 0 (done): the emulator accepts `string(int)` and `request.time.year()/month()/day()`; no fallback needed.
+- Client `inviteStudent`: `runTransaction` (add to the import list): read the quota doc, compute `count`, then `tx.set(quota)` and `tx.set(link)`. It accepts a read-miss as 0. On limit/permission failure: `getDoc(quota)`; if `count >= 30` show "You've sent a lot of invites today, try again tomorrow."; else if the link id already exists "You're already linked with, or have already invited, that student."; otherwise (count < 30 and no existing link, i.e. clock/timezone denial) "Couldn't send. Check your device date and time, then try again." The client computes the quota id with UTC: `const d=new Date(); const day=d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate();` and uses the same `day` for the doc id `{uid}_{day}` and the `day` field. Tests use one `utcDayKey()` helper read once per test to avoid 00:00 UTC flakes.
+- Overlay accept (item 2): after `res.ok` call `renderMyInvites(listEl,msgEl)` and set `msgEl.textContent="Linked ✓"`, since no `onMyStatus` snapshot fires for a link-only accept.
 - Dedupe: link ids are deterministic. Re-inviting an existing id is an update, which no rule allows, so the whole transaction is rejected and quota is not consumed. The same applies to a previously denied invite (existing limitation, now with a clearer message).
 - Document-access limits: invite create evaluates `callerRoleIs` (exists+get on `users/me`) plus quota `exists/get/getAfter`; quota write evaluates `callerRoleIs` plus `exists/existsAfter/getAfter` on the link. Repeated access to the same path is cached and counts once, so a link create touches about 3 distinct documents (users/me, quota, and the quota-after) and a quota write about 3 (users/me, link, link-after). That is well under the 10 per operation and 20 per request limits. The test run reports that the batch at the 30th invite passes; exact counts are reported only if the emulator exposes them.
 - `firestore.indexes.json`: no change (no new queries).
@@ -119,7 +123,7 @@ Client (reuse the `fix-student-pending/diagnosis.md` approach: extract the real 
 ## 7. Risks
 
 - Tightening reads is a behavior change: adults with `invited`/`requested` links lose profile reads until acceptance (intended). An old client against new rules just shows labels instead of names.
-- Old clients cannot send invites under the new rules (no quota write). A NEW client against OLD rules also fails to invite (the `inviteQuota` write is default-denied). Deploy order: owner deploys rules first, then merges the PR (Pages) immediately after; the window where invites fail is short and only affects adults.
+- Old clients cannot send invites under the new rules (no quota write). A NEW client against OLD rules also fails to invite (the `inviteQuota` write is default-denied). Deploy order (stated once): the owner deploys the rules FIRST (`firebase deploy --only firestore:rules,firestore:indexes --project mathquest-ca395`), then merges/publishes the client. Old clients keep working on the new rules except that adults cannot send invites until they load the new client.
 - `getAfter` pairing is the highest-risk logic; covered by the batch tests above.
 - UTC day boundary may differ from the family's local day; message says "tomorrow".
 - Student-typed `studentName` can be misleading; the adult still must hold the code.
@@ -128,6 +132,15 @@ Client (reuse the `fix-student-pending/diagnosis.md` approach: extract the real 
 
 ## 8. Deliverables beyond code
 - Rules header comment (A11-A15), `rules-test` additions, root `README.md` owner-role section, and the project-context Phase log / Open items update (remove the three fixed items, add the usernames leak and the role-change decision) before reporting the phase done.
+
+## Implementation notes (Phase 1b, as built)
+- Owner decisions: adults read a linked child's profile once the student has accepted (userid invite accepted, email-invite canonical doc accepted, or code request approved), never before consent. Item 3: no in-app role change, rules unchanged, owner-only console steps in the root `README.md`, no script.
+- Chosen limit: 30 invites per adult per UTC day (`inviteDailyLimit()` in the rules, `INVITE_LIMIT` in `index.html`; keep in sync).
+- Rules document-access cost (derived from the rules, not instrumented; the emulator does not report it): invite create touches `users/me` (exists+get), the quota doc (exists+get), `getAfter(quota)` = 3 distinct documents; quota create/update touches `users/me`, `links/{lastLinkId}` (exists/existsAfter/getAfter) = 3 distinct documents; the two-write batch totals at most 6. Limits are 10 per single-document request and 20 per multi-document request. The emulator test with the 30th invite batch passes.
+- Email-invite dedupe: the client now writes the invite's own `targetValue` into the canonical accepted doc, so the adult desk de-duplicates the original `email|...` row by `targetValue` and the student list by `adultUid`. If a legacy `users.email` differs from the auth email, the invite can only be accepted via the `users.email` address (the rule rebuilds the id from it), so the two stay consistent.
+- Follow-ups (project-context, not fixed here): self-asserted `users.email`, and email exposure via world-readable `usernames/{userid}`.
+- Negative invite tests use a positive-control batch built with the same `inviteBatch` helper; N1/N4/N5 negatives are over-determined (they also fail the quota pairing), the control isolates the helper.
+- Rollover cannot be tested with a moved clock in the emulator; covered by a seeded previous-day full quota doc not blocking today.
 
 ## Review responses (iteration 2)
 - F1 fixed: UTC day key, helper, third (clock) message in section 5.
