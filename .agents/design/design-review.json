@@ -1,0 +1,30 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "NIT",
+      "title": "§4.6 phrasing implies adultLinkedTo authorizes reading an un-accepted email invitee",
+      "where": "§4.6 (\"allowed because a link exists\") and §7.1 listMyStudents",
+      "problem": "The §4.6 bullet reads as if the adult can users-read every listed student, but adultLinkedTo only covers the deterministic studentUid_adultUid id. Un-accepted email invites (studentUid:null) have no such link; listMyStudents already handles this by displaying the typed email instead of a users read, so behavior is correct — only the phrasing is ambiguous.",
+      "fix": "Add a half-sentence to the §4.6 bullet clarifying the users-read is allowed only for rows with a concrete studentUid (userid invites, code-requests, accepted email invites), matching the helper comment already present in §6."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "Two pre-change anchors drift ~15-18 lines",
+      "where": "§4.5/§7.1 saveProfile (~659 vs actual ~654); §7.1 USERS/USERNAMES constants (~565 vs actual ~547-548)",
+      "problem": "Minor line-anchor drift. Both are trivially locatable by name and the doc instructs locate-by-name, so this does not block.",
+      "fix": "Tighten saveProfile anchor to ~654 and the collection-constants anchor to ~547 on the next edit."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "Inconsistent rule-helper style (let-binding vs inlined path)",
+      "where": "§6 approvedLinkExists/acceptableInviteExists use `let path = ...`; adultLinkedTo inlines the path",
+      "problem": "Purely stylistic; rules-v2 supports let bindings in functions and both forms are correct.",
+      "fix": "Optionally make the path-construction style uniform across helpers."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\saban\\Downloads\\RIDHI projects\\game 2\\.agents\\design\\design-review.md"
+}

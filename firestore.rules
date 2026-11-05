@@ -1,0 +1,273 @@
+// =====================================================================
+// MathQuest firestore.rules — ATTACK-CASE INDEX (both flows, old + new)
+// Every invariant is enforced below; this block enumerates what is blocked
+// and where. OLD = carried from the single-flow design; NEW = introduced by
+// the bidirectional invite flow.
+//
+//  A1 (OLD) student self-approves via users self-update
+//           -> self-update branch (1) forbids changing own status; the only
+//              student status change is the invite-accept branch (2), which
+//              requires a real adult-authored 'invited' link (none exists for a
+//              self-forged invite, see N1/N4).
+//  A2 (OLD) student self-approves via self-link chain (fake linkCodes 'teacher'
+//           -> self links -> self approve) -> blocked at linkCodes.create
+//              (callerRoleIs), links.create code-branch (studentUid!=adultUid),
+//              and users adult-update (auth.uid!=uid & callerRoleIs).
+//  A3 (OLD) studentUid == adultUid self-link -> links.create inequality deny.
+//  A4 (OLD) cross-user users read -> read = isSelf || adultLinkedTo only.
+//  A5 (OLD) fabricated score at users.create -> students forced best==0,
+//              status=='pending', approvedBy==null.
+//  A6 (OLD) role escalation on update -> role immutable on ALL update branches.
+//  A7 (OLD) pending student writes a leaderboard row -> leaderboard write
+//              requires users.status=='active' (or non-student).
+//  A8 (OLD) adult over-writes a student's profile under cover of approval
+//           -> onlyStatusAndApprover() diff limited to status/approvedBy/updated.
+//  A9 (OLD) adult approves a student with no approved link -> adult-update (3)
+//              requires approvedLinkExists() (exists()-guarded).
+// --- NEW invite-flow attack cases ---
+//  N1 student FORGES an invite 'from' a fake adult to self-activate
+//       -> links.create invite-branch (a) requires isSelf(adultUid) AND
+//          callerRoleIs(['teacher','parent']); a student is neither, so they
+//          cannot author an 'invited' link. No link => users accept branch (2)
+//          fails acceptableInviteExists => cannot activate.
+//  N2 adult invites a student, then the STUDENT escalates via the accept write
+//       -> users accept branch (2) is diff-limited to status/approvedBy/updated
+//          (onlyStatusAndApprover), role immutable, status forced 'active'. The
+//          student rides the accept to active ONLY; no role/score/other change.
+//  N3 student ACCEPTS an invite that NAMES A DIFFERENT student
+//       -> links accept branch (c) requires, for a userid invite,
+//          existing().studentUid == auth.uid; for an email invite,
+//          existing().targetValue == callerEmail(). users accept branch (2)
+//          independently re-checks via acceptableInviteExists. Someone else's
+//          invite cannot be accepted.
+//  N4 a NON-ADULT sends invites -> links.create invite-branch (a) requires
+//          callerRoleIs(['teacher','parent']); a student is denied.
+//  N5 adult forges an invite 'from' another adult -> links.create invite-branch
+//          requires isSelf(incoming().adultUid); email-invite id must be
+//          'email|'+auth.uid+'|*'. An adult cannot name a different adultUid.
+//  N6 student flips a DIFFERENT student's 'invited' link to 'accepted'
+//          -> links accept branch (c) requires incoming().studentUid==auth.uid
+//          and the userid/email addressee check; mirrors N3 at the links layer.
+// =====================================================================
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // true iff the signed-in caller's OWN users doc exists and has the given role
+    function callerRoleIs(roleList) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in roleList;
+    }
+    // the caller's own stored email (from their users doc), LOWERCASED — for
+    // email-invite matching. The stored email is verbatim-case (signup writes it
+    // raw), while the invite id/targetValue are stored lowercased (branch (a));
+    // .lower() here is the single accept-side normalization point (§3.1.1) so
+    // both sides compare the lowercased form.
+    function callerEmail() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.email.lower();
+    }
+
+    // ---- usernames: unique userid -> {uid,email}. Create once; readable so
+    //      login resolves userid->email AND an adult resolves a userid invite
+    //      to a uid. Never mutate someone else's.
+    match /usernames/{userid} {
+      allow read: if true;                         // pre-auth login + userid-invite resolution
+      allow create: if isSelf(incoming().uid);     // you can only claim for yourself
+      allow update, delete: if false;              // immutable in Phase 1
+    }
+
+    // ---- linkCodes: adult discovery table (uid + role only, no PII). FALLBACK only.
+    //      The creator must actually BE the adult whose role they claim.
+    match /linkCodes/{code} {
+      allow read: if signedIn();                   // student resolves a fallback code
+      allow create: if isSelf(incoming().adultUid)
+                    && incoming().role in ['teacher','parent']
+                    && callerRoleIs([incoming().role]);   // real adult of that role
+      allow update, delete: if false;
+    }
+
+    // ---- leaderboard/{uid}: denormalized world-readable scores (no PII beyond
+    //      display name). Only an ACTIVE account may write its OWN row.  [A7]
+    match /leaderboard/{uid} {
+      allow read: if true;                         // global leaderboard is public
+      allow create, update: if isSelf(uid)
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && (get(/databases/$(database)/documents/users/$(uid)).data.role != 'student'
+            || get(/databases/$(database)/documents/users/$(uid)).data.status == 'active')
+        && incoming().keys().hasOnly(['name','best','level','updated']);
+      allow delete: if false;
+    }
+
+    // ---- users/{uid}
+    match /users/{uid} {
+      allow read: if isSelf(uid) || adultLinkedTo(uid);           // [A4]
+
+      // Create own doc. role fixed at creation; students start pending with a
+      // zero score and no approver (prevents a fabricated leaderboard entry). [A5]
+      allow create: if isSelf(uid)
+        && incoming().role in ['student','teacher','parent']
+        && (incoming().role != 'student' ||
+             (incoming().status == 'pending'
+              && incoming().best == 0
+              && incoming().approvedBy == null));
+
+      // (1) Self update — profile/progress only, NO escalation. [A1][A6]
+      allow update: if isSelf(uid)
+        && incoming().role == existing().role              // role immutable
+        && incoming().status == existing().status          // can't self-approve here
+        && incoming().approvedBy == existing().approvedBy; // can't self-set approver
+
+      // (2) Self update — ACCEPT AN INVITE (adult-initiated flow). The STUDENT
+      //     activates themselves, but ONLY off a real adult-authored invite
+      //     addressed to them. role immutable; diff limited to
+      //     status/approvedBy/updated; approvedBy must be the inviting adult. [N1][N2][N3]
+      allow update: if isSelf(uid)
+        && existing().role == 'student'
+        && existing().status == 'pending'
+        && incoming().status == 'active'
+        && incoming().role == existing().role
+        && acceptableInviteExists(uid, incoming().approvedBy)   // invite from THIS adult, addressed to THIS student
+        && onlyStatusAndApprover(uid);
+
+      // (3) Adult update — APPROVE A CODE-REQUEST (fallback flow). A REAL,
+      //     LINKED adult (not the student) flips the student to active. [A8][A9]
+      allow update: if signedIn()
+        && request.auth.uid != uid                         // no self-approval
+        && callerRoleIs(['teacher','parent'])              // caller is a real adult
+        && existing().role == 'student'
+        && approvedLinkExists(uid, request.auth.uid)       // approved code-link to THIS adult
+        && incoming().status == 'active'
+        && incoming().role == existing().role
+        && incoming().approvedBy == request.auth.uid
+        && onlyStatusAndApprover(uid);
+
+      allow delete: if false;
+    }
+
+    // ---- links/{linkId}
+    match /links/{linkId} {
+      allow read: if signedIn()
+        && (isSelf(existing().studentUid) || isSelf(existing().adultUid)
+            || (existing().targetKind == 'email'                // email invite addressed to me
+                && existing().targetValue == callerEmail()));
+
+      // (a) ADULT sends an INVITE (primary). Creator must BE a real adult. No
+      //     self-links. userid invites carry a resolved studentUid + deterministic
+      //     id; email invites carry studentUid:null + adult-namespaced id. [N1][N4][N5]
+      allow create: if isSelf(incoming().adultUid)
+        && callerRoleIs(['teacher','parent'])
+        && incoming().source == 'invite'
+        && incoming().status == 'invited'
+        && incoming().createdBy == request.auth.uid
+        && incoming().adultUid != incoming().studentUid   // studentUid null for email => true
+        && incoming().targetKind in ['userid','email']
+        && (
+             (incoming().targetKind == 'userid'
+               && incoming().studentUid is string
+               && linkId == incoming().studentUid + '_' + incoming().adultUid)
+             ||
+             (incoming().targetKind == 'email'
+               && incoming().studentUid == null
+               && linkId == 'email|' + request.auth.uid + '|' + incoming().targetValue
+               && incoming().targetValue == incoming().targetValue.lower())  // email stored lowercased
+           );
+
+      // (b) STUDENT requests a link by CODE (fallback). No self-links; the
+      //     adultUid must be an existing teacher/parent. [A2][A3]
+      allow create: if isSelf(incoming().studentUid)
+        && incoming().source == 'code'
+        && incoming().studentUid != incoming().adultUid
+        && incoming().status == 'requested'
+        && incoming().createdBy == request.auth.uid
+        && linkId == incoming().studentUid + '_' + incoming().adultUid
+        && exists(/databases/$(database)/documents/users/$(incoming().adultUid))
+        && get(/databases/$(database)/documents/users/$(incoming().adultUid)).data.role in ['teacher','parent'];
+
+      // (c) STUDENT accepts a USERID INVITE addressed to them (deterministic id
+      //     already == studentUid_adultUid): 'invited' -> 'accepted'. [N3][N6]
+      allow update: if existing().status == 'invited'
+        && existing().targetKind == 'userid'
+        && existing().studentUid == request.auth.uid      // addressee is the caller
+        && incoming().status == 'accepted'
+        && incoming().adultUid == existing().adultUid
+        && incoming().studentUid == existing().studentUid
+        && incoming().targetKind == existing().targetKind;
+
+      // (c2) STUDENT accepts an EMAIL INVITE by CREATING the canonical link doc
+      //      links/{auth.uid}_{adultUid} in 'accepted'. The student proves the
+      //      email invite exists and is addressed to THEIR email via
+      //      emailInviteToMe(). The original 'email|...' doc is left as-is
+      //      (declinable later); all lookups use this canonical id. [N3][N6]
+      allow create: if isSelf(incoming().studentUid)
+        && incoming().source == 'invite'
+        && incoming().targetKind == 'email'
+        && incoming().status == 'accepted'
+        && incoming().studentUid != incoming().adultUid
+        && linkId == incoming().studentUid + '_' + incoming().adultUid
+        && emailInviteToMe(incoming().adultUid);          // a matching 'invited' email invite exists for my email
+
+      // (d) ADULT decides a CODE-REQUEST addressed to them: 'requested' -> approved/denied.
+      allow update: if isSelf(existing().adultUid)
+        && existing().status == 'requested'
+        && incoming().status in ['approved','denied']
+        && incoming().studentUid == existing().studentUid
+        && incoming().adultUid == existing().adultUid;
+
+      // (e) EITHER party may DECLINE a pending invite ('invited' -> 'denied').
+      allow update: if existing().status == 'invited'
+        && incoming().status == 'denied'
+        && incoming().adultUid == existing().adultUid
+        && (isSelf(existing().adultUid)
+            || (existing().targetKind == 'userid' && existing().studentUid == request.auth.uid)
+            || (existing().targetKind == 'email' && existing().targetValue == callerEmail()));
+
+      allow delete: if false;
+    }
+
+    function adultLinkedTo(studentUid) {
+      // An adult may read a student's users doc once a deterministic-id link to
+      // them exists in a non-denied state. (Email invites use an 'email|...' id
+      // and are not accepted until the student stamps their uid; the adult does
+      // not read the invitee's users doc before accept — they show the typed
+      // email — so this helper need not cover the email-id case.)
+      return signedIn()
+        && exists(/databases/$(database)/documents/links/$(studentUid + '_' + request.auth.uid))
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + request.auth.uid)).data.status != 'denied';
+    }
+    function approvedLinkExists(studentUid, adultUid) {
+      // exists()-guarded. Used by the ADULT code-request approval branch (3).
+      return exists(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid))
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid)).data.status == 'approved';
+    }
+    function acceptableInviteExists(studentUid, adultUid) {
+      // exists()-guarded. Used by the STUDENT invite-accept users branch (2).
+      // The student performs link-accept (branch (c)/(c2)) FIRST, so by the time
+      // this runs the link exists naming this student+adult in 'invited'/'accepted'.
+      return exists(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid))
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid)).data.adultUid == adultUid
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid)).data.studentUid == studentUid
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + adultUid)).data.status in ['invited','accepted'];
+    }
+    function emailInviteToMe(adultUid) {
+      // exists()-guarded. Reconstructs the email-invite id from the CALLER'S OWN
+      // email, so a student can only prove an email invite that was addressed to
+      // THEIR email. callerEmail() returns the LOWERCASED stored email (§3.1.1),
+      // matching the lowercased id/targetValue written at invite time (branch (a)).
+      return exists(/databases/$(database)/documents/links/$('email|' + adultUid + '|' + callerEmail()))
+        && get(/databases/$(database)/documents/links/$('email|' + adultUid + '|' + callerEmail())).data.adultUid == adultUid
+        && get(/databases/$(database)/documents/links/$('email|' + adultUid + '|' + callerEmail())).data.status == 'invited'
+        && get(/databases/$(database)/documents/links/$('email|' + adultUid + '|' + callerEmail())).data.targetKind == 'email'
+        && get(/databases/$(database)/documents/links/$('email|' + adultUid + '|' + callerEmail())).data.targetValue == callerEmail();
+    }
+    function onlyStatusAndApprover(uid) {
+      // every field except status/approvedBy/updated must be unchanged
+      return incoming().diff(existing()).affectedKeys().hasOnly(['status','approvedBy','updated']);
+    }
+  }
+}
