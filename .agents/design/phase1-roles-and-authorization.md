@@ -1,8 +1,8 @@
 # Phase 1 Design — Three-Role Identity + Cross-Role Authorization
 
-Status: REVISED (iteration 2, resolves design-review.json) • Branch: `feature/roles-and-authorization` • Scope: Phase 1 only (identity + authorization). AI agents / game builder are later phases.
+Status: REVISED (iteration 3, resolves the latest design-review.json) • Branch: `feature/roles-and-authorization` • Scope: Phase 1 only (identity + authorization). AI agents / game builder are later phases.
 
-> Revision note: this version resolves every HIGH/MEDIUM/NIT finding from `.agents/design/design-review.json`. See §11 "Responses to review findings" at the end for a point-by-point trace. The two HIGH fixes are: (1) security-rules now cross-check that an approving `adultUid` is a real adult account and forbid self-links (no self-approval chain); (2) the two new overlays are explicitly added to the `el` map and the `hideAllOverlays` array so they are actually hidden on transitions.
+> Revision note (iteration 3): the security-rules strategy was accepted by the latest review (verdict CHANGES_REQUESTED on 2 MEDIUM client-data-flow details, 0 HIGH). This iteration resolves both MEDIUMs and both NITs by pinning down the two cross-script data-flow mechanisms the review flagged: (1) a `leaderboardEligible` flag on the cloud object, set from named call sites, is how `saveProfile` decides whether to write the leaderboard row (it cannot see `role`/`status`); (2) `watchMyStatus` is a thin module wrapper whose callback is a main-script `onMyStatus(data)` owning `state`/`justActivated`, with the deferred transition added to the named `gameOver()`/`levelClear()` handlers. See §12 for the point-by-point trace of this iteration; §11 retains the trace of the prior iteration.
 
 ## 1. Overview
 
@@ -105,7 +105,12 @@ leaderboard/{uid} { name: string, best: number, level: number, updated: timestam
 
 This collection exists to fix the regression the review found (finding 5): the new restrictive `users` read rule (§6) denies reading other players' `users` docs, which would break the existing global-leaderboard query. Instead of loosening `users`, leaderboard data is **denormalized** into a world-readable collection carrying only the three non-PII fields the leaderboard table renders. Write rules (§6) ensure a user can only write their **own** `leaderboard/{uid}` row and only when they are an `active` non-pending account, so a pending student cannot inject a fabricated score. This keeps `users` fully private while preserving the global leaderboard.
 
-- Who writes it: `saveProfile` (§7.1) writes `leaderboard/{uid}` **in addition to** `users/{uid}`, but only for accounts whose in-memory role/status is active (adults, or `active` students; never pending students, never legacy-before-backfill). Writing a denormalized row is cheap and idempotent (`setDoc merge`).
+- Who writes it: `saveProfile` (§7.1) writes `leaderboard/{uid}` **in addition to** `users/{uid}`, but only for accounts that are leaderboard-eligible (adults, or `active` students; never pending students, never legacy-before-backfill). Writing a denormalized row is cheap and idempotent (`setDoc merge`).
+- **How `saveProfile` knows it is eligible (resolves finding 1).** `saveProfile` lives in the `<script type="module">` block and receives only the profile field list (`{name,best,level,grade,speed,heroColor,…,musicOn}`, verified ~line 648) — it has **no** `role`/`status` in scope, because those live in the separate main-script IIFE and are never passed in. We do **not** thread `role`/`status` into the persisted `profile` literal (that would risk persisting new fields onto `users` and fighting the create-rule's `best == 0` on backfill). Instead we add an explicit eligibility flag on the cloud object:
+  - New module-scope `let leaderboardEligible = false;` inside the Firebase module block, plus a new `MathQuestCloud` method `setLeaderboardEligible(bool)` that assigns it.
+  - `saveProfile` reads this flag: it `setDoc`s `leaderboard/{uid}` **only if `leaderboardEligible === true`**. The `users/{uid}` write is unconditional (unchanged).
+  - Call sites that set the flag (named explicitly): in `enterGame` (main script, ~line 1104), right after `loadProfile` resolves the role/status branch, call `cloud().setLeaderboardEligible(isAdult || studentStatus === 'active')` — i.e. `true` for adults and active students, `false` for pending students. Legacy docs are backfilled to `active` in the same branch (§7.4), so they set `true`. On the live pending→active transition (§5 `onMyStatus`), call `cloud().setLeaderboardEligible(true)` at the moment the student flips to active. In `logout()` (~line 1164) call `cloud().setLeaderboardEligible(false)` so a stale flag never leaks across sessions.
+  - This keeps the `persistProgress` profile literal (~line 1198) **unchanged** (no `role`/`status` added there), so the `users` write shape is untouched and the create-rule's `best == 0` constraint is never disturbed.
 - Who reads it: the leaderboard query (§7.6) now reads `leaderboard`, not `users`.
 
 ### 4.6 Lookups / indexes
@@ -119,16 +124,29 @@ This collection exists to fix the regression the review found (finding 5): the n
 ## 5. Offline / Pending-Student Experience
 
 - **Offline (Firebase unavailable):** unchanged. The game already falls back to local cache + local leaderboard. Role/status logic is skipped entirely; the user plays solo exactly as today. No regression. (Verified: `enterGame` role-branching is only on the online path; offline uses `getCached(uid)`.)
-- **Pending student (online, not yet approved):** after login they land on a **"Waiting for approval"** screen (`#pendingApproval`) that explains a parent/teacher needs to approve them, shows a **"Have a code? Enter it"** field to claim an adult code, and offers a **"Play solo for now"** button. Playing solo uses the normal game loop but: (a) their score is **not** written to `leaderboard/{uid}` (the `saveProfile` write-guard skips pending accounts, and rules reject a pending write anyway), (b) they are flagged as pending in their profile.
-- **pending → active live transition (specified; resolves finding 6).** A pending student's `#pendingApproval` screen starts a `watchMyStatus(cb)` `onSnapshot` on their own `users/{uid}`. When an adult approves and the snapshot fires `status === 'active'`:
-  - If the student is **on the pending screen** (`state !== 'playing'`): transition immediately — hide `#pendingApproval`, run the normal active-student path (show `#start`), and **unsubscribe** the snapshot (one-shot; no further need).
-  - If the student is **mid-game** (`state === 'playing'`): do **not** interrupt. Set an in-memory flag `justActivated = true` and leave the run alone. At the next natural screen boundary (game-over or level-clear handler), if `justActivated` is set, route to the start screen and clear the flag. This avoids a jarring yank out of a run.
-  - The snapshot is **always unsubscribed** in `logout()` and once the student becomes active (both exits above), so there is no listener leak across sessions.
+- **Pending student (online, not yet approved):** after login they land on a **"Waiting for approval"** screen (`#pendingApproval`) that explains a parent/teacher needs to approve them, shows a **"Have a code? Enter it"** field to claim an adult code, and offers a **"Play solo for now"** button. Entering the adult code is a **post-login action** (the student is already authenticated; §7.3, NIT 4). Playing solo uses the normal game loop but: (a) their score is **not** written to `leaderboard/{uid}` — `enterGame` set `leaderboardEligible = false` for a pending student (§4.5), so `saveProfile` skips the leaderboard write, and the rules reject a pending write anyway, (b) they are flagged as pending in their profile.
+- **pending → active live transition (fully specified; resolves findings 6 and the review's finding 2).** The `onSnapshot` is created in the module script, but its callback must read/write main-script state (`state`, `justActivated`). Those variables live inside the main-script IIFE and are **not reachable from the module**. So the ownership is split deliberately:
+  - `watchMyStatus(cb)` (§7.1) is a **thin module wrapper**: it does `onSnapshot(doc(db, USERS, uid), snap => cb(snap.data()))` and **returns the unsubscribe function**. It contains no game logic.
+  - The callback passed in is a **main-script function `onMyStatus(data)`** (defined in the main IIFE, §7.3), so it can touch `state`, set/read `justActivated`, and call `hideAllOverlays()` / `el.start.classList.add("show")`. `enterGame` wires it: `unsubMyStatus = cloud().watchMyStatus(onMyStatus)`.
+  - `onMyStatus(data)` body: when `data.status === 'active'`:
+    - If **not mid-game** (`state !== 'playing'`): transition immediately — `cloud().setLeaderboardEligible(true)`, `hideAllOverlays()`, `el.start.classList.add("show")`, `state = 'start'`, then `unsubMyStatus?.(); unsubMyStatus = null;` (one-shot).
+    - If **mid-game** (`state === 'playing'`): do **not** interrupt. Set `cloud().setLeaderboardEligible(true)` (so the student's next save lands on the leaderboard) and set the main-script flag `justActivated = true`. Leave the run alone and keep the snapshot subscribed until the deferred transition fires.
+  - **Deferred transition hook sites (named).** The two natural screen boundaries are the existing `gameOver()` (~line 2004) and `levelClear()` (the level-clear path, ~line 1993). Add this 3-line check to the **end of both** functions:
+    ```js
+    if (justActivated) {
+      justActivated = false;
+      hideAllOverlays(); el.start.classList.add("show"); state = "start";
+      unsubMyStatus?.(); unsubMyStatus = null;
+    }
+    ```
+    (It runs after the overlay those functions show is set up; it supersedes the game-over/level-clear screen only when the student was just activated mid-run.)
+  - `justActivated` is a **main-script module-scope `let justActivated = false;`** declared alongside `let unsubMyStatus = null;` (§7.3).
+  - The snapshot is **always unsubscribed**: in `logout()` (§7.5), on the immediate transition above, and in the deferred `justActivated` check — so there is no listener leak across sessions.
 - **Active student / any adult:** adults go to the **Approval screen** (`#approvalDesk`: their linked students with approve/deny buttons, their own link code shown) and can still open the game. Active students go straight to the existing start screen.
 
 ## 6. Security Rules Strategy (`firestore.rules`) + Attack-Case Reasoning
 
-Rules are the **only** real protection: the Firebase web config (`apiKey`, project id, etc.) is public in `index.html` (verified, `firebaseConfig` literal ~lines 544–552) and cannot be hidden in a static site. Anyone can instantiate the SDK against project `mathquest-ca395`. Therefore every invariant below is enforced server-side in rules, never by trusting the client. In particular, the client is untrusted even when it "follows the flow": the rules independently re-verify that an approving adult is really an adult, that a student is not acting as their own adult, and that a self-created `users` doc has a zero score and no approver.
+Rules are the **only** real protection: the Firebase web config (`apiKey`, project id, etc.) is public in `index.html` (verified, `firebaseConfig` literal ~lines 527–537, `apiKey` ~line 528) and cannot be hidden in a static site. Anyone can instantiate the SDK against project `mathquest-ca395`. Therefore every invariant below is enforced server-side in rules, never by trusting the client. In particular, the client is untrusted even when it "follows the flow": the rules independently re-verify that an approving adult is really an adult, that a student is not acting as their own adult, and that a self-created `users` doc has a zero score and no approver.
 
 ```
 rules_version = '2';
@@ -291,9 +309,10 @@ All edits stay inline / in the existing module; no new files loaded in the brows
   - `claimCode({code})` — student resolves `linkCodes/{CODE}`, then `setDoc(links/{self}_{adultUid})` with `status:'pending'`.
   - `listLinkedStudents()` — adult `query(links, where('adultUid','==',me), where('status','in',['pending','approved']))`, then `getDoc(users/{studentUid})` per row for name/status.
   - `approveStudent({studentUid})` / `denyStudent({studentUid})` — adult `updateDoc(links/...)`; on approve also `updateDoc(users/{studentUid}, {status:'active', approvedBy:me, updated:serverTimestamp()})`.
-  - `watchMyStatus(cb)` — `onSnapshot` on own `users/{uid}`; returns the unsubscribe function so callers can detach it (see §5 lifecycle).
+  - `watchMyStatus(cb)` — a **thin module wrapper**: `onSnapshot(doc(db, USERS, uid), s => cb(s.data()))`; returns the unsubscribe function. It holds **no** game logic — the real callback (`onMyStatus`) lives in the main script because it must touch `state`/`justActivated` (§5, §7.3).
   - `myLinkCode()` — getter returning the adult's own `linkCode`.
-- Extend `saveProfile` (~line 655): after writing `users/{uid}`, if the in-memory profile is an active account (adult, or `active` student — never pending, never pre-backfill legacy), also `setDoc(leaderboard/{uid}, {name, best, level, updated}, {merge:true})`. This is the only writer of the denormalized leaderboard row.
+- Add a module-scope eligibility flag and setter (resolves finding 1): `let leaderboardEligible = false;` beside the other module state, and a `MathQuestCloud` method `setLeaderboardEligible(bool) { leaderboardEligible = !!bool; }`. `saveProfile` cannot read `role`/`status` (they are not in its scope — see §4.5), so this flag is the mechanism it branches on.
+- Extend `saveProfile` (~line 648): keep the unconditional `setDoc(users/{uid}, …)` exactly as today, then **if `leaderboardEligible === true`** also `setDoc(leaderboard/{uid}, {name, best, level, updated: serverTimestamp()}, {merge:true})`. This is the only writer of the denormalized leaderboard row. Do **not** add `role`/`status` to the destructured `saveProfile` signature or to the `persistProgress` profile literal (~line 1198) — the `users` write shape stays unchanged.
 
 ### 7.2 Auth UI HTML (`#auth` overlay, ~lines 342–367)
 - Add a **role picker** to the Sign Up pane (`#signupPane`): three selectable buttons (I'm a Student / Parent / Teacher) styled with the existing `.grade-btn`/`.color-swatch` pattern and pastel palette. Default = Student.
@@ -302,8 +321,15 @@ All edits stay inline / in the existing module; no new files loaded in the brows
 
 ### 7.3 Auth flow JS (functions ~lines 1053–1175)
 - `doSignup` (~1073): read the selected role, pass it to `cloud().signup`.
-- `enterGame` (~1104): after `loadProfile`, branch on `role`/`status` **from the already-loaded profile** (no extra read): adult → render & show `#approvalDesk`; pending student → render & show `#pendingApproval` (wire the code-claim + solo buttons, start `watchMyStatus` and keep the returned unsubscribe); active student or legacy doc → existing start-screen path unchanged (`hideAllOverlays()` + `el.start.classList.add("show")`).
-- Add new handler functions near here: `showPending()`, `showApprovalDesk()`, `renderLinkedStudents()`, `onClaimCode()`, `onApprove(uid)`, `onDeny(uid)`, `playSolo()`. Store the `watchMyStatus` unsubscribe in a module-scope `let unsubMyStatus = null`; implement the §5 transition rule (immediate if on pending screen, deferred via `justActivated` flag if `state === 'playing'`) and call `unsubMyStatus?.()` on transition-to-active.
+- `enterGame` (~1104): after `loadProfile`, branch on `role`/`status` **from the already-loaded profile** (no extra read) and set the leaderboard-eligibility flag in each branch (§4.5): 
+  - adult → `cloud().setLeaderboardEligible(true)`, render & show `#approvalDesk`;
+  - pending student → `cloud().setLeaderboardEligible(false)`, render & show `#pendingApproval` (wire the code-claim + solo buttons, then `unsubMyStatus = cloud().watchMyStatus(onMyStatus)`);
+  - active student or legacy doc (backfilled to active, §7.4) → `cloud().setLeaderboardEligible(true)`, existing start-screen path unchanged (`hideAllOverlays()` + `el.start.classList.add("show")`).
+- Add new handler functions near here: `showPending()`, `showApprovalDesk()`, `renderLinkedStudents()`, `onClaimCode()`, `onApprove(uid)`, `onDeny(uid)`, `playSolo()`, and `onMyStatus(data)`.
+- **Main-script module-scope state (declared together, inside the main IIFE):** `let unsubMyStatus = null;` and `let justActivated = false;`. These are main-script variables precisely because `onMyStatus` and the deferred hooks need to touch `state`/`justActivated`, which the module cannot see (see §5).
+- `onMyStatus(data)` is the main-script callback handed to `cloud().watchMyStatus(...)`; it owns the `state === 'playing'` branch, the `justActivated` flag, and the immediate-vs-deferred transition logic exactly as specified in §5. `enterGame` sets `unsubMyStatus = cloud().watchMyStatus(onMyStatus)` when showing the pending screen.
+- The deferred transition is a 3-line `if (justActivated) {…}` block added to the **end of `gameOver()` (~2004) and `levelClear()` (~1993)** — the two named hook sites (§5).
+- `onClaimCode()` is a **post-login action** (the student is already authenticated from signup/login, so `getDoc(linkCodes/{CODE})` passes the `signedIn()` read rule). The pending screen's code field is never used pre-auth (resolves NIT 4).
 
 ### 7.4 Legacy backfill
 - In `enterGame`, if a loaded profile has no `role`, treat as `student`/`active` in memory and write the backfill (`role:'student', status:'active', approvedBy:null`) via the existing `saveProfile`/`setDoc merge` path (self-`update` rule branch — not the constrained `create` branch, so an existing player's score is untouched). Old players are grandfathered without a flag day.
@@ -317,7 +343,7 @@ All edits stay inline / in the existing module; no new files loaded in the brows
   ```
   This is required — `hideAllOverlays` sweeps a hardcoded element list, **not** `.overlay.show`; without this edit the new overlays would stay stuck on top of the game. (We keep the hardcoded-array approach rather than refactoring to `querySelectorAll('.overlay.show')`, to avoid an unrelated behavior change to existing transitions.)
 - `showAuth` (~line 1053) calls `hideAllOverlays()` already, so once the two overlays are in that array they are correctly cleared on the auth transition. No other change to `showAuth`.
-- `startAuthListener` unchanged in structure; `enterGame` does the role branching, so the listener stays thin. Offline branch unchanged — pending/role logic is never reached offline. Add `unsubMyStatus?.()` to `logout()` so the status snapshot is detached on sign-out (no listener leak; §5).
+- `startAuthListener` unchanged in structure; `enterGame` does the role branching, so the listener stays thin. Offline branch unchanged — pending/role logic is never reached offline. Add `unsubMyStatus?.(); unsubMyStatus = null;` and `cloud().setLeaderboardEligible(false);` to `logout()` (~line 1164) so the status snapshot is detached and the eligibility flag is cleared on sign-out (no listener leak, no stale flag across sessions; §5, §4.5).
 
 ### 7.6 Leaderboard
 - Add a `MathQuestCloud` method (or repoint `topScores`) to read the denormalized collection: `query(collection(db, LEADERBOARD), orderBy('best','desc'), limit(max))` instead of querying `users` (resolves the regression in finding 5 — the restrictive `users` read rule no longer blocks the leaderboard). `renderLeaderboardRows` (~line 2030) is unchanged; it already reads `name/best/level`, which the `leaderboard` docs carry. Pending students never appear because they never get a `leaderboard` row written.
@@ -355,3 +381,12 @@ These are repo artifacts only; this step does **not** run `firebase deploy`/`log
 - **Finding 8 — NIT, `onAuthChange` either/or. ADDRESSED.** Resolved to a single choice: listener stays `{uid, name}`; `enterGame` branches on role/status from the profile it already loads (§7.1).
 - **Finding 9 — NIT, unused `deleteField`. ADDRESSED.** Dropped from the import list (§7.1).
 - **Finding 10 — NIT, unused `usernames.role`. ADDRESSED.** `usernames` shape left unchanged; no `role` field added; mechanism B explicitly deferred (§4.2, §3, §10).
+
+## 12. Responses to the latest review findings (iteration 3)
+
+Reviewed doc verdict: **CHANGES_REQUESTED** — 2 MEDIUM, 0 HIGH, 2 NITs. The security-rules strategy was accepted (self-approval chain closed at three gates, role immutable, leaderboard denormalized). Both blockers were underspecified client data-flow details.
+
+- **Finding 1 — MEDIUM, `saveProfile` cannot see `role`/`status`; leaderboard write-guard unimplementable. ADDRESSED (fix (b)).** Chose the `setLeaderboardEligible(bool)` flag on `MathQuestCloud` over threading fields through the profile literal, because fix (a) would add `role`/`status` to the persisted `profile` object and risk disturbing the `users` write shape / the create-rule `best == 0` constraint. Specified: a module-scope `let leaderboardEligible = false;`, a `setLeaderboardEligible` setter, `saveProfile` gating the `leaderboard/{uid}` write on that flag, and the exact call sites that set it — `enterGame` (per role/status branch), the `onMyStatus` activation transition, and `logout()` (reset to false). The `persistProgress` profile literal (~line 1198) and the `saveProfile` signature are explicitly left unchanged. See §4.5 ("How `saveProfile` knows it is eligible"), §7.1 (flag + `saveProfile` bullet), §7.3 (`enterGame`), §7.5 (`logout`).
+- **Finding 2 — MEDIUM, mid-game activation deferral references unnamed handlers / cross-scope variables. ADDRESSED.** Specified the split ownership: `watchMyStatus(cb)` is a thin module wrapper returning the unsubscribe (§7.1); the callback is a **main-script `onMyStatus(data)`** owning the `state === 'playing'` branch and the `justActivated` flag; `justActivated` and `unsubMyStatus` are declared together as main-script module-scope `let`s (§7.3). Named the deferred-transition hook sites — the 3-line `if (justActivated) {…}` block is added to the **end of `gameOver()` (~2004) and `levelClear()` (~1993)**, with the exact snippet shown (§5, §7.3).
+- **Finding 3 — NIT, line-anchor drift. ADDRESSED.** §6 `firebaseConfig` anchor corrected to ~527–537 (`apiKey` ~528). The "locate by function name / element id" instruction at §1/§7 already governs all anchors as approximate.
+- **Finding 4 — NIT, clarify code-claim is post-login. ADDRESSED.** Noted in §5 and §7.3 that `onClaimCode()` is a post-login action (the student is authenticated, so the `signedIn()` read on `linkCodes` passes); no rule change needed.
