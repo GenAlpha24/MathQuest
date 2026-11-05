@@ -338,6 +338,7 @@
       <div id="accountDropdown" role="menu">
         <button class="menu-item" id="pauseBtn">⏸ Pause</button>
         <button class="menu-item" id="musicBtn">🎵 Music: On</button>
+        <button class="menu-item" id="studentsBtn" style="display:none">👪 My students</button>
         <button class="menu-item" id="leaderboardBtn">🏆 Leaderboard</button>
         <button class="menu-item" id="helpBtn">❓ Help</button>
         <div class="menu-sep"></div>
@@ -1516,6 +1517,8 @@
     // Route by role/status. The offline/cache/default path carries no `role`,
     // so it lands in branch 3 (no role logic) by construction.
     const role = profile.role;
+    // "My students" menu item is for signed-in teachers/parents only.
+    document.getElementById("studentsBtn").style.display = (role === "teacher" || role === "parent") ? "" : "none";
     if (role === "teacher" || role === "parent") {
       // (1) Adult -> approval desk.
       if (cloud()) cloud().setLeaderboardEligible(true);
@@ -1716,6 +1719,7 @@
     if (unsubMyStatus) { unsubMyStatus(); unsubMyStatus = null; }
     justActivated = false;
     if (cloud()) cloud().setLeaderboardEligible(false);
+    document.getElementById("studentsBtn").style.display = "none";
     if (cloud()) await cloud().logout();
     showAuth();
   }
@@ -2895,6 +2899,14 @@
   document.getElementById("leaderboardBtn").onclick = showLeaderboard;
   document.getElementById("lbCloseBtn").onclick = () => el.leaderboard.classList.remove("show");
   document.getElementById("pauseBtn").onclick = togglePause;
+  // Adults: reopen the approval desk mid-session. Freeze any run first, then
+  // park on the start state (like login) so P/Esc/Space do nothing behind it.
+  document.getElementById("studentsBtn").onclick = () => {
+    pauseGame(); // no-op unless playing/battle; stops the battle countdown
+    showApprovalDesk();
+    paused = false; prePauseState = null;
+    state = "start";
+  };
   const musicBtn = document.getElementById("musicBtn");
   const muteBtn = document.getElementById("muteBtn");
   // Keep both the dropdown item and the standalone mute button in sync.
