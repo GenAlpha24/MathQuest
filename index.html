@@ -611,6 +611,9 @@
   // Adult's own role + shareable link code, cached on signup/login so the
   // adult-side invite helpers can stamp adultRole and show the code.
   let myRole = null, myLinkCode = null;
+  // True while signup() is creating the account + users doc; the auth listener
+  // parks its sign-in in heldAuth until the doc exists (see onAuthChange).
+  let signingUp = false, heldAuth = null;
 
   const USERS = "users";         // one doc per player, keyed by Firebase UID
   const USERNAMES = "usernames"; // maps a unique userid -> { uid, email }
@@ -655,13 +658,28 @@
     onAuthChange(cb) {
       if (!auth) { cb(null); return; }
       onAuthStateChanged(auth, (user) => {
-        cb(user ? { uid: user.uid, name: user.displayName || (user.email || "").split("@")[0] } : null);
+        const u = user ? { uid: user.uid, name: user.displayName || (user.email || "").split("@")[0] } : null;
+        // createUserWithEmailAndPassword fires this BEFORE signup() has written
+        // users/{uid}; entering the game now would see no profile and take the
+        // legacy path. Hold the sign-in until signup finishes writing the doc.
+        if (signingUp && u) { heldAuth = () => cb(u); return; }
+        cb(u);
       });
     },
 
     // Sign up with a UNIQUE user id + a real email + password.
     // The email is used by Firebase Auth; login later uses userid+password.
-    async signup({ userid, email, password, role }) {
+    async signup(args) {
+      signingUp = true; heldAuth = null;
+      let res;
+      try { res = await this._signup(args); }
+      finally { signingUp = false; }
+      const held = heldAuth; heldAuth = null;
+      if (res.ok) { if (held) held(); }
+      else if (held && auth) { try { await signOut(auth); } catch (e) {} } // half-created account (no profile doc): don't enter the game
+      return res;
+    },
+    async _signup({ userid, email, password, role }) {
       if (!auth || !db) return { ok: false, error: "Cloud sign-up is unavailable." };
       const id = normalizeUserid(userid);
       if (!validUserid(id)) return { ok: false, error: "User ID: 3-16 letters, numbers, or _ (no spaces)." };
@@ -697,7 +715,6 @@
             if (!exists.exists()) { linkCode = candidate; break; }
           }
           if (!linkCode) linkCode = makeLinkCode() + makeLinkCode().slice(0, 2); // extremely unlikely fallback
-          await setDoc(doc(db, LINKCODES, linkCode), { adultUid: uid, role: theRole });
         } catch (e) { return { ok: false, error: friendlyError(e) }; }
       }
 
@@ -720,6 +737,8 @@
           userDoc.linkCode = linkCode;
         }
         await setDoc(doc(db, USERS, uid), userDoc);
+        // The linkCodes rule checks the caller's users doc role, so it must exist first.
+        if (isAdult) await setDoc(doc(db, LINKCODES, linkCode), { adultUid: uid, role: theRole });
       } catch (e) { return { ok: false, error: friendlyError(e) }; }
 
       // Cache adult role/code so invite helpers can use them this session.
@@ -1438,6 +1457,7 @@
 
     // Load profile from Firestore, falling back to the local cache.
     let profile = await (cloud() ? cloud().loadProfile(user.uid) : null);
+    const fromCloud = !!profile;   // a real users/{uid} doc exists (not cache/default)
     if (!profile) profile = getCached(user.uid);
     profile = profile || { name: currentUser, best: 0, level: 1, grade: 1, speed: 2 };
 
@@ -1512,7 +1532,8 @@
       hideAllOverlays();
       el.start.classList.add("show");
       state = "start";
-      if (!role && cloud()) cloud().backfillRole(currentUid);
+      // Backfill only a genuine legacy doc (exists, no role) — never a missing/cached/default one.
+      if (!role && fromCloud && cloud()) cloud().backfillRole(currentUid);
     }
   }
 
