@@ -12,6 +12,8 @@ Diff:
 - `adultLinkedTo`: replace `.status != 'denied'` with `.status in ['accepted','approved']`. Update the comment (email-invite canonical doc `studentUid_adultUid` is `accepted`, so it is covered).
 - Code-requests (`requested`): do NOT loosen user reads. Decision: carry a display name on the link doc. Rule (b) (student creates request) gets: `&& (!('studentName' in incoming()) || (incoming().studentName is string && incoming().studentName.size() <= 40))`. The client writes `studentName` from the student's display name. It is student-typed text, so it is a label only. Trust still comes from the adult's secret code, and the adult sees a name, not email/uid.
 - Add an optional `adultName` (<= 40 chars, same check) to invite creation (a). It fixes a current gap: a student cannot read the adult's users doc (A4), so the invite list always shows "An adult". `listMyInvites` will read `data.adultName`.
+- Name-field integrity: the update rules (c), (d), (e) each gain `&& incoming().diff(existing()).affectedKeys().hasOnly(['status','decidedAt'])`, so neither party can rewrite `studentName`/`adultName` after creation. Existing tests write only `status` and `decidedAt`; the implementer confirms by running them.
+- Pre-existing, not fixed here: `usernames/{userid}` is world-readable and holds `{uid, email}`, so anyone (even signed out) can get a child's email from a userid. The 1b change closes the `users` read only; email is NOT protected overall. Recorded in project-context Open items as a follow-up (needs a server-side login lookup, Phase 2). Student code-requests are also not rate limited; only invites are in scope.
 - Header comment: add `A11 (NEW) adult reads a student profile via an un-accepted invite or unapproved request -> adultLinkedTo requires accepted/approved`, plus the quota cases from section 5 (A12-A14).
 
 Read-path audit (all `users`/`links` reads):
@@ -44,7 +46,9 @@ Cloud (no rules change expected):
 - `acceptInvite({..., activate})`: `activate` true only for `status === 'pending'` (pending screen call passes true). For active students skip the `users` update. Reason: rule (2) requires existing `pending`; rule (1) forbids changing `approvedBy`, so the write would be denied and previously-linked approver would be lost.
 - Userid invite: rule (c) `invited -> accepted`. Email invite: canonical `studentUid_adultUid` create (c2) via `emailInviteToMe`.
 - `requestByCode` unchanged for active students (rule (b) needs only the target to be an adult) plus `studentName`.
-- `approveStudent`: after the link flips to `approved`, `getDoc(users/{student})`; only write the activation if `status !== 'active'`. This avoids overwriting an active student's `approvedBy` and `updated`.
+- `approveStudent`: after the link flips to `approved`, `getDoc(users/{student})`; write the activation ONLY if `d.exists() && d.data().role === 'student' && d.data().status === 'pending'`; otherwise skip the write and return ok. A bare `status !== 'active'` check is wrong: an un-backfilled legacy doc has no `role`/`status`, so rule (3) would error on the missing field and leave a half-approved link. Skipping also avoids overwriting an active student's `approvedBy`/`updated`. Test: approving a code-request from a role-less legacy doc leaves the link `approved`, attempts no users write, returns ok, and the adult can then read the doc.
+- `listMyInvites`: add a third query `links where studentUid == me and status in ['accepted','approved']`. Drop any `email|...` invited row whose `adultUid` already has a canonical row, and render linked adults as "Linked ✓" with no button. Reason: rule (c2) leaves the original `email|...` doc `invited` forever, and Accept on it would always fail (rule (c) is userid-only). Pending-screen behavior is unchanged except it also shows "Linked ✓" rows.
+- Live activation: a pending student who becomes active without relogin gets the menu item too. Set `invitesBtn.style.display = ""` in `onMyStatus` on activation and in both `justActivated` handlers (~2555, ~2570), not only `enterGame` branch (3).
 
 Risks specific to legacy docs: an old doc may lack `email` (email invites then fail closed because `callerEmail()` errors; userid invites still work) or lack a `usernames/{userid}` entry (adult's userid invite says "No student with that user ID"; email invite is the path). The emulator test seeds a legacy doc both with and without `email` to document this. No rule change unless a flow fails for a doc that does have email and usernames.
 
@@ -56,7 +60,7 @@ Why not (b): legacy role-less docs are children's accounts; a self-upgrade to `t
 
 Why no script: the only owner-credential route is reusing the Firebase CLI's stored refresh token with the CLI's OAuth client, which depends on CLI internals and is easy to get wrong. A rare, one-account edit in the console is simpler, auditable and safe. If the owner wants a script later, it should be a separate decision.
 
-Deliverable: `docs/owner-set-role.md` (short). Steps for converting account `<uid>` to teacher/parent: (1) in `users/<uid>` set `role`, `status: "active"`, `approvedBy: null`, `linkCode: "<7-char code from the allowed alphabet>"` (2) create `linkCodes/<CODE>` = `{adultUid: "<uid>", role: "<role>"}` (3) delete any `links` docs with `studentUid == <uid>` and any `leaderboard/<uid>` row if wanted (4) tell the user to log out/in. Rules and tests are unchanged, so immutability still holds. The human can veto and pick (b)/(c).
+Deliverable: a short "Owner: change an account's role" section in the single root `README.md` (no separate docs file, per the minimal-files rule). Steps for converting account `<uid>` to teacher/parent: (1) in `users/<uid>` set `role`, `status: "active"`, `approvedBy: null`, `linkCode: "<7-char code from the allowed alphabet>"` (2) create `linkCodes/<CODE>` = `{adultUid: "<uid>", role: "<role>"}` (3) delete any `links` docs with `studentUid == <uid>` and any `leaderboard/<uid>` row if wanted (4) tell the user to log out/in. Rules and tests are unchanged, so immutability still holds. The human can veto and pick (b)/(c).
 
 ## 5. Item 4: invite rate limit (rules)
 
@@ -64,16 +68,41 @@ Limit: 30 new invites per adult per UTC day. A class is typically 20-30 students
 
 Data shape: `inviteQuota/{adultUid}_{yyyymmdd}` = `{ adultUid, day (int yyyymmdd), count (int), lastLinkId (string) }`. One doc per adult-day; rollover is a new doc id (the client cannot choose the day because rules derive it from `request.time`). Old docs are negligible and never read.
 
-Rules:
-- `function todayKey() { return request.time.year()*10000 + request.time.month()*100 + request.time.day(); }`; `quotaPath(uid)` = `inviteQuota/$(uid + '_' + string(todayKey()))`.
-- `match /inviteQuota/{qid}`: `read` if `signedIn() && qid.matches(request.auth.uid + '_[0-9]{8}')` (works for non-existent docs, unlike `resource` checks). `delete` false.
-  - `create`: `isSelf(incoming().adultUid)`, `callerRoleIs(['teacher','parent'])`, `qid == adultUid + '_' + string(todayKey())`, `incoming().day == todayKey()`, `count == 1`, keys `hasOnly`, plus `invitePaired()`.
-  - `update`: same owner/role/day, `incoming().count == existing().count + 1`, `incoming().count <= inviteDailyLimit()`, `adultUid`/`day` unchanged, plus `invitePaired()`.
-  - `invitePaired()`: `!exists(links/lastLinkId) && existsAfter(links/lastLinkId) && getAfter(links/lastLinkId).data.adultUid == request.auth.uid && .status == 'invited'`. A quota bump with no new invite fails.
-- Link create (a) gains: `&& getAfter(quotaPath(uid)).data.lastLinkId == linkId && getAfter(quotaPath(uid)).data.count == (exists(quotaPath(uid)) ? get(quotaPath(uid)).data.count : 0) + 1`. `lastLinkId == linkId` stops one quota bump from covering two links in a batch. An invite without a quota write fails (`getAfter` of a missing doc errors, which denies).
-- Client `inviteStudent`: `runTransaction` (add to the import list): read the quota doc, compute `count`, then `tx.set(quota)` and `tx.set(link)`. It accepts a read-miss as 0. On limit/permission failure: `getDoc(quota)`; if `count >= 30` show "You've sent a lot of invites today, try again tomorrow."; otherwise "You already invited that student (or they declined)."
+Rules, written out (all new, in `firestore.rules`):
+
+```
+function inviteDailyLimit() { return 30; }
+function todayKey() { return request.time.year()*10000 + request.time.month()*100 + request.time.day(); }
+function quotaId(uid) { return uid + '_' + string(todayKey()); }
+function quotaPath(uid) { return /databases/$(database)/documents/inviteQuota/$(quotaId(uid)); }
+function invitePaired() {   // the quota write is accompanied by a NEW invite link of mine in the same batch
+  return !exists(/databases/$(database)/documents/links/$(incoming().lastLinkId))
+    && existsAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId))
+    && getAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId)).data.adultUid == request.auth.uid
+    && getAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId)).data.status == 'invited';
+}
+function quotaOk(qid) {
+  return signedIn() && callerRoleIs(['teacher','parent'])
+    && incoming().adultUid == request.auth.uid
+    && qid == quotaId(request.auth.uid)            // day comes from request.time, never the client
+    && incoming().day == todayKey()
+    && incoming().count is int && incoming().lastLinkId is string
+    && incoming().keys().hasOnly(['adultUid','day','count','lastLinkId'])
+    && invitePaired();
+}
+match /inviteQuota/{qid} {
+  allow read: if signedIn() && qid.matches(request.auth.uid + '_[0-9]{8}');  // works for missing docs
+  allow create: if quotaOk(qid) && incoming().count == 1;
+  allow update: if quotaOk(qid) && incoming().count == existing().count + 1
+                && incoming().count <= inviteDailyLimit();
+  allow delete: if false;
+}
+```
+
+- Link create (a) gains: `&& getAfter(quotaPath(request.auth.uid)).data.lastLinkId == linkId && getAfter(quotaPath(request.auth.uid)).data.count == (exists(quotaPath(request.auth.uid)) ? get(quotaPath(request.auth.uid)).data.count : 0) + 1`. `lastLinkId == linkId` stops one quota bump from covering two links in a batch. An invite without a quota write fails (`getAfter` of a missing doc errors, which denies). `qid` is a parameter of `quotaOk` because it is only in scope inside the `match`.
+- Step 0 for the implementer, before writing any tests: compile the rules in the emulator and confirm `string(int)` and `request.time.year()/month()/day()` are accepted (not verified by me). Fallback if `string(int)` is rejected: key on `string(int(math.floor(request.time.toMillis() / 86400000)))`, still derived from `request.time`; if that is also rejected, stop and report.- Client `inviteStudent`: `runTransaction` (add to the import list): read the quota doc, compute `count`, then `tx.set(quota)` and `tx.set(link)`. It accepts a read-miss as 0. On limit/permission failure: `getDoc(quota)`; if `count >= 30` show "You've sent a lot of invites today, try again tomorrow."; otherwise "You already invited that student (or they declined)."
 - Dedupe: link ids are deterministic. Re-inviting an existing id is an update, which no rule allows, so the whole transaction is rejected and quota is not consumed. The same applies to a previously denied invite (existing limitation, now with a clearer message).
-- Document-access limits: invite create evaluates `callerRoleIs` (exists+get on `users/me`) plus quota `exists/get/getAfter`; quota write evaluates `callerRoleIs` plus `exists/existsAfter/getAfter` on the link. Static upper bound without caching is about 8 per operation, under the 10 per-operation limit (20 per commit). The test run reports the static count and the pass result at the limit; if the emulator debug log exposes counts, those are reported too.
+- Document-access limits: invite create evaluates `callerRoleIs` (exists+get on `users/me`) plus quota `exists/get/getAfter`; quota write evaluates `callerRoleIs` plus `exists/existsAfter/getAfter` on the link. Repeated access to the same path is cached and counts once, so a link create touches about 3 distinct documents (users/me, quota, and the quota-after) and a quota write about 3 (users/me, link, link-after). That is well under the 10 per operation and 20 per request limits. The test run reports that the batch at the 30th invite passes; exact counts are reported only if the emulator exposes them.
 - `firestore.indexes.json`: no change (no new queries).
 - Header comment: `A12 adult exceeds the daily limit`, `A13 adult resets/decrements/deletes quota or picks another day`, `A14 student or non-adult writes quota`, `A15 one quota bump covering several invites / quota bump with no invite`.
 
