@@ -24,6 +24,11 @@
 //           -> onlyStatusAndApprover() diff limited to status/approvedBy/updated.
 //  A9 (OLD) adult approves a student with no approved link -> adult-update (3)
 //              requires approvedLinkExists() (exists()-guarded).
+//  A10 (OLD) legacy (pre-Phase-1, role-less) doc is locked out / abused via the
+//           backfill -> branch (1b) allows ONLY role:'student', status:'active',
+//              approvedBy:null on a doc that has no `role`; a role-less doc cannot
+//              be newly created (create rule requires role), so it cannot be used
+//              to mint a teacher/parent or to self-approve a real pending student.
 // --- NEW invite-flow attack cases ---
 //  N1 student FORGES an invite 'from' a fake adult to self-activate
 //       -> links.create invite-branch (a) requires isSelf(adultUid) AND
@@ -122,6 +127,22 @@ service cloud.firestore {
         && incoming().role == existing().role              // role immutable
         && incoming().status == existing().status          // can't self-approve here
         && incoming().approvedBy == existing().approvedBy; // can't self-set approver
+
+      // (1b) Self update — ONE-TIME LEGACY BACKFILL. Docs created before Phase 1
+      //      have NO `role` field, so branches (1)/(2) fail closed (reading a
+      //      missing field is a rules error => deny) and a grandfathered player
+      //      could neither save progress nor be backfilled. This branch lets the
+      //      owner of a role-less doc set exactly role:'student', status:'active',
+      //      approvedBy:null and nothing else. Not an escalation path: new docs
+      //      cannot be created without a role (create rule), so a role-less doc is
+      //      always a pre-Phase-1 player; the role can only become 'student'; and
+      //      no teacher/parent role or approver can be set here.
+      allow update: if isSelf(uid)
+        && !('role' in existing())
+        && incoming().role == 'student'
+        && incoming().status == 'active'
+        && incoming().approvedBy == null
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role','status','approvedBy','updated']);
 
       // (2) Self update — ACCEPT AN INVITE (adult-initiated flow). The STUDENT
       //     activates themselves, but ONLY off a real adult-authored invite
