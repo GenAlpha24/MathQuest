@@ -1,0 +1,8 @@
+rules-test/node_modules
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Old UI variants, kept locally only; not part of the deployed app
+index-Crayon-version.html
+index-Original.html
