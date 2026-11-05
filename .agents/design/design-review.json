@@ -1,39 +1,30 @@
 {
-  "verdict": "CHANGES_REQUESTED",
+  "verdict": "APPROVED",
   "findings": [
     {
       "id": 1,
-      "severity": "MEDIUM",
-      "title": "watchMyStatus(cb) references a uid that does not exist in module scope",
-      "location": "design §7.1 (watchMyStatus), §5 (ownership split), §7.3 (enterGame wiring); index.html module block ~lines 516-688, currentUid declared main-script line 775",
-      "problem": "watchMyStatus(cb) is specified as onSnapshot(doc(db, USERS, uid), ...), but the Firebase module keeps no current-uid variable. Every existing module method that needs the id takes it as a parameter (loadProfile(uid) line 640, saveProfile(uid,...) line 648). currentUid is a main-script variable (line 775) unreachable from the module, so the bare uid does not resolve and the snapshot cannot be created as written. enterGame wires cloud().watchMyStatus(onMyStatus) with no uid.",
-      "fix": "Either (a) thread the id through to match the existing param convention: watchMyStatus(uid, cb) { return onSnapshot(doc(db, USERS, uid), s => cb(s.data())); } and call cloud().watchMyStatus(currentUid, onMyStatus); or (b) read auth.currentUser.uid inside the wrapper. Also specify a no-op unsubscribe when auth/db is missing so unsubMyStatus?.() is always safe. Option (a) matches the file's (uid, ...) pattern."
+      "severity": "NIT",
+      "title": "§4.6 phrasing implies adultLinkedTo authorizes reading an un-accepted email invitee",
+      "where": "§4.6 (\"allowed because a link exists\") and §7.1 listMyStudents",
+      "problem": "The §4.6 bullet reads as if the adult can users-read every listed student, but adultLinkedTo only covers the deterministic studentUid_adultUid id. Un-accepted email invites (studentUid:null) have no such link; listMyStudents already handles this by displaying the typed email instead of a users read, so behavior is correct — only the phrasing is ambiguous.",
+      "fix": "Add a half-sentence to the §4.6 bullet clarifying the users-read is allowed only for rows with a concrete studentUid (userid invites, code-requests, accepted email invites), matching the helper comment already present in §6."
     },
     {
       "id": 2,
       "severity": "NIT",
-      "title": "Inaccurate enumeration of existing state strings (\"pause\", \"countdown\")",
-      "location": "design §5 and §13 finding 3; index.html states at lines 2171, 2204 (\"paused\"), el map 741-742",
-      "problem": "The design lists existing state values including \"pause\" and \"countdown\". The actual pause state string is \"paused\" (lines 2171, 2204), and there is no \"countdown\" state; pause/countdown are only element ids / el handles. Real states: auth, start, playing, battle, levelClear, gameOver, paused.",
-      "fix": "Correct the enumeration to the verified set (note \"paused\" and \"battle\", drop \"countdown\"). Does not affect correctness: the new state = \"pending\" is unique against all actual states, so the no-collision claim still holds."
+      "title": "Two pre-change anchors drift ~15-18 lines",
+      "where": "§4.5/§7.1 saveProfile (~659 vs actual ~654); §7.1 USERS/USERNAMES constants (~565 vs actual ~547-548)",
+      "problem": "Minor line-anchor drift. Both are trivially locatable by name and the doc instructs locate-by-name, so this does not block.",
+      "fix": "Tighten saveProfile anchor to ~654 and the collection-constants anchor to ~547 on the next edit."
     },
     {
       "id": 3,
       "severity": "NIT",
-      "title": "enterGame role branch must explicitly cover the null/cache-only/default profile case",
-      "location": "design §7.3, §7.4; index.html enterGame lines 1105-1111",
-      "problem": "enterGame derives profile from loadProfile -> getCached -> a default literal {name,best:0,level:1,grade:1,speed:2} (lines 1109-1111). The default and cached objects carry no role, like legacy docs. §7.3's branch text reads as if role/status is always present; §7.4 covers missing-role but the wording leaves the brand-new/cache-only branch ambiguous.",
-      "fix": "State the three branches explicitly: adult (role in {teacher,parent}); pending student (role=='student' && status=='pending'); everything else including missing role / cached-only / default -> active+legacy backfill path."
-    },
-    {
-      "id": 4,
-      "severity": "NIT",
-      "title": "Legacy backfill cannot be written through the existing saveProfile",
-      "location": "design §7.4; index.html saveProfile line 648",
-      "problem": "saveProfile(uid, {...}) destructures a fixed field list with no role/status/approvedBy, and the design forbids adding those to its signature (§4.5, §7.1). So 'backfill role/status/approvedBy via the existing saveProfile' would silently drop the new fields and never backfill.",
-      "fix": "Name a distinct write for the backfill, e.g. MathQuestCloud.backfillRole(uid) doing setDoc(users/{uid}, {role:'student', status:'active', approvedBy:null}, {merge:true}); it goes through the self-update rule branch (not the create rule), so the create-rule best==0 constraint is not disturbed, consistent with §4.1."
+      "title": "Inconsistent rule-helper style (let-binding vs inlined path)",
+      "where": "§6 approvedLinkExists/acceptableInviteExists use `let path = ...`; adultLinkedTo inlines the path",
+      "problem": "Purely stylistic; rules-v2 supports let bindings in functions and both forms are correct.",
+      "fix": "Optionally make the path-construction style uniform across helpers."
     }
   ],
-  "counts": { "HIGH": 0, "MEDIUM": 1, "NIT": 3 },
-  "reviewDoc": "c:\\Users\\saban\\Downloads\\RIDHI projects\\game 2/.agents/design/design-review.md"
+  "reviewDoc": "c:\\Users\\saban\\Downloads\\RIDHI projects\\game 2\\.agents\\design\\design-review.md"
 }

@@ -1,85 +1,65 @@
-# Design Review — Phase 1: Three-Role Identity + Cross-Role Authorization
+# Design Review — Phase 1 MathQuest: Three-Role Identity + Bidirectional Linking
 
-Reviewed document: `.agents/design/phase1-roles-and-authorization.md` (iteration 4)
-Reviewed against source: `index.html` (3656 lines), `questions.js`
-Review scope: design-only; no build/test run (there is none).
+Reviewed document: `.agents/design/phase1-roles-and-authorization.md` (Status: REVISED, iteration 6).
+Scope of this review (per the step brief): the CHANGED linking/authorization mechanism (bidirectional invite + code fallback) and its security, plus a narrow spot-check of the `index.html` edit anchors and the four carried-forward residual findings. Settled parts (roles, extended users model, denormalized leaderboard, offline fallback, role immutability, live pending→active transition) were NOT re-litigated.
 
-Verdict: **CHANGES_REQUESTED** (1 MEDIUM, 0 HIGH, 3 NITs)
-
-The security-rules strategy is sound and I could not find a privilege-escalation hole: the self-approval chain is genuinely closed at three independent gates, `role` is immutable on both update branches, students are forced to `status:'pending' && best==0 && approvedBy==null` at create, cross-user `users` reads are denied, and the leaderboard regression is fixed by a world-readable denormalized collection with an active-only self-write guard. The client-edit anchors are unusually accurate against the real source. The one blocker is a concrete feasibility gap in a specified function signature (`watchMyStatus`) that references a `uid` that does not exist in module scope.
-
----
-
-## Findings
-
-### 1. MEDIUM — `watchMyStatus(cb)` references a `uid` that does not exist in module scope
-Location: design §7.1 (`watchMyStatus` bullet), §5 (ownership split), §7.3 (`enterGame` wires `unsubMyStatus = cloud().watchMyStatus(onMyStatus)`).
-
-The design specifies `watchMyStatus(cb)` as a thin module wrapper doing `onSnapshot(doc(db, USERS, uid), s => cb(s.data()))`. I verified the Firebase module block (`index.html` ~lines 516–688): every existing method that needs the player's id takes it **as a parameter** (`loadProfile(uid)` ~line 640, `saveProfile(uid, {...})` ~line 648). The module does **not** keep a current-uid variable — `currentUid` is a main-script variable (declared `let currentUid = null;` at line 775, inside the main IIFE) and is not reachable from the module. So the bare `uid` in `watchMyStatus`'s body resolves to nothing; the snapshot cannot be created as written.
-
-By contrast the `saveProfile` leaderboard-write (§7.1) is fine — `saveProfile(uid, …)` already receives `uid`, so `setDoc(leaderboard/{uid}, …)` has it in scope. The problem is isolated to `watchMyStatus`.
-
-Concrete fix — pick one and specify it:
-- (a) Thread the id through, matching the existing param convention:
-  ```js
-  // module method
-  watchMyStatus(uid, cb) { return onSnapshot(doc(db, USERS, uid), s => cb(s.data())); },
-  ```
-  and in `enterGame` (which already has `user.uid`): `unsubMyStatus = cloud().watchMyStatus(currentUid, onMyStatus);`
-- (b) Read it from Auth inside the wrapper:
-  ```js
-  watchMyStatus(cb) {
-    const u = auth && auth.currentUser;
-    if (!u) return () => {};
-    return onSnapshot(doc(db, USERS, u.uid), s => cb(s.data()));
-  },
-  ```
-Also specify the no-op unsubscribe when `auth`/`db` is missing (offline), so `unsubMyStatus?.()` in `logout()`/the deferred hook is always safe to call. Option (a) is more consistent with the file's existing `(uid, …)` pattern.
-
-### 2. NIT — §5 enumeration of existing `state` strings is inaccurate (`"pause"`, `"countdown"`)
-Location: design §5 and §13 finding 3, which list the existing state-switched values as `"auth"`, `"start"`, `"playing"`, `"levelClear"`, `"gameOver"`, `"pause"`, `"countdown"`.
-
-Verified in source: the pause state string is actually `state = "paused"` (lines 2171 and 2204), **not** `"pause"`; and there is no `state = "countdown"` anywhere. `pause`/`countdown` exist only as element ids / `el.pause` / `el.countdown` handles (el map ~lines 741–742). The real state strings in use are `auth`, `start`, `playing`, `battle`, `levelClear`, `gameOver`, `paused` (the `let state` comment at line 817 lists `auth | start | playing | battle | levelClear | gameOver | leaderboard`).
-
-This does not affect correctness — the new `state = "pending"` value is unique against every actual state string, so the design's core claim (no collision; `state !== 'playing'` test is unambiguous) still holds. But the enumeration should be corrected so the implementer does not test against a non-existent `"pause"`/`"countdown"` state. Fix: replace the list with the verified set above (note `"paused"` and `"battle"`, drop `"countdown"`).
-
-### 3. NIT — `enterGame` must guard the role branch for the null/cache-only profile case
-Location: design §7.3 (`enterGame` branches on `role`/`status` "from the already-loaded profile") and §7.4 (legacy backfill when "a loaded profile has no `role`").
-
-Verified: `enterGame` (line 1105) builds `profile` from `cloud().loadProfile` → `getCached` → a hardcoded default literal `{ name, best:0, level:1, grade:1, speed:2 }` (lines 1109–1111). The default and the cached object both have **no `role`**, exactly like a legacy doc. The design's §7.4 rule ("no `role` → treat as student/active + backfill") does cover these, but §7.3's branch text reads as if a `role`/`status` is always present. Make §7.3 explicit that the three branches are: (adult) `role in {teacher,parent}`; (pending student) `role=='student' && status=='pending'`; (everything else incl. missing `role`, cached-only, and default) → active/legacy path + backfill. This removes the ambiguity about which branch a brand-new online profile with a null `loadProfile` result lands in. (Low impact: §7.4 already implies the right outcome; this is a precision/wording fix.)
-
-### 4. NIT — legacy backfill via `saveProfile` cannot write `role`/`status`/`approvedBy`
-Location: design §7.4 ("write the backfill (`role:'student', status:'active', approvedBy:null`) via the existing `saveProfile`/`setDoc merge` path").
-
-Verified: `saveProfile(uid, {…})` destructures a **fixed** field list (line 648) and writes only those fields; it has no `role`/`status`/`approvedBy` parameter and the design elsewhere (§4.5, §7.1) deliberately forbids adding them to `saveProfile`'s signature to keep the `users` write shape stable. So "backfill via the existing `saveProfile`" is self-contradictory — `saveProfile` would silently drop the three new fields and never actually backfill them. The design must name a distinct write for the backfill (e.g. a new `MathQuestCloud.backfillRole(uid)` doing `setDoc(users/{uid}, {role:'student', status:'active', approvedBy:null}, {merge:true})`, which goes through the self-`update` rule branch and so is not subject to the create-rule `best==0` constraint — consistent with §4.1). This is a NIT, not a blocker, because the intent and the rule path are already correct in §4.1/§7.4; only the write mechanism is misnamed.
+Verdict: **APPROVED** — 0 HIGH, 0 MEDIUM. Three NITs noted below; none block.
 
 ---
 
 ## Verified Assumptions (checked against source)
 
-- **Single-file static app, Firebase v10.12.2 from gstatic CDN as ES modules, `window.MathQuestCloud` exposed.** Confirmed: `<script type="module">` at line 516, imports from `.../10.12.2/firebase-{app,auth,firestore}.js`, `window.MathQuestCloud = {…}` ~line 575.
-- **`firebaseConfig` + public `apiKey` live in the file (~527–537; `apiKey` ~528), project `mathquest-ca395`.** Confirmed exactly (apiKey at line 528, projectId `mathquest-ca395` at line 531). The "rules are the only protection" premise is correct.
-- **Two existing collections `users/{uid}` and `usernames/{userid}`; `usernames` shape is `{uid,email}`.** Confirmed: constants at ~line 549; `setDoc(usernames, {uid, email})` at line 608; `setDoc(users/{uid}, {uid,name,email,best,level,grade,speed,created,updated})` at line 609.
-- **`saveProfile(uid, {name,best,level,…,musicOn})` has NO `role`/`status` in scope.** Confirmed at line 648 — the destructured list matches the design's §4.5 claim; the `leaderboardEligible`-flag workaround is justified.
-- **`saveProfile` does `setDoc(users/{uid}, …, {merge:true})` unconditionally.** Confirmed (lines 648–668). Adding a conditional `setDoc(leaderboard/{uid}, …, {merge:true})` after it is feasible.
-- **`topScores` currently queries `users` with `orderBy("best","desc")`.** Confirmed at line 672. This is the exact read the new restrictive `users` rule would break — the denormalized `leaderboard` collection correctly resolves it, and `renderLeaderboardRows` (line 2029) already renders only `name/best/level`, which the `leaderboard` docs carry.
-- **`onAuthChange` callback shape is `{uid, name}`.** Confirmed at line 579. The "keep the listener thin, branch in `enterGame`" decision is implementable with no extra read.
-- **`enterGame(user)` is only invoked when `c.available` is true.** Confirmed: `startAuthListener` (line 3633) returns early with an offline message when `!c.available`, and only calls `enterGame(user)` inside the `onAuthChange` success path (lines 3640–3643). So role/status logic never runs offline — the "no offline regression" claim holds. The offline fallback uses `getCached(uid)` inside `enterGame` and the local leaderboard; nothing in the proposed edits touches those paths.
-- **`submitBestToCloud()` → `persistProgress({immediate:true})` → `cloud().saveProfile(currentUid, profile)`; called from `levelCleared()`, `gameOver()`, `showLeaderboard()`.** Confirmed: `submitBestToCloud` line 1211; `persistProgress` immediate branch returns `cloud().saveProfile(currentUid, profile)` (lines 1197–1206); call sites at line 1996 (`levelCleared`), 2009 (`gameOver`), 2050 (`showLeaderboard`). So routing the leaderboard write through `saveProfile` reaches all three triggers with no new call site — the "`saveProfile` is the only writer" claim is accurate.
-- **Stale comment above `submitBestToCloud` says the leaderboard reads from `users/{uid}`.** Confirmed verbatim at line 1210. The §7.6 instruction to update it is valid.
-- **`levelCleared()` is the level-clear handler (line 1971); `gameOver()` at line 2006; there is NO `function levelClear`.** Confirmed. `levelClear` appears only as element id `#levelClear` (line 439), `el.levelClear` handle (line 738), and the state string `state = "levelClear"` (line 1972). Iteration-4 finding 1's correction is accurate — hooking `levelCleared()`/`gameOver()` is right.
-- **`hideAllOverlays()` sweeps a HARDCODED array, not `.overlay.show`.** Confirmed at line 2392: `[el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard].forEach(...)`. The §7.5 requirement to add `el.pendingApproval, el.approvalDesk` to this array (and to the `el` map ~line 700) is correct and necessary — new overlays would otherwise never be hidden.
-- **`el` map starts ~line 700; `#auth` overlay + `#signupPane` at ~341–367.** Confirmed (el map line 700; auth overlay lines 341–366; `#signupPane` line 357). Adding a role picker to `#signupPane` and sibling overlays after `#auth` is feasible with the existing `.overlay`/`.btn` classes.
-- **`cloud()` helper is `() => window.MathQuestCloud` (line 1061).** Confirmed. New `MathQuestCloud` methods (`setLeaderboardEligible`, `claimCode`, `listLinkedStudents`, `approveStudent`, `denyStudent`, `myLinkCode`) are callable as designed.
-- **`doSignup()` (line 1073) calls `cloud().signup({userid,email,password})`.** Confirmed. Extending with `role` is feasible; `signup` at line 588 is the place to accept it.
-- **`logout()` (line 1163) is the right place to detach the snapshot and reset the flag.** Confirmed — it already nulls `currentUid`/`currentUser` and calls `cloud().logout()`.
-- **`questions.js` is the question bank (`MathQuest.Questions.make/hint/videoTopic`), independent of auth.** Confirmed (header + IIFE). Phase 1 does not touch it; no conflict. Keeping it out of scope is correct.
-- **Security-rules attack cases.** Walked §6.4 against the ruleset in §6: self-approve via self-update (blocked by `incoming().status == existing().status`), self-link chain (blocked at `linkCodes` create `callerRoleIs`, at `links` create `studentUid != adultUid`, and at `users` adult-approval `request.auth.uid != uid`), cross-user read (blocked by `isSelf || adultLinkedTo`), fabricated score at create (blocked by `best==0`), role escalation on update (blocked by `role` immutability on both branches), approve-without-link (blocked by `exists()`-guarded `approvedLinkExists`), adult over-writing profile under cover of approval (bounded by `onlyStatusAndApprover` diff). No privilege-escalation hole found.
+1. **Signup stores email verbatim (trimmed, not lowercased).** Verified. `doSignup` does `const email = el.signupEmail.value.trim();` (~1074); `signup(...)` writes `setDoc(unameRef, { uid, email })` (~606) and the `users` doc with `email` raw (~608–613). No `.toLowerCase()` anywhere on the path. This confirms the premise of §3.1.1 — the email-invite case-normalization fix is addressing a real mismatch, and the design's cited anchors (~1075 trim, ~608/~612 writes) are accurate within "locate by name" tolerance.
+2. **`saveProfile` destructure carries no `role`/`status`.** Verified. Signature is `saveProfile(uid, { name, best, level, grade, speed, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, ultraGemsCollected, subject, musicOn })` (~654). The design's claim that `saveProfile` cannot see role/status (hence the `setLeaderboardEligible` flag and the distinct `backfillRole`) is correct. Anchor ~659 is within tolerance (actual ~654).
+3. **`enterGame` default + cache objects carry no `role`.** Verified. Default literal is `{ name: currentUser, best: 0, level: 1, grade: 1, speed: 2 }` (~1109) and the cache object (`cacheProfile`) has no `role`. Both correctly fall into the design's third ("everything else") branch, confirming the three-way-branch reasoning and the legacy-backfill trigger. `enterGame` anchor ~1104 is exact; it currently has no role branching, so the insertion is net-new.
+4. **`hideAllOverlays` sweeps a hardcoded array, not `.overlay.show`.** Verified (~2391): `[el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard].forEach(o => o.classList.remove("show"));`. The design's requirement to add `el.pendingApproval, el.approvalDesk` to both the `el` map and this array is correct and necessary, and the exact snippet it provides matches. Anchor ~2390/~2392 accurate (actual ~2391).
+5. **State-string set.** Verified. `state` is assigned `"auth"`, `"start"`, `"playing"`, `"battle"`, `"levelClear"`, `"gameOver"`, `"paused"`. The pause string is `"paused"` (~2171, ~2204). There is NO `"pause"`/`"countdown"` state — `pause`/`countdown` appear only as element ids/`el` handles. The design's verified set and the uniqueness of the new `"pending"` string are correct.
+6. **`levelCleared()` vs `levelClear`.** Verified. The level-clear handler is `function levelCleared()` (~1971), which sets `state = "levelClear"` internally. There is no `function levelClear()`. The design hooks `levelCleared()` and explicitly leaves the `levelClear` id/handle/state alone — correct.
+7. **`gameOver()` anchor.** Verified at ~2006 (design says ~2005 — within tolerance).
+8. **`submitBestToCloud()` → `persistProgress({immediate:true})` → `saveProfile`, and its three call sites.** Verified. `submitBestToCloud` (~1211) calls `persistProgress({ immediate: true })`; it is called from `levelCleared()` (~1995), `gameOver()` (~2010), and `showLeaderboard()` (~2050). Confirms §7.6's "no new write call site" claim and the "`saveProfile` is the only leaderboard writer" invariant.
+9. **The stale leaderboard comment is real.** Verified (~1210): `// ... saving the profile also updates the global board, // since the leaderboard reads from users/{uid}.` The design correctly flags this for a comment-only update to reference `leaderboard/{uid}`.
+10. **Current Firestore imports omit `updateDoc`/`where`/`onSnapshot`.** Verified (~524–527): imports are `doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, serverTimestamp`. The three additions the design requires are genuinely absent and `deleteField` is correctly not imported.
+11. **`currentUid`, `el` map, `USERS`/`USERNAMES`, `firebaseConfig`/`apiKey` anchors.** Verified: `currentUid` at ~774 (design ~775), `el` map at ~701 (exact), `USERS`/`USERNAMES` constants at ~547–548 (design ~565 — off ~18 lines but locatable by name), `firebaseConfig` ~528 / `apiKey` ~529 (design ~527–537/~528). All within the stated "locate by name" tolerance.
+12. **`usernames/{userid}` already carries `{uid, email}`.** Verified: `setDoc(unameRef, { uid: cred.user.uid, email })`. The design's reuse of this as the userid→uid invite resolver without a shape change is sound; no `role` field is added.
 
 ## Unverified / Wrong Assumptions
 
-- **WRONG (Finding 1): `watchMyStatus(cb)` can reference `uid` in the module block.** The module keeps no current-uid state; `uid` must be passed in or read from `auth.currentUser`. See Finding 1.
-- **WRONG (Finding 2): existing states include `"pause"` and `"countdown"`.** The actual pause state is `"paused"`; there is no `"countdown"` state. See Finding 2.
-- **IMPRECISE (Finding 4): legacy backfill "via the existing `saveProfile`".** `saveProfile`'s fixed destructure cannot write `role`/`status`/`approvedBy`; a separate merge write is needed.
-- **NOT VERIFIABLE IN THIS REVIEW:** the composite index `links(adultUid, status)` behind the `where('adultUid','==',me)` + `where('status','in',[...])` query — the design itself flags this as untested (committed, not deployed). The `in` + equality combination does require a composite index in Firestore; declaring it in `firestore.indexes.json` is correct, but whether the live query matches the declared index is confirmable only at deploy/emulator time (out of scope here, and acknowledged by the design).
-- **NOT VERIFIABLE IN THIS REVIEW:** `firestore.rules` / `firestore.indexes.json` / `firebase.json` do not yet exist (they are Phase-1 deliverables per §8), so the rules were reviewed as written in §6, not as committed files.
+None material. Firestore-rules-language behavior (`.lower()` on a `get(...).data.email` string, `diff().affectedKeys().hasOnly(...)`, `exists()`/`get()` on reconstructed paths, `in` membership) is relied on but cannot be executed in this review step (no emulator run is in scope, and the design itself flags composite indexes and rules as committed-but-undeployed). These are standard rules-v2 constructs and the design already lists emulator unit tests (§9) as the verification vehicle; this is a known, documented limitation rather than a wrong assumption.
+
+---
+
+## Security walk-through of the CHANGED linking flow (no blocking findings)
+
+The new attack cases were each traced to a hard deny; the reasoning holds against source.
+
+- **Student forges an invite "from" a fake adult to self-activate (N1/N4).** To get an `invited` link the student must pass `links` branch (a): `isSelf(incoming().adultUid) && callerRoleIs(['teacher','parent'])`. A student's own `users.role == 'student'`, so `callerRoleIs` fails; they cannot author an `invited` link naming themselves as the adult. With no adult-authored link, the `users` accept branch (2)'s `acceptableInviteExists` (userid) / `emailInviteToMe` (email) find nothing. **Blocked.**
+- **Student escalates via the accept write (N2).** Branch (2) is diff-limited by `onlyStatusAndApprover` to `status`/`approvedBy`/`updated`, forces `status == 'active'`, and keeps `role == existing().role`. `approvedBy` is attacker-controlled input, but `acceptableInviteExists(uid, incoming().approvedBy)` requires a real `invited`/`accepted` link at `links/{uid}_{approvedBy}` — only an adult can create it (branch a). So the student can only ride an accept to `active`; no role bump, no score change, no arbitrary approver. **Blocked.**
+- **Accepting an invite that names a different student (N3/N6).** Userid path: branch (c) requires `existing().studentUid == request.auth.uid` and branch (2) independently re-checks via `acceptableInviteExists` (which asserts `get(path).data.studentUid == studentUid`, with `studentUid == auth.uid`). Email path: branch (c2) creates `links/{auth.uid}_{adultUid}` guarded by `emailInviteToMe`, which reconstructs the invite id from `callerEmail()` (the caller's OWN stored email) and requires `targetValue == callerEmail()`. A student cannot prove an invite addressed to someone else's email/uid. **Blocked.**
+- **Non-adult sends invites (N4).** Branch (a) `callerRoleIs(['teacher','parent'])` denies any non-adult creating an `invited` link. **Blocked.**
+- **Adult forges an invite "from" another adult (N5).** Branch (a) requires `isSelf(incoming().adultUid)`; userid id must be `studentUid_adultUid` with `adultUid == self`, and the email id must be `'email|' + request.auth.uid + '|' + targetValue`. An adult cannot name a different `adultUid`. **Blocked.**
+- **Carried-forward cases (A1–A9).** Student self-approve via self-update (branch (1) pins `status`/`approvedBy` unchanged); self-link chain (three independent gates: `linkCodes` create `callerRoleIs`, `links` (b) `studentUid != adultUid` + target role check, `users` (3) `auth.uid != uid` + `callerRoleIs`); `studentUid == adultUid` self-link (inequality in (a) and (b)); cross-user `users` read (read = `isSelf || adultLinkedTo`); fabricated score at create (student `create` forces `best == 0 && status == 'pending' && approvedBy == null`); role immutability (every update branch asserts `role == existing().role`); pending student leaderboard write (leaderboard write requires non-student or `status == 'active'`). All trace to deny. **Blocked.**
+- **role immutability & create constraints.** Verified in-rule: `create` pins `role in {...}` and, for students, `status == 'pending' && best == 0 && approvedBy == null`; backfill goes through the self-`update` branch (1) which does not re-assert `best == 0`, so it does not disturb an existing score. Consistent with §4.1/§7.4 and the real `saveProfile` shape.
+- **Pending student cannot self-activate or write leaderboard rows across either flow.** Self-activation requires an adult-authored link (invite path) or an adult approver write (code path); neither is forgeable by the pending student. Leaderboard write is doubly guarded (rule `status=='active'` + client `leaderboardEligible=false` for pending). **Holds.**
+- **Offline / active-user flow untouched.** `enterGame`'s role branching is net-new and gated on the online profile; the offline path (`getCached` + local leaderboard) and the existing start-screen/game loop are not altered by the design. Verified that current `enterGame` already funnels default/cache objects (no `role`) into the active path, so the "everything else" branch preserves today's behavior. **No regression.**
+- **Email case-normalization (the iteration-6 change).** The single-point `lower(trim(...))` normalization across the four touch points (stored `targetValue`, invite id, `callerEmail()` rule read, discovery query) is internally consistent, and the premise (verbatim-case signup email) is verified in source. The prior mismatch failed closed (no privilege hole), so this is a feasibility repair, correctly scoped.
+
+---
+
+## Findings
+
+1. **NIT — `adultLinkedTo` cannot authorize the adult's read of an un-accepted email invitee, which the UI implies it needs.** §4.6 ("Adult shows each linked student's name/status: `getDoc(users/{studentUid})` — allowed because a link exists") and §7.1 `listMyStudents` say rows without a name (un-accepted email invite) "display `targetValue` (the email) and state 'sent'." That is internally consistent (the adult shows the typed email, not a `users` read) and `adultLinkedTo` deliberately covers only the deterministic `studentUid_adultUid` id. No contradiction in behavior. The NIT is purely that the §4.6 bullet's phrasing ("allowed because a link exists") reads as if it applies to all rows; add a half-sentence clarifying it applies only to rows with a concrete `studentUid` (userid invites, code-requests, accepted email invites), matching the helper comment already in §6. Non-blocking: the rules and the `listMyStudents` spec are already correct.
+
+2. **NIT — stale pre-change line anchors drift ~15–18 lines in two spots.** `saveProfile` is at ~654 (design ~659) and the `USERS`/`USERNAMES` constants at ~547–548 (design ~565). Both are still trivially locatable by name and the document repeatedly instructs "locate by function name / element id, not line number," so this does not block. Tighten the two anchors on the next edit if convenient.
+
+3. **NIT — `approvedLinkExists` / `acceptableInviteExists` use `let path = ...` inside a function while other helpers inline the path.** Stylistic only; rules-v2 supports `let` bindings in functions, and the design uses both forms. No correctness impact. Optionally make the style uniform.
+
+---
+
+## Carried-forward residual findings — correctly applied
+
+- **`watchMyStatus(uid, cb)` takes `uid` as a param.** Applied correctly (§7.1/§5): `watchMyStatus(uid, cb){ if(!db||!uid) return ()=>{}; return onSnapshot(doc(db,USERS,uid), s=>cb(s.data())); }`, wired `cloud().watchMyStatus(currentUid, onMyStatus)`. `currentUid` confirmed as the main-script var (~774). Safe no-op unsubscribe returned when db/uid missing. Correct.
+- **Verified state-string set.** Applied; matches source exactly (see Verified Assumption 5). `"pending"` is unique. Correct.
+- **`enterGame` three-branch coverage.** Applied; the default literal and cache object (verified to lack `role`) land in the third branch with legacy backfill. Correct.
+- **Distinct `backfillRole` write.** Applied: `setDoc(users/{uid}, {role:'student',status:'active',approvedBy:null}, {merge:true})` through the self-`update` branch, explicitly NOT `saveProfile` (whose fixed destructure — verified — would drop the three fields). Correct.
+
+All four are correctly carried forward and specified.
