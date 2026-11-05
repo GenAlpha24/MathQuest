@@ -444,11 +444,340 @@
   }
 
   // =====================================================================
+  //  ELA (English Language Arts) QUESTION BANK
+  //  ---------------------------------------------------------------------
+  //  A separate set of generators for reading/writing skills, graded by
+  //  the same grade codes the math bank uses. Each generator returns the
+  //  same question-object shape { text, answer, opts, topic } so the game
+  //  engine can show them with no changes. Topics scale by grade.
+  // =====================================================================
+
+  // Small, grade-appropriate word lists used by several generators.
+  const ELA_WORDS = {
+    // simple consonant-vowel-consonant / early sight words
+    easy: ["cat", "dog", "sun", "hat", "run", "big", "red", "box", "cup", "pig", "bed", "top"],
+    // slightly longer, grade 2-3 words
+    mid:  ["happy", "jump", "water", "friend", "school", "rabbit", "garden", "yellow", "under", "little"],
+    // richer vocabulary for grades 4-5
+    hard: ["enormous", "generous", "ancient", "fragile", "curious", "brave", "silent", "gentle", "rapid", "weary"],
+  };
+
+  // Synonym / antonym pairs for vocabulary questions (grades 3-5).
+  const SYNONYMS = [
+    ["happy", "glad"], ["big", "large"], ["fast", "quick"], ["small", "tiny"],
+    ["smart", "clever"], ["angry", "mad"], ["scared", "afraid"], ["pretty", "beautiful"],
+    ["begin", "start"], ["shout", "yell"],
+  ];
+  const ANTONYMS = [
+    ["hot", "cold"], ["up", "down"], ["big", "small"], ["happy", "sad"],
+    ["fast", "slow"], ["open", "closed"], ["day", "night"], ["full", "empty"],
+    ["light", "dark"], ["loud", "quiet"],
+  ];
+
+  // Rhyming families for grades 1-2.
+  const RHYMES = [
+    ["cat", ["hat", "bat", "mat"], ["dog", "sun", "cup"]],
+    ["dog", ["log", "fog", "frog"], ["cat", "pig", "bed"]],
+    ["run", ["sun", "fun", "bun"], ["top", "red", "box"]],
+    ["red", ["bed", "fed", "led"], ["cat", "run", "pig"]],
+    ["pig", ["big", "wig", "dig"], ["dog", "cup", "hat"]],
+  ];
+
+  // Which article (a / an) goes in front of a word.
+  const AN_WORDS = ["apple", "orange", "egg", "umbrella", "igloo", "elephant", "octopus", "ant"];
+  const A_WORDS  = ["ball", "cat", "dog", "house", "tree", "book", "car", "sun"];
+
+  // Plurals: singular -> correct plural (covers regular + a few irregulars).
+  const PLURALS = [
+    ["cat", "cats"], ["dog", "dogs"], ["box", "boxes"], ["baby", "babies"],
+    ["child", "children"], ["mouse", "mice"], ["foot", "feet"], ["leaf", "leaves"],
+    ["bus", "buses"], ["fox", "foxes"],
+  ];
+
+  // Past-tense verbs (grades 3-5): present -> correct past tense.
+  const PAST_TENSE = [
+    ["run", "ran"], ["eat", "ate"], ["go", "went"], ["see", "saw"], ["jump", "jumped"],
+    ["play", "played"], ["swim", "swam"], ["sing", "sang"], ["make", "made"], ["bring", "brought"],
+  ];
+
+  // Common/proper noun pairs and a small set for parts-of-speech questions.
+  const NOUNS = ["dog", "city", "river", "teacher", "apple", "school", "flower", "mountain"];
+  const VERBS = ["run", "jump", "sing", "write", "read", "swim", "paint", "climb"];
+  const ADJECTIVES = ["happy", "tall", "bright", "soft", "cold", "shiny", "quiet", "brave"];
+
+  function pick(arr) { return arr[rand(0, arr.length - 1)]; }
+  function distractors(pool, answer, count) {
+    const out = new Set();
+    let guard = 0;
+    while (out.size < count && guard++ < 100) {
+      const c = pick(pool);
+      if (c !== answer) out.add(c);
+    }
+    return [...out];
+  }
+
+  // ---- ELA generators ----
+
+  // Rhyming words (grades 1-2): "Which word rhymes with cat?"
+  function makeRhyme() {
+    const [word, rhymes, nonRhymes] = pick(RHYMES);
+    const answer = pick(rhymes);
+    const opts = shuffle([answer, ...nonRhymes.slice(0, 3)]).slice(0, 4);
+    if (!opts.includes(answer)) opts[0] = answer;
+    return { text: `Which word rhymes with "${word}"?`, answer, opts: shuffle(opts), topic: "rhyme", word };
+  }
+
+  // Beginning sound (grade 1): "Which word begins with the same sound as 'sun'?"
+  function makeBeginningSound() {
+    const word = pick(ELA_WORDS.easy);
+    const letter = word[0];
+    const matches = ELA_WORDS.easy.filter(w => w[0] === letter && w !== word);
+    const answer = matches.length ? pick(matches) : word;
+    const others = distractors(ELA_WORDS.easy.filter(w => w[0] !== letter), answer, 3);
+    return {
+      text: `Which word starts with the same sound as "${word}" (${letter})?`,
+      answer, opts: shuffle([answer, ...others]).slice(0, 4), topic: "beginningSound", word, letter,
+    };
+  }
+
+  // a vs an (grades 1-2): "Which is correct?"
+  function makeArticle() {
+    const useAn = Math.random() < 0.5;
+    const word = useAn ? pick(AN_WORDS) : pick(A_WORDS);
+    const answer = useAn ? `an ${word}` : `a ${word}`;
+    const wrong = useAn ? `a ${word}` : `an ${word}`;
+    return { text: `Which is correct?`, answer, opts: shuffle([answer, wrong]), topic: "article", word };
+  }
+
+  // Plurals (grades 2-3): "What is the plural of 'baby'?"
+  function makePlural() {
+    const [singular, plural] = pick(PLURALS);
+    const wrongs = distractors(PLURALS.map(p => p[1]), plural, 3);
+    return {
+      text: `What is the plural of "${singular}"?`,
+      answer: plural, opts: shuffle([plural, ...wrongs]).slice(0, 4), topic: "plural", singular,
+    };
+  }
+
+  // Synonyms (grades 3-5): "Which word means the SAME as 'happy'?"
+  function makeSynonym() {
+    const [word, syn] = pick(SYNONYMS);
+    const pool = SYNONYMS.flat().concat(ANTONYMS.flat());
+    const wrongs = distractors(pool, syn, 3).filter(w => w !== word);
+    while (wrongs.length < 3) wrongs.push(pick(ELA_WORDS.mid));
+    return {
+      text: `Which word means the SAME as "${word}"?`,
+      answer: syn, opts: shuffle([syn, ...wrongs.slice(0, 3)]), topic: "synonym", word,
+    };
+  }
+
+  // Antonyms (grades 3-5): "Which word means the OPPOSITE of 'hot'?"
+  function makeAntonym() {
+    const [word, ant] = pick(ANTONYMS);
+    const pool = ANTONYMS.flat().concat(SYNONYMS.flat());
+    const wrongs = distractors(pool, ant, 3).filter(w => w !== word);
+    while (wrongs.length < 3) wrongs.push(pick(ELA_WORDS.mid));
+    return {
+      text: `Which word means the OPPOSITE of "${word}"?`,
+      answer: ant, opts: shuffle([ant, ...wrongs.slice(0, 3)]), topic: "antonym", word,
+    };
+  }
+
+  // Past tense (grades 3-5): "What is the past tense of 'run'?"
+  function makePastTense() {
+    const [present, past] = pick(PAST_TENSE);
+    const wrongs = distractors(PAST_TENSE.map(p => p[1]), past, 2);
+    wrongs.push(present + "ed"); // a tempting-but-wrong regular form
+    return {
+      text: `What is the past tense of "${present}"?`,
+      answer: past, opts: shuffle([past, ...wrongs]).slice(0, 4), topic: "pastTense", present,
+    };
+  }
+
+  // Parts of speech (grades 4-5): "Which word is a VERB?"
+  function makePartOfSpeech() {
+    const kinds = [
+      ["noun", NOUNS, "a person, place, or thing"],
+      ["verb", VERBS, "an action word"],
+      ["adjective", ADJECTIVES, "a describing word"],
+    ];
+    const [name, pool, _desc] = pick(kinds);
+    const answer = pick(pool);
+    const otherPools = kinds.filter(k => k[0] !== name).flatMap(k => k[1]);
+    const wrongs = distractors(otherPools, answer, 3);
+    return {
+      text: `Which word is a ${name.toUpperCase()}?`,
+      answer, opts: shuffle([answer, ...wrongs]).slice(0, 4), topic: "partOfSpeech", pos: name,
+    };
+  }
+
+  // Capitalization (grades 2-4): "Which word should be capitalized?"
+  function makeCapitalization() {
+    const propers = ["monday", "april", "sarah", "texas", "london", "december", "friday", "maria"];
+    const commons = ["dog", "happy", "table", "run", "blue", "garden", "quickly", "apple"];
+    const proper = pick(propers);
+    const answer = proper.charAt(0).toUpperCase() + proper.slice(1);
+    const wrongs = distractors(commons, proper, 3);
+    return {
+      text: `Which word should always start with a capital letter?`,
+      answer, opts: shuffle([answer, ...wrongs]).slice(0, 4), topic: "capitalization",
+    };
+  }
+
+  // Pick an ELA question appropriate for the grade.
+  function makeELA(grade, level) {
+    // Early grades (Pre-K..1): sounds, rhyming, articles.
+    if (grade <= 1) {
+      return pick([makeRhyme, makeBeginningSound, makeArticle])();
+    }
+    // Grades 2-3: plurals, rhyming, articles, capitalization, synonyms.
+    if (grade <= 3) {
+      return pick([makePlural, makeRhyme, makeArticle, makeCapitalization, makeSynonym])();
+    }
+    // Grades 4-5: vocabulary + grammar.
+    return pick([makeSynonym, makeAntonym, makePastTense, makePartOfSpeech, makeCapitalization, makePlural])();
+  }
+
+  // ELA hints.
+  function hintELA(q) {
+    switch (q.topic) {
+      case "rhyme":
+        return `Rhyming words end with the same sound.\n` +
+               `Say each choice out loud and listen to the ending.\n` +
+               `The one that ends like "${q.word}" is the answer.`;
+      case "beginningSound":
+        return `Listen to the FIRST sound in each word.\n` +
+               `"${q.word}" starts with the "${q.letter}" sound.\n` +
+               `Pick the word that begins the same way.`;
+      case "article":
+        return `Use "an" before a word that starts with a vowel sound (a, e, i, o, u),\n` +
+               `and "a" before a word that starts with a consonant sound.\n` +
+               `Say it out loud to hear which fits.`;
+      case "plural":
+        return `Plural means more than one.\n` +
+               `Most words just add -s, but words ending in x, s, or ch add -es,\n` +
+               `and some change completely (child → children).`;
+      case "synonym":
+        return `A synonym is a word that means the SAME thing.\n` +
+               `Try swapping each choice into a sentence with "${q.word}".\n` +
+               `The one that keeps the meaning is the synonym.`;
+      case "antonym":
+        return `An antonym is a word that means the OPPOSITE.\n` +
+               `Think of what is the reverse of "${q.word}".`;
+      case "pastTense":
+        return `Past tense tells about something that already happened.\n` +
+               `Many verbs add -ed, but some change their spelling (run → ran).\n` +
+               `Say "Yesterday I ___" to test it.`;
+      case "partOfSpeech":
+        return `A noun names a person, place, or thing.\n` +
+               `A verb is an action. An adjective describes something.\n` +
+               `Decide what each word does in a sentence.`;
+      case "capitalization":
+        return `Proper nouns — names of people, places, days, and months —\n` +
+               `always begin with a capital letter.\n` +
+               `Everyday words (common nouns) do not.`;
+      default:
+        return `Read the question carefully and say each choice out loud.`;
+    }
+  }
+
+  const ELA_TOPIC_WORD = {
+    rhyme: "rhyming words for kids",
+    beginningSound: "beginning sounds phonics for kids",
+    article: "when to use a and an for kids",
+    plural: "singular and plural nouns for kids",
+    synonym: "synonyms for kids",
+    antonym: "antonyms for kids",
+    pastTense: "past tense verbs for kids",
+    partOfSpeech: "nouns verbs adjectives for kids",
+    capitalization: "capitalization rules proper nouns for kids",
+  };
+
+  // =====================================================================
+  //  SCIENCE generators
+  //  Simple, kid-friendly multiple-choice science facts. Each returns the
+  //  standard { text, answer, opts, topic, ... } shape. A per-item `why`
+  //  string powers the Math Help hint for that question.
+  // =====================================================================
+
+  // Each entry: [question, correctAnswer, [wrongChoices], whyExplanation, topic]
+  const SCIENCE_EASY = [ // Pre-K .. Grade 1
+    ["What do plants need to grow?", "Sunlight and water", ["Candy", "Toys", "Darkness"], "Plants use sunlight and water to make their food and grow.", "plants"],
+    ["Which animal says 'moo'?", "Cow", ["Dog", "Cat", "Duck"], "A cow moos; dogs bark, cats meow, and ducks quack.", "animals"],
+    ["What do we use to see?", "Eyes", ["Ears", "Nose", "Hands"], "We see with our eyes. Ears hear, the nose smells, hands touch.", "body"],
+    ["What color is the sky on a clear day?", "Blue", ["Green", "Purple", "Brown"], "On a clear day the sky looks blue.", "weather"],
+    ["Which one is a baby dog?", "Puppy", ["Kitten", "Chick", "Calf"], "A baby dog is a puppy. A kitten is a baby cat.", "animals"],
+    ["What falls from clouds when it rains?", "Water", ["Sand", "Rocks", "Leaves"], "Rain is drops of water falling from clouds.", "weather"],
+    ["Where do fish live?", "In water", ["In trees", "In the sky", "Underground"], "Fish live in water and breathe with gills.", "animals"],
+    ["What do bees make?", "Honey", ["Milk", "Bread", "Juice"], "Bees collect nectar from flowers and make honey.", "animals"],
+    ["Which is used to hear?", "Ears", ["Eyes", "Feet", "Teeth"], "We hear sounds with our ears.", "body"],
+    ["What do we breathe to stay alive?", "Air", ["Water", "Sand", "Milk"], "People and animals breathe air (oxygen) to live.", "body"],
+  ];
+  const SCIENCE_MID = [ // Grades 2-3
+    ["Which planet do we live on?", "Earth", ["Mars", "Jupiter", "The Moon"], "We live on Earth, the third planet from the Sun.", "space"],
+    ["What is the center of our solar system?", "The Sun", ["The Moon", "Earth", "A star cluster"], "The Sun is a star at the center; planets orbit around it.", "space"],
+    ["What do we call water that falls as frozen flakes?", "Snow", ["Rain", "Hail", "Fog"], "Snow is water frozen into ice crystals that fall from clouds.", "weather"],
+    ["Which of these is a mammal?", "Dog", ["Frog", "Snake", "Fish"], "Mammals have fur or hair and feed milk to their babies, like a dog.", "animals"],
+    ["What gas do plants give off that we breathe?", "Oxygen", ["Carbon dioxide", "Helium", "Smoke"], "Plants make oxygen during photosynthesis, which we breathe.", "plants"],
+    ["How many legs does an insect have?", "6", ["4", "8", "2"], "All insects have 6 legs. Spiders (8 legs) are not insects.", "animals"],
+    ["What is frozen water called?", "Ice", ["Steam", "Rain", "Mud"], "When water gets cold enough it freezes into solid ice.", "matter"],
+    ["Which part of a plant takes in water from the soil?", "Roots", ["Leaves", "Flower", "Petals"], "Roots soak up water and nutrients from the soil.", "plants"],
+    ["What do you call animals that eat only plants?", "Herbivores", ["Carnivores", "Omnivores", "Insects"], "Herbivores eat only plants; carnivores eat meat.", "animals"],
+    ["What makes daytime light?", "The Sun", ["The Moon", "Stars", "Street lamps"], "The Sun lights up the daytime sky.", "space"],
+  ];
+  const SCIENCE_HARD = [ // Grades 4-5
+    ["What are the three states of matter?", "Solid, liquid, gas", ["Hot, warm, cold", "Big, small, tiny", "Rock, water, air"], "Matter is usually a solid, a liquid, or a gas.", "matter"],
+    ["What process do plants use to make food?", "Photosynthesis", ["Digestion", "Evaporation", "Respiration"], "Plants use photosynthesis: sunlight + water + carbon dioxide make food and oxygen.", "plants"],
+    ["Which force pulls objects toward the Earth?", "Gravity", ["Magnetism", "Friction", "Wind"], "Gravity pulls things down toward the Earth.", "forces"],
+    ["What do we call a baby frog?", "Tadpole", ["Caterpillar", "Larva", "Cub"], "A baby frog is a tadpole; it lives in water and grows legs.", "animals"],
+    ["Which planet is known as the Red Planet?", "Mars", ["Venus", "Saturn", "Neptune"], "Mars looks red because of iron (rust) in its soil.", "space"],
+    ["What is the water cycle step where water turns into vapor?", "Evaporation", ["Condensation", "Precipitation", "Collection"], "Evaporation is liquid water turning into water vapor (a gas).", "weather"],
+    ["What part of the body pumps blood?", "Heart", ["Lungs", "Brain", "Stomach"], "The heart pumps blood all around the body.", "body"],
+    ["Which of these is a source of renewable energy?", "The Sun", ["Coal", "Oil", "Gasoline"], "Sunlight is renewable, it won't run out; coal and oil are not.", "forces"],
+    ["What do we call animals that eat both plants and meat?", "Omnivores", ["Herbivores", "Carnivores", "Producers"], "Omnivores eat both plants and animals, like bears and people.", "animals"],
+    ["How many bones does the adult human body have?", "206", ["100", "300", "150"], "An adult human skeleton has 206 bones.", "body"],
+  ];
+
+  function makeScienceFrom(bank) {
+    const [text, answer, wrongs, why, topic] = pick(bank);
+    const opts = shuffle([answer, ...wrongs]).slice(0, 4);
+    if (!opts.includes(answer)) opts[0] = answer;
+    return { text, answer, opts: shuffle(opts), topic: "science", sciTopic: topic, why };
+  }
+
+  // Pick a science question appropriate for the grade.
+  function makeScience(grade, level) {
+    if (grade <= 1) return makeScienceFrom(SCIENCE_EASY);
+    if (grade <= 3) return makeScienceFrom(Math.random() < 0.5 ? SCIENCE_MID : SCIENCE_EASY);
+    return makeScienceFrom(Math.random() < 0.6 ? SCIENCE_HARD : SCIENCE_MID);
+  }
+
+  // Science hint: use the per-question explanation.
+  function hintScience(q) {
+    return (q && q.why) ? q.why : "Think about what you know and pick the best answer.";
+  }
+
+  const SCIENCE_TOPIC_WORD = {
+    plants: "how plants grow for kids",
+    animals: "animal facts for kids",
+    body: "human body for kids",
+    weather: "weather and the water cycle for kids",
+    space: "planets and the solar system for kids",
+    matter: "states of matter for kids",
+    forces: "gravity and forces for kids",
+  };
+
+  // =====================================================================
   //  PUBLIC API
   // =====================================================================
 
-  // Build a question for the given grade and current game level.
-  function make(grade, level) {
+  // Build a question for the given subject, grade, and current game level.
+  // subject: "math" (default) or "ela".
+  function make(subject, grade, level) {
+    // Back-compat: old callers used make(grade, level) with no subject.
+    if (typeof subject === "number") { level = grade; grade = subject; subject = "math"; }
+    if (subject === "ela") return makeELA(grade, level);
+    if (subject === "science") return makeScience(grade, level);
     if (grade <= 0) return makeEarly(grade);          // Pre-K / TK / K
     const topic = maybeTopicQuestion(grade);          // grade-specific skills
     if (topic) return topic;
@@ -457,6 +786,11 @@
 
   // Build a friendly, step-by-step explanation for a question object.
   function hint(q) {
+    // Science questions carry their own explanation.
+    if (q && q.topic === "science") return hintScience(q);
+    // ELA questions have their own explanations.
+    if (q && ELA_TOPIC_WORD[q.topic]) return hintELA(q);
+
     const { a, b, op, answer } = q;
 
     // Grade-level topic questions have their own explanations.
@@ -543,7 +877,8 @@
     data: "reading picture graphs and bar graphs for kids",
   };
   function videoTopic(q) {
-    return TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
+    if (q && q.topic === "science") return SCIENCE_TOPIC_WORD[q.sciTopic] || "science for kids";
+    return ELA_TOPIC_WORD[q.topic] || TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
   }
 
   // Expose the API on a global namespace (no build step / modules needed).

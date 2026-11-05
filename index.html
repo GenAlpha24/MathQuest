@@ -17,22 +17,22 @@
     height: 100vh;          /* fill the viewport exactly */
     height: 100dvh;         /* dynamic viewport height on mobile browsers */
     overflow: hidden;       /* no page/sidebar scroll */
-    padding: 8px;
+    padding: 4px;
     user-select: none;
   }
   h1 {
     color: #ff5a8c;
     text-shadow: 2px 2px 0 #fff;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     text-align: center;
-    font-size: clamp(20px, 4.5vw, 34px);  /* scale the title to the screen */
+    font-size: clamp(18px, 3.4vw, 28px);  /* keep the title small so the game gets more room */
     flex: 0 0 auto;
   }
   #topbar {
     display: flex;
     gap: 12px;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 3px;
     font-weight: bold;
     color: #2b3a67;
     flex: 0 0 auto;
@@ -73,18 +73,18 @@
   .menu-sep { height: 1px; background: #e3e8ff; margin: 4px 6px; }
   #hud {
     display: flex;
-    gap: 18px;
-    font-size: 18px;
+    gap: 10px;
+    font-size: 15px;
     font-weight: bold;
     color: #2b3a67;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     flex-wrap: wrap;
     justify-content: center;
     flex: 0 0 auto;
   }
   .hud-box {
     background: #fff;
-    padding: 6px 14px;
+    padding: 4px 10px;
     border-radius: 12px;
     box-shadow: 0 3px 0 #cfd8ff;
   }
@@ -131,6 +131,20 @@
   }
   .overlay.show { display: flex; }
   .overlay h2 { font-size: 30px; margin-bottom: 10px; }
+  /* Big 3-2-1 number shown when resuming from a pause */
+  #countdownNum {
+    font-size: clamp(64px, 18vw, 140px);
+    font-weight: bold;
+    color: #ffd43b;
+    text-shadow: 3px 3px 0 #2b3a67;
+    line-height: 1;
+    animation: countPop .4s ease-out;
+  }
+  @keyframes countPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
   .overlay p { font-size: 18px; margin-bottom: 16px; max-width: 460px; }
 
   /* Auth */
@@ -217,7 +231,8 @@
   .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #e0a800; }
   .btn.big { background: #51cf66; box-shadow: 0 4px 0 #2f9e44; color:#fff; }
   .btn.small { font-size:16px; padding:8px 14px; }
-  #gradePick, #speedPick, #colorPick, #hairPick, #genderPick, #gemMatchPick { margin: 4px 0 14px; }
+  #gradePick, #speedPick, #colorPick, #hairPick, #genderPick, #gemMatchPick, #subjectPick { margin: 4px 0 14px; }
+  #subjectButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
   #hairButtons, #genderButtons, #gemMatchButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
   #gradeButtons, #speedButtons { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
   #colorButtons, #hairColorButtons, #eyeColorButtons { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
@@ -277,9 +292,9 @@
   #leaderboard .you td { font-weight:bold; color:#ff5a8c; }
 
   #controls-hint {
-    margin-top: 6px;
+    margin-top: 3px;
     color: #2b3a67;
-    font-size: 14px;
+    font-size: 12px;
     text-align: center;
     flex: 0 0 auto;
   }
@@ -316,6 +331,7 @@
     <div class="hud-box">Best: <span id="best">0</span></div>
     <div class="hud-box">Monsters left: <span id="monstersLeft">0</span></div>
     <div class="hud-box">💎 Mega: <span id="megaCount">0</span></div>
+    <div class="hud-box">🌟 Ultra: <span id="ultraCount">0</span></div>
   </div>
 
   <div id="gameWrap">
@@ -361,6 +377,10 @@
       <div id="speedPick">
         <p style="margin-bottom:8px;">Pick the running speed:</p>
         <div id="speedButtons"></div>
+      </div>
+      <div id="subjectPick">
+        <p style="margin-bottom:8px;">Pick what you want to learn:</p>
+        <div id="subjectButtons"></div>
       </div>
       <div id="colorPick">
         <p style="margin-bottom:8px;">Pick your character's color:</p>
@@ -446,10 +466,12 @@
       <h2>❓ How to Play</h2>
       <div style="text-align:left; max-width:520px; font-size:16px; line-height:1.5;">
         <p><b>Goal:</b> Run across the level, jump over spikes, and beat every monster to clear the level.</p>
-        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. Jump over the green poisonous mist, don't breathe it! Hop over the wiggly worms and the big bears too. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
+        <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. Jump over the green poisonous mist, don't breathe it! Hop over the wiggly worms, the slow snails 🐌, the big bears, slithering snakes, buzzing beehives, and bubbling slime puddles too. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
         <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out, either tap a choice, or press <b>T</b> to jump to the type box, type your answer, and press Enter. Every correct answer earns you a life ❤️ (and answering fast gives bonus points), and 5 correct answers in a row earns a bonus life! 🔥 A wrong answer or running out of time costs a life and breaks your streak.</p>
         <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life, and grabbing a gem 💎 gives +1 life too. ❤️</p>
+        <p style="margin-top:10px;"><b>Treasure chests:</b> Grab a chest 🎁 for a surprise advantage, +5 lives, a shield 🛡️ that blocks your next hit, extra time on upcoming questions ⏱️, or bonus points ⭐.</p>
         <p style="margin-top:10px;"><b>Mega gem:</b> Collect <b>most</b> of the gems in a level and a rainbow <b>mega-rare gem</b> ✨ appears near the finish, a mega gem is worth 4 gems (+4 lives)! And if you reach the end having collected most of the gems, you earn the mega gem anyway as a bonus. You also earn a mega gem each time you stockpile lots of lives (every 10 lives). Your mega gem count is shown in the HUD.</p>
+        <p style="margin-top:10px;"><b>Ultra gem:</b> Stockpile a huge pile of lives and you earn a super-rare <b>ultra gem</b> 🌟, worth 8 gems (+8 lives)! You earn one ultra gem for every <b>30 lives</b> (at 30, 60, 90, and so on), and your ultra gem count is shown in the HUD.</p>
         <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
         <p style="margin-top:10px;"><b>Pause:</b> Press the ⏸ Pause button or the <b>P</b> / <b>Esc</b> key anytime.</p>
         <p style="margin-top:10px;"><b>Saving:</b> Your level, grade, and best score are saved to your account automatically.</p>
@@ -462,6 +484,12 @@
       <h2>⏸ Paused</h2>
       <p>Take a break! Your progress is safe. Press Resume (or the P key) to keep playing.</p>
       <button class="btn big" id="resumeBtn">Resume</button>
+    </div>
+
+    <!-- Resume countdown -->
+    <div id="countdown" class="overlay">
+      <h2>Get ready!</h2>
+      <div id="countdownNum">3</div>
     </div>
 
     <!-- Leaderboard -->
@@ -619,7 +647,7 @@
     },
 
     // Save the player's progress. Only writes their OWN doc (uid must match auth).
-    async saveProfile(uid, { name, best, level, grade, speed, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn }) {
+    async saveProfile(uid, { name, best, level, grade, speed, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, ultraGemsCollected, subject, musicOn }) {
       if (!db || !uid) return false;
       try {
         await setDoc(doc(db, USERS, uid), {
@@ -636,6 +664,8 @@
           heroGender: heroGender === "girl" ? "girl" : "boy",
           gemMatchColor: !!gemMatchColor,
           megaGemsCollected: Number(megaGemsCollected) || 0,
+          ultraGemsCollected: Number(ultraGemsCollected) || 0,
+          subject: (subject === "ela" || subject === "science") ? subject : "math",
           musicOn: musicOn === undefined ? true : !!musicOn,
           updated: serverTimestamp(),
         }, { merge: true });
@@ -677,6 +707,7 @@
     speedDisplay: document.getElementById("speedDisplay"),
     speedButtons: document.getElementById("speedButtons"),
     colorButtons: document.getElementById("colorButtons"),
+    subjectButtons: document.getElementById("subjectButtons"),
     hairButtons: document.getElementById("hairButtons"),
     hairColorButtons: document.getElementById("hairColorButtons"),
     eyeColorButtons: document.getElementById("eyeColorButtons"),
@@ -688,6 +719,7 @@
     best: document.getElementById("best"),
     monstersLeft: document.getElementById("monstersLeft"),
     megaCount: document.getElementById("megaCount"),
+    ultraCount: document.getElementById("ultraCount"),
     auth: document.getElementById("auth"),
     tabLogin: document.getElementById("tabLogin"),
     tabSignup: document.getElementById("tabSignup"),
@@ -706,6 +738,8 @@
     levelClear: document.getElementById("levelClear"),
     gameOver: document.getElementById("gameOver"),
     pause: document.getElementById("pause"),
+    countdown: document.getElementById("countdown"),
+    countdownNum: document.getElementById("countdownNum"),
     help: document.getElementById("help"),
     leaderboard: document.getElementById("leaderboard"),
     lbBody: document.getElementById("lbBody"),
@@ -792,6 +826,11 @@
   const GRADE_SHORT = { "-2": "Pre-K", "-1": "TK", "0": "K", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5" };
   let grade = 1; // chosen per user, drives math difficulty
 
+  // Subject the player is practicing: "math" or "ela".
+  const SUBJECTS = [["math", "🔢 Math"], ["ela", "📖 ELA"], ["science", "🔬 Science"]];
+  const VALID_SUBJECTS = ["math", "ela", "science"];
+  let subject = "math";
+
   const player = { x: 80, y: GROUND_Y, w: 40, h: 46, vy: 0, onGround: true };
   const GRAVITY = 0.8;
   const JUMP_V = -14;
@@ -829,11 +868,22 @@
   let gems = [];  // collectible gems: { x, y, collected, color } -> +1 life on touch
   let megaGem = null; // the mega-rare gem: appears after ALL gems in a level are collected
   let megaGemsCollected = 0; // lifetime count of mega gems (saved to profile)
+  // Treasure chests: collect one for a random advantage.
+  let chests = []; // { x, y, collected }
+  let shieldActive = false;    // blocks the next obstacle hit for free
+  let extraTimeQuestions = 0;  // number of upcoming questions that get +time
   const MEGA_PER_GAME = 4;   // at most 4 mega gems may be earned per game/run
   let megaGemsThisRun = 0;   // how many earned in the current run (reset each run)
   // Life-milestone reward: hitting a high life count earns a mega gem.
   const LIFE_MILESTONE_STEP = 10;   // first at 10 lives, then 20, 30, ...
   let lifeMilestoneReached = 0;     // highest milestone already rewarded
+
+  // ULTRA-rare gem: earned for every 30 lives stockpiled in a run (30, 60, 90...).
+  const ULTRA_MILESTONE_STEP = 30;  // one ultra gem per 30 lives
+  const ULTRA_GEM_VALUE = 8;        // an ultra gem is worth 8 gems (+8 lives)
+  let ultraGemsCollected = 0;       // lifetime count of ultra gems (saved to profile)
+  let ultraGemsThisRun = 0;         // how many earned in the current run
+  let ultraMilestoneReached = 0;    // highest 30-life milestone already rewarded
   // Gem colors: each has a body fill and a matching glow.
   const GEM_COLORS = [
     { body: "#4dd2ff", glow: "rgba(80, 220, 255, 0.9)" },  // cyan
@@ -1073,10 +1123,12 @@
     heroGender = (profile.heroGender === "girl") ? "girl" : "boy";
     gemMatchColor = !!profile.gemMatchColor;
     megaGemsCollected = profile.megaGemsCollected || 0;
+    ultraGemsCollected = profile.ultraGemsCollected || 0;
+    subject = VALID_SUBJECTS.includes(profile.subject) ? profile.subject : "math";
     musicOn = (profile.musicOn === undefined || profile.musicOn === null) ? true : !!profile.musicOn;
     score = 0;
 
-    cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn });
+    cacheProfile(currentUid, { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, ultraGemsCollected, subject, musicOn });
 
     el.loginUserid.value = ""; el.loginPass.value = "";
     el.signupUserid.value = ""; el.signupEmail.value = ""; el.signupPass.value = "";
@@ -1087,6 +1139,7 @@
     renderGradeButtons();
     renderSpeedButtons();
     renderColorButtons();
+    renderSubjectButtons();
     renderHairButtons();
     renderHairColorButtons();
     renderEyeColorButtons();
@@ -1141,7 +1194,7 @@
   function persistProgress(opts) {
     if (!currentUid) return Promise.resolve();
     bestScore = Math.max(bestScore, score);
-    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, musicOn };
+    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, ultraGemsCollected, subject, musicOn };
     cacheProfile(currentUid, profile); // instant local cache (deferred disk)
     if (opts && opts.immediate) {
       if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
@@ -1221,6 +1274,22 @@
         renderColorButtons();
       };
       el.colorButtons.appendChild(s);
+    });
+  }
+
+  // ---- Subject selection (Math / ELA) ----
+  function renderSubjectButtons() {
+    el.subjectButtons.innerHTML = "";
+    SUBJECTS.forEach(([val, label]) => {
+      const b = document.createElement("button");
+      b.className = "grade-btn" + (val === subject ? " selected" : "");
+      b.textContent = label;
+      b.onclick = () => {
+        subject = val;
+        persistProgress();
+        renderSubjectButtons();
+      };
+      el.subjectButtons.appendChild(b);
     });
   }
 
@@ -1406,11 +1475,36 @@
       const h = 14;
       return { type, x, y: GROUND_Y - h, w, h, wiggle: Math.random() * Math.PI * 2 };
     }
+    if (type === "snail") {
+      // a slow snail with a shell crawling on the ground; jump over it.
+      // Kept short so it clears with a normal jump, like the worm.
+      const w = 34 + Math.floor(Math.random() * 10); // 34-44 wide
+      const h = 22 + Math.floor(Math.random() * 4);   // 22-25 tall
+      return { type, x, y: GROUND_Y - h, w, h, bob: Math.random() * Math.PI * 2 };
+    }
     if (type === "bear") {
       // a big bear sitting on the ground; jump over it. Kept jumpable.
       const h = 40 + Math.floor(Math.random() * 8); // 40-47 tall
       const w = 44;
       return { type, x, y: GROUND_Y - h, w, h, sway: Math.random() * Math.PI * 2 };
+    }
+    if (type === "snake") {
+      // a slithering snake on the ground; jump over it. `slither` animates.
+      const w = 40 + Math.floor(Math.random() * 16); // 40-55 wide
+      const h = 18;
+      return { type, x, y: GROUND_Y - h, w, h, slither: Math.random() * Math.PI * 2 };
+    }
+    if (type === "beehive") {
+      // a beehive low to the ground with buzzing bees; jump over it.
+      const h = 34 + Math.floor(Math.random() * 8); // 34-41 tall
+      const w = 34;
+      return { type, x, y: GROUND_Y - h, w, h, buzz: Math.random() * Math.PI * 2 };
+    }
+    if (type === "slime") {
+      // a bubbling slime puddle on the ground; jump over it. `bubble` animates.
+      const w = 44 + Math.floor(Math.random() * 20); // 44-63 wide
+      const h = 16;
+      return { type, x, y: GROUND_Y - h, w, h, bubble: Math.random() * Math.PI * 2 };
     }
 
     // spike (default)
@@ -1423,6 +1517,7 @@
     holes = [];
     gems = [];
     megaGem = null;
+    chests = [];
     monsters = [];
     worldOffset = 0;
     player.y = GROUND_Y; player.vy = 0; player.onGround = true;
@@ -1439,9 +1534,9 @@
     //   lv 8+: + rolling boulders
     //   lv 9+: + falling icicles
     let types = ["rock", "rock", "spike", "cactus"];
-    if (lv >= 2) types = types.concat(["bird", "fire", "worm"]);
-    if (lv >= 3) types = types.concat(["saw", "log"]);
-    if (lv >= 4) types = types.concat(["bat", "mist"]);
+    if (lv >= 2) types = types.concat(["bird", "fire", "worm", "snail"]);
+    if (lv >= 3) types = types.concat(["saw", "log", "snake", "slime"]);
+    if (lv >= 4) types = types.concat(["bat", "mist", "beehive"]);
     if (lv >= 5) types = types.concat(["geyser", "bear"]);
     if (lv >= 6) types = types.concat(["spikeball"]);
     if (lv >= 7) types = types.concat(["spring"]);
@@ -1487,6 +1582,13 @@
           const color = GEM_COLORS[Math.floor(Math.random() * GEM_COLORS.length)];
           gems.push({ x: x - gemGap, y: gy, collected: false, color });
         }
+
+        // Occasionally drop a treasure chest (rarer than gems). Grabbing it
+        // gives a random advantage. Sits on the ground so you run into it.
+        if (Math.random() < 0.12) {
+          const chestGap = 130 + Math.floor(Math.random() * 70);
+          chests.push({ x: x - chestGap, y: GROUND_Y - 26, collected: false });
+        }
       }
       monsters.push({ x: x, emoji: MONSTER_EMOJIS[(lv + i) % MONSTER_EMOJIS.length], alive: true });
       x += 320;
@@ -1504,6 +1606,7 @@
     el.best.textContent = Math.max(bestScore, score);
     el.monstersLeft.textContent = monsters.filter(m => m.alive).length;
     el.megaCount.textContent = megaGemsCollected;
+    if (el.ultraCount) el.ultraCount.textContent = ultraGemsCollected;
     checkLifeMilestone();
   }
 
@@ -1512,6 +1615,23 @@
   // milestone pays out once, tracked by lifeMilestoneReached.
   function checkLifeMilestone() {
     if (!currentUid) return; // only while a player is logged in
+
+    // ULTRA-rare gem: earned for every 30 lives stockpiled (30, 60, 90...).
+    // Each milestone pays out once, tracked by ultraMilestoneReached.
+    const ultraMilestone = Math.floor(lives / ULTRA_MILESTONE_STEP) * ULTRA_MILESTONE_STEP;
+    if (ultraMilestone >= ULTRA_MILESTONE_STEP && ultraMilestone > ultraMilestoneReached) {
+      ultraMilestoneReached = ultraMilestone;
+      ultraGemsThisRun++;
+      ultraGemsCollected++;
+      lives += ULTRA_GEM_VALUE;      // an ultra gem is worth 8 gems (+8 lives)
+      if (el.ultraCount) el.ultraCount.textContent = ultraGemsCollected;
+      el.lives.textContent = lives;
+      sfx.levelClear();
+      setTimeout(sfx.extraLife, 300);
+      setTimeout(sfx.extraLife, 550); // double chime for the rarer reward
+      persistProgress();
+    }
+
     const milestone = Math.floor(lives / LIFE_MILESTONE_STEP) * LIFE_MILESTONE_STEP;
     if (milestone >= LIFE_MILESTONE_STEP && milestone > lifeMilestoneReached) {
       lifeMilestoneReached = milestone;
@@ -1539,7 +1659,7 @@
   }
 
   function makeQuestion(lv) {
-    return window.MathQuest.Questions.make(grade, lv);
+    return window.MathQuest.Questions.make(subject, grade, lv);
   }
 
   // Build a question that differs in variety from `avoidKind` when possible.
@@ -1695,11 +1815,19 @@
       el.answers.appendChild(b);
     });
     el.typeInput.value = ""; // fresh type-in box each question
+    // Numbers get a numeric keypad on mobile; ELA/word answers get a text keyboard.
+    const wordAnswer = typeof q.answer === "string" && isNaN(Number(q.answer));
+    el.typeInput.setAttribute("inputmode", wordAnswer ? "text" : "numeric");
     startTimer();
   }
 
   function startTimer() {
     timeLeft = QUESTION_SECONDS; // fresh full time for a new question
+    // Chest "extra time" advantage: add 8s to the next few questions.
+    if (extraTimeQuestions > 0) {
+      timeLeft += 8;
+      extraTimeQuestions--;
+    }
     runTimerInterval();
   }
 
@@ -1730,7 +1858,7 @@
 
   function renderTimer() {
     el.timerSecs.textContent = Math.ceil(timeLeft);
-    const pct = Math.max(0, (timeLeft / QUESTION_SECONDS) * 100);
+    const pct = Math.max(0, Math.min(100, (timeLeft / QUESTION_SECONDS) * 100));
     el.timerFill.style.width = pct + "%";
     el.timerFill.style.background = pct > 50 ? "#51cf66" : (pct > 20 ? "#ffd43b" : "#ff6b6b");
   }
@@ -2077,14 +2205,49 @@
     el.pause.classList.add("show");
   }
 
+  let countdownTimer = null; // interval id for the 3-2-1 resume countdown
+
   function resumeGame() {
     if (!paused) return;
+    if (countdownTimer) return; // a countdown is already running
     paused = false;
     el.pause.classList.remove("show");
-    state = prePauseState;
-    prePauseState = null;
-    // if we were mid-question and it isn't answered yet, resume the countdown
-    if (state === "battle" && !questionAnswered) resumeTimer();
+    // Don't hand control back yet: run a 3-2-1 countdown first. Keep the
+    // state as "paused" so the game stays frozen behind the overlay.
+    runResumeCountdown(() => {
+      state = prePauseState;
+      prePauseState = null;
+      // if we were mid-question and it isn't answered yet, resume the countdown
+      if (state === "battle" && !questionAnswered) resumeTimer();
+    });
+  }
+
+  // Show a 3-2-1 overlay, then call done() to actually resume play.
+  function runResumeCountdown(done) {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    let n = 3;
+    el.countdownNum.textContent = n;
+    el.countdown.classList.add("show");
+    sfx.jump(); // soft tick for the first number
+    // restart the pop animation on each number
+    const pop = () => {
+      el.countdownNum.style.animation = "none";
+      void el.countdownNum.offsetWidth; // reflow to replay the animation
+      el.countdownNum.style.animation = "";
+    };
+    countdownTimer = setInterval(() => {
+      n--;
+      if (n > 0) {
+        el.countdownNum.textContent = n;
+        pop();
+        sfx.jump();
+      } else {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        el.countdown.classList.remove("show");
+        done();
+      }
+    }, 1000);
   }
 
   // ---- Input ----
@@ -2162,12 +2325,25 @@
   musicBtn.onclick = toggleMusic;
   muteBtn.onclick = toggleMusic;
   document.getElementById("resumeBtn").onclick = resumeGame;
+  let helpPausedGame = false; // did opening Help auto-pause the game?
   document.getElementById("helpBtn").onclick = () => {
-    // pause active play so nothing runs behind the help screen
-    if (state === "playing" || state === "battle") pauseGame();
+    // Auto-pause active play so nothing runs behind the help screen.
+    helpPausedGame = false;
+    if (state === "playing" || state === "battle") {
+      pauseGame();
+      helpPausedGame = true;
+      el.pause.classList.remove("show"); // show Help, not the pause screen
+    }
     el.help.classList.add("show");
   };
-  document.getElementById("helpCloseBtn").onclick = () => el.help.classList.remove("show");
+  document.getElementById("helpCloseBtn").onclick = () => {
+    el.help.classList.remove("show");
+    // If opening Help paused the game, resume it (with the 3-2-1 countdown).
+    if (helpPausedGame) {
+      helpPausedGame = false;
+      resumeGame();
+    }
+  };
   document.getElementById("mathHelpBtn").onclick = showMathHelp;
   document.getElementById("videoBtn").onclick = openVideo;
   document.getElementById("typeSubmit").onclick = submitTypedAnswer;
@@ -2186,7 +2362,10 @@
     lives = 3; score = 0;
     lifeMilestoneReached = 0; // fresh run: life-milestone rewards reset
     megaGemsThisRun = 0;      // fresh run: up to 4 mega gems again
+    ultraGemsThisRun = 0;     // fresh run: ultra gems can be earned again
+    ultraMilestoneReached = 0;
     correctStreak = 0;        // fresh run: reset the answer streak
+    shieldActive = false; extraTimeQuestions = 0; // fresh run: clear chest perks
     buildLevel(level);
     state = "playing";
   };
@@ -2200,13 +2379,17 @@
     lives = 3; score = 0;
     lifeMilestoneReached = 0; // fresh run: life-milestone rewards reset
     megaGemsThisRun = 0;      // fresh run: up to 4 mega gems again
+    ultraGemsThisRun = 0;     // fresh run: ultra gems can be earned again
+    ultraMilestoneReached = 0;
     correctStreak = 0;        // fresh run: reset the answer streak
+    shieldActive = false; extraTimeQuestions = 0; // fresh run: clear chest perks
     buildLevel(level); // resume from saved level, fresh lives/score
     state = "playing";
   };
 
   function hideAllOverlays() {
-    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.help, el.scratch, el.leaderboard]
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard]
       .forEach(o => o.classList.remove("show"));
   }
 
@@ -2253,7 +2436,11 @@
       if (o.type === "log") o.roll += 0.25;
       if (o.type === "mist") o.puff += 0.1; // gentle swirling animation
       if (o.type === "worm") o.wiggle += 0.2; // wiggling animation
+      if (o.type === "snail") o.bob += 0.12;  // gentle antenna/head bob
       if (o.type === "bear") o.sway += 0.08;  // gentle breathing/sway
+      if (o.type === "snake") o.slither += 0.25; // slithering wave
+      if (o.type === "beehive") o.buzz += 0.3;   // buzzing bees
+      if (o.type === "slime") o.bubble += 0.15;  // bubbling
       if (o.type === "spikeball") {
         const prevX = o.swingX;
         o.swing += 0.05; // a touch slower so it's easier to time
@@ -2369,6 +2556,20 @@
       }
     }
 
+    // Collect treasure chests: each grants a random advantage.
+    const CHEST = 30;
+    for (const chest of chests) {
+      if (chest.collected) continue;
+      const cx = chest.x - worldOffset;
+      if (cx + CHEST < 0) continue;
+      if (cx > W) break;
+      if (px + player.w > cx && px < cx + CHEST &&
+          py + player.h > chest.y - CHEST && py < chest.y + 6) {
+        chest.collected = true;
+        openChest();
+      }
+    }
+
     // Collect the mega-rare gem (big reward: +3 lives, counts as a collectible)
     if (megaGem && !megaGem.collected) {
       const MG = 44;
@@ -2396,9 +2597,42 @@
     }
   }
 
+  // ---- Treasure chest advantages ----
+  let chestMsg = "";       // floating message shown briefly on screen
+  let chestMsgTimer = 0;   // frames remaining to show it
+  function showChestMsg(text) { chestMsg = text; chestMsgTimer = 150; }
+
+  function openChest() {
+    sfx.extraLife();
+    // Pick a random advantage.
+    const roll = Math.floor(Math.random() * 4);
+    if (roll === 0) {
+      lives += 5;
+      showChestMsg("🎁 Chest: +5 lives! ❤️");
+    } else if (roll === 1) {
+      shieldActive = true;
+      showChestMsg("🎁 Chest: Shield! Your next hit is blocked 🛡️");
+    } else if (roll === 2) {
+      extraTimeQuestions = 3;
+      showChestMsg("🎁 Chest: Extra time on the next 3 questions ⏱️");
+    } else {
+      score += 100;
+      showChestMsg("🎁 Chest: +100 points! ⭐");
+    }
+    updateHUD();
+    persistProgress();
+  }
+
   let obstacleCooldown = 0;
   function loseLifeFromObstacle(o) {
     if (obstacleCooldown > 0) return;
+    // Shield blocks this hit for free (one-time).
+    if (shieldActive) {
+      shieldActive = false;
+      obstacleCooldown = 60;
+      showChestMsg("🛡️ Shield blocked the hit!");
+      return;
+    }
     lives--;
     obstacleCooldown = 60;
     sfx.hit();
@@ -2525,6 +2759,14 @@
       if (mgx + 44 >= 0 && mgx <= W) drawMegaGem(mgx, megaGem.y);
     }
 
+    // treasure chests
+    for (const chest of chests) {
+      if (chest.collected) continue;
+      const cx = chest.x - worldOffset;
+      if (cx + 30 < 0 || cx > W) continue;
+      drawChest(cx, chest.y);
+    }
+
     ctx.font = "44px serif";
     ctx.textBaseline = "bottom";
     for (const m of monsters) {
@@ -2536,6 +2778,18 @@
 
     drawHero(player.x, player.y - player.h);
 
+    // shield bubble around the hero while a chest shield is active
+    if (shieldActive) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(77, 208, 255, 0.9)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w / 2, player.y - player.h / 2,
+              player.w * 0.8 + Math.sin(worldOffset * 0.2) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const flagX = levelLength - worldOffset;
     if (flagX < W && flagX > 0) {
       ctx.fillStyle = "#ff5a8c";
@@ -2545,6 +2799,24 @@
       ctx.lineTo(flagX + 34, GROUND_Y - 50);
       ctx.lineTo(flagX + 4, GROUND_Y - 40);
       ctx.fill();
+    }
+
+    // floating chest message (advantage earned / shield blocked)
+    if (chestMsgTimer > 0) {
+      chestMsgTimer--;
+      ctx.save();
+      ctx.font = "bold 20px 'Comic Sans MS', 'Trebuchet MS', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const alpha = Math.min(1, chestMsgTimer / 40);
+      ctx.fillStyle = `rgba(43,58,103,${0.85 * alpha})`;
+      const tw = ctx.measureText(chestMsg).width + 24;
+      roundRect(W / 2 - tw / 2, 14, tw, 34, 10);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillText(chestMsg, W / 2, 31);
+      ctx.restore();
+      ctx.textAlign = "left"; // reset for other text draws
     }
 
     if (obstacleCooldown > 0) obstacleCooldown--;
@@ -2704,6 +2976,62 @@
       }
       return;
     }
+    if (o.type === "snail") {
+      // a cute snail: soft body on the ground, a spiral shell, and two
+      // bobbing antennae with eyes on top. The snail faces right (forward).
+      const bob = Math.sin(o.bob || 0) * 1.5;
+      const baseY = o.y + o.h;              // ground line of the obstacle
+      const bodyH = o.h * 0.45;
+      const headX = ox + o.w - 6;           // head at the front (right)
+
+      // foot/body: a rounded slug shape along the ground
+      ctx.fillStyle = "#b5e06b";
+      ctx.beginPath();
+      ctx.moveTo(ox + 2, baseY);
+      ctx.quadraticCurveTo(ox + 2, baseY - bodyH, ox + o.w * 0.4, baseY - bodyH);
+      ctx.quadraticCurveTo(headX, baseY - bodyH, headX + 4, baseY - bodyH * 0.4 + bob);
+      ctx.quadraticCurveTo(headX + 6, baseY, headX, baseY);
+      ctx.lineTo(ox + 2, baseY);
+      ctx.closePath();
+      ctx.fill();
+
+      // spiral shell sitting on the body
+      const shellCx = ox + o.w * 0.4;
+      const shellCy = baseY - bodyH - o.h * 0.18;
+      const shellR = o.h * 0.42;
+      ctx.fillStyle = "#e8a04b";
+      ctx.beginPath();
+      ctx.arc(shellCx, shellCy, shellR, 0, Math.PI * 2);
+      ctx.fill();
+      // spiral line
+      ctx.strokeStyle = "#a9641f";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 3.2; a += 0.25) {
+        const rr = shellR * (1 - a / (Math.PI * 3.6));
+        const sx = shellCx + Math.cos(a) * rr;
+        const sy = shellCy + Math.sin(a) * rr;
+        if (a === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+
+      // two antennae with eyes on the head, bobbing gently
+      const antTop = baseY - bodyH * 0.4 + bob - 8;
+      ctx.strokeStyle = "#b5e06b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(headX, baseY - bodyH * 0.4 + bob);
+      ctx.lineTo(headX - 2, antTop);
+      ctx.moveTo(headX + 3, baseY - bodyH * 0.4 + bob);
+      ctx.lineTo(headX + 5, antTop);
+      ctx.stroke();
+      ctx.fillStyle = "#2b3a67";
+      ctx.beginPath();
+      ctx.arc(headX - 2, antTop, 2, 0, Math.PI * 2);
+      ctx.arc(headX + 5, antTop, 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
     if (o.type === "bear") {
       // a chunky brown bear sitting on the ground
       const sway = Math.sin(o.sway || 0) * 1.5;
@@ -2738,6 +3066,90 @@
       ctx.arc(cx - 6, bodyTop - 1 + sway, 2, 0, Math.PI * 2);
       ctx.arc(cx + 6, bodyTop - 1 + sway, 2, 0, Math.PI * 2);
       ctx.fill();
+      return;
+    }
+    if (o.type === "snake") {
+      // a green slithering snake drawn as a wavy thick line + head
+      const s = o.slither || 0;
+      const baseY = o.y + o.h / 2;
+      ctx.strokeStyle = "#2e7d32";
+      ctx.lineWidth = o.h * 0.7;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      for (let i = 0; i <= o.w; i += 4) {
+        const yy = baseY + Math.sin(s + i * 0.25) * 4;
+        if (i === 0) ctx.moveTo(ox + i, yy); else ctx.lineTo(ox + i, yy);
+      }
+      ctx.stroke();
+      // head at the front (right)
+      const hyy = baseY + Math.sin(s + o.w * 0.25) * 4;
+      ctx.fillStyle = "#388e3c";
+      ctx.beginPath();
+      ctx.arc(ox + o.w, hyy, o.h * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff"; // eye
+      ctx.beginPath();
+      ctx.arc(ox + o.w + 2, hyy - 2, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      // flicking tongue
+      ctx.strokeStyle = "#d32f2f";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ox + o.w + o.h * 0.5, hyy);
+      ctx.lineTo(ox + o.w + o.h * 0.5 + 6 + Math.sin(s * 3) * 2, hyy);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+      return;
+    }
+    if (o.type === "beehive") {
+      // a layered hive with little bees buzzing around it
+      const cx = ox + o.w / 2;
+      ctx.fillStyle = "#e0a63c";
+      const layers = 4;
+      for (let i = 0; i < layers; i++) {
+        const ly = o.y + 4 + (i * (o.h - 6)) / layers;
+        const lw = o.w * (0.9 - i * 0.12);
+        ctx.beginPath();
+        ctx.ellipse(cx, ly, lw / 2, (o.h / layers) * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // entrance hole
+      ctx.fillStyle = "#5d4037";
+      ctx.beginPath();
+      ctx.arc(cx, o.y + o.h - 8, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // buzzing bees
+      ctx.fillStyle = "#222";
+      for (let i = 0; i < 2; i++) {
+        const a = (o.buzz || 0) * 2 + i * Math.PI;
+        const bx = cx + Math.cos(a) * (o.w * 0.6);
+        const by = o.y + 6 + Math.sin(a * 1.5) * 8;
+        ctx.beginPath();
+        ctx.arc(bx, by, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    if (o.type === "slime") {
+      // a bubbling purple slime puddle
+      const b = o.bubble || 0;
+      const topY = o.y;
+      ctx.fillStyle = "rgba(156, 39, 176, 0.75)";
+      ctx.beginPath();
+      ctx.moveTo(ox, GROUND_Y);
+      ctx.quadraticCurveTo(ox + o.w * 0.25, topY, ox + o.w * 0.5, topY + 2);
+      ctx.quadraticCurveTo(ox + o.w * 0.75, topY, ox + o.w, GROUND_Y);
+      ctx.closePath();
+      ctx.fill();
+      // bubbles
+      ctx.fillStyle = "rgba(206, 147, 216, 0.9)";
+      for (let i = 0; i < 3; i++) {
+        const bx = ox + o.w * (0.25 + i * 0.25);
+        const by = GROUND_Y - 3 - ((b * 5 + i * 6) % (o.h));
+        ctx.beginPath();
+        ctx.arc(bx, by, 2 + (i % 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
       return;
     }
     if (o.type === "bat") {
@@ -2932,6 +3344,41 @@
     ctx.lineTo(cx, cy);
     ctx.lineTo(cx - s / 4, cy - s / 6);
     ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // A treasure chest sitting on the ground.
+  function drawChest(cx, gyBottom) {
+    const w = 30, h = 26;
+    const x = cx, y = gyBottom - h;
+    const bob = Math.sin(worldOffset * 0.06) * 2;
+    ctx.save();
+    ctx.translate(0, bob);
+    // base
+    ctx.fillStyle = "#8d5a2b";
+    roundRect(x, y + 10, w, h - 10, 4); ctx.fill();
+    // lid
+    ctx.fillStyle = "#a9692f";
+    ctx.beginPath();
+    ctx.moveTo(x, y + 11);
+    ctx.lineTo(x, y + 6);
+    ctx.quadraticCurveTo(x + w / 2, y - 4, x + w, y + 6);
+    ctx.lineTo(x + w, y + 11);
+    ctx.closePath();
+    ctx.fill();
+    // gold bands
+    ctx.fillStyle = "#ffd43b";
+    ctx.fillRect(x, y + 9, w, 3);
+    ctx.fillRect(x + w / 2 - 2, y + 2, 4, h - 4);
+    // lock
+    ctx.fillStyle = "#e0a800";
+    ctx.fillRect(x + w / 2 - 3, y + 11, 6, 6);
+    // sparkle
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    const tw = 1 + Math.abs(Math.sin(worldOffset * 0.1)) * 2;
+    ctx.beginPath();
+    ctx.arc(x + w - 4, y + 2, tw, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
