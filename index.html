@@ -186,6 +186,9 @@
   }
   .student-row .who, .invite-row .who { font-weight: bold; text-align: left; }
   .student-row .state, .invite-row .state { font-size: 14px; opacity: 0.85; }
+  .student-row { flex-wrap: wrap; }
+  .student-row .progress { flex-basis: 100%; font-size: 13px; opacity: 0.85; text-align: left; }
+  #activeInviteList { width: 100%; max-width: 440px; }
   #inviteList, #studentList { width: 100%; max-width: 440px; }
   .link-code-box {
     background: #fff4d6; color: #2b3a67; border-radius: 14px;
@@ -339,6 +342,7 @@
         <button class="menu-item" id="pauseBtn">⏸ Pause</button>
         <button class="menu-item" id="musicBtn">🎵 Music: On</button>
         <button class="menu-item" id="studentsBtn" style="display:none">👪 My students</button>
+        <button class="menu-item" id="invitesBtn" style="display:none">📨 Invites / Link a grown-up</button>
         <button class="menu-item" id="leaderboardBtn">🏆 Leaderboard</button>
         <button class="menu-item" id="helpBtn">❓ Help</button>
         <div class="menu-sep"></div>
@@ -411,6 +415,20 @@
       <button class="btn big" id="playSoloBtn">Play solo for now</button>
     </div>
 
+    <!-- Invites for ACTIVE students (pre-roles / already-activated): accept an invite or enter a code -->
+    <div id="studentInvites" class="overlay">
+      <h2>Link a grown-up 👪</h2>
+      <p>Accept an invite from a parent or teacher, or type the code they gave you.</p>
+      <div id="activeInviteList"></div>
+      <div class="link-code-box">
+        <p style="margin:0 0 6px;">Have a code from your adult? Enter it here:</p>
+        <input id="activeCodeInput" placeholder="Code (e.g. SUN42KQ)" maxlength="12" autocomplete="off" />
+        <button class="btn small" id="activeCodeSendBtn">Send</button>
+      </div>
+      <div id="activeInviteMsg" style="min-height:22px; color:#ffd43b; margin:6px 0;"></div>
+      <button class="btn big" id="activeInvitesCloseBtn">Back to game</button>
+    </div>
+
     <!-- Approval desk (adult screen) -->
     <div id="approvalDesk" class="overlay">
       <h2>Your students 👪</h2>
@@ -420,6 +438,7 @@
         <button class="btn small" id="inviteSendBtn">Send</button>
       </div>
       <div id="approvalMsg" style="min-height:22px; color:#ffd43b; margin:6px 0;"></div>
+      <button class="btn small" id="refreshStudentsBtn">↻ Refresh</button>
       <div id="studentList"></div>
       <div class="link-code-box">
         Share this code as a backup: <b id="myLinkCode">—</b>
@@ -583,7 +602,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs,
-    query, where, orderBy, limit, onSnapshot, serverTimestamp
+    query, where, orderBy, limit, onSnapshot, serverTimestamp, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -620,6 +639,8 @@
   const USERNAMES = "usernames"; // maps a unique userid -> { uid, email }
   const LINKS = "links";         // (student, adult) authorization records
   const LINKCODES = "linkCodes"; // adult shareable code -> { adultUid, role } (fallback)
+  const QUOTA = "inviteQuota";   // per-adult per-UTC-day invite counter (rules enforce the limit)
+  const INVITE_LIMIT = 30;       // keep in sync with inviteDailyLimit() in firestore.rules
   const LEADERBOARD = "leaderboard"; // denormalized world-readable top scores
 
   // A userid must be simple + safe to use as a Firestore doc id.
@@ -639,6 +660,7 @@
   }
 
   // Turn Firebase's error codes into kid-friendly messages.
+  const INVITE_LIMIT_MSG = "You've sent a lot of invites today, try again tomorrow.";
   function friendlyError(e) {
     const code = (e && e.code) || "";
     if (code.includes("email-already-in-use")) return "That email already has an account. Try logging in.";
@@ -834,35 +856,59 @@
       const me = auth.currentUser.uid;
       const raw = String(identifier || "").trim();
       if (!raw) return { ok: false, error: "Enter a user ID or email." };
+      let linkId = null, linkData = null;
       try {
+        const base = {
+          adultUid: me, adultRole: myRole, adultName: String(auth.currentUser.displayName || "").slice(0, 40),
+          source: "invite", status: "invited", createdBy: me,
+          createdAt: serverTimestamp(), decidedAt: null,
+        };
         if (raw.includes("@")) {
           // Email invite: no lookup; the student self-matches on login.
           const key = raw.toLowerCase();
-          const linkId = "email|" + me + "|" + key;
-          await setDoc(doc(db, LINKS, linkId), {
-            studentUid: null, adultUid: me, adultRole: myRole,
-            source: "invite", targetKind: "email", targetValue: key,
-            status: "invited", createdBy: me,
-            createdAt: serverTimestamp(), decidedAt: null,
-          });
-          return { ok: true };
+          linkId = "email|" + me + "|" + key;
+          linkData = { ...base, studentUid: null, targetKind: "email", targetValue: key };
+        } else {
+          const userid = normalizeUserid(raw);
+          if (!validUserid(userid)) return { ok: false, error: "That doesn't look like a user ID or email." };
+          const unameSnap = await getDoc(doc(db, USERNAMES, userid));
+          if (!unameSnap.exists()) return { ok: false, error: "No student with that user ID." };
+          const studentUid = unameSnap.data().uid;
+          linkId = studentUid + "_" + me;
+          linkData = { ...base, studentUid, targetKind: "userid", targetValue: userid };
         }
-        const userid = normalizeUserid(raw);
-        if (!validUserid(userid)) return { ok: false, error: "That doesn't look like a user ID or email." };
-        const unameSnap = await getDoc(doc(db, USERNAMES, userid));
-        if (!unameSnap.exists()) return { ok: false, error: "No student with that user ID." };
-        const studentUid = unameSnap.data().uid;
-        await setDoc(doc(db, LINKS, studentUid + "_" + me), {
-          studentUid, adultUid: me, adultRole: myRole,
-          source: "invite", targetKind: "userid", targetValue: userid,
-          status: "invited", createdBy: me,
-          createdAt: serverTimestamp(), decidedAt: null,
+      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+      // The invite and today's quota bump are ONE atomic write; the rules reject either alone.
+      // The day is UTC, matching request.time in firestore.rules.
+      const d = new Date();
+      const day = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+      const qRef = doc(db, QUOTA, me + "_" + day);
+      const linkRef = doc(db, LINKS, linkId);
+      try {
+        await runTransaction(db, async (tx) => {
+          const q = await tx.get(qRef);
+          const count = q.exists() ? (Number(q.data().count) || 0) : 0;
+          if (count >= INVITE_LIMIT) throw Object.assign(new Error("limit"), { code: "mq/limit" });
+          tx.set(qRef, { adultUid: me, day, count: count + 1, lastLinkId: linkId });
+          tx.set(linkRef, linkData);
         });
         return { ok: true };
-      } catch (e) { return { ok: false, error: friendlyError(e) }; }
+      } catch (e) {
+        if (e && e.code === "mq/limit") return { ok: false, error: INVITE_LIMIT_MSG };
+        if (!(e && String(e.code || "").includes("permission-denied"))) return { ok: false, error: friendlyError(e) };
+        // Denied: work out why so the message is useful (limit, already invited, or a clock problem).
+        try {
+          const q = await getDoc(qRef);
+          if (q.exists() && q.data().count >= INVITE_LIMIT) return { ok: false, error: INVITE_LIMIT_MSG };
+          if ((await getDoc(linkRef)).exists()) return { ok: false, error: "You're already linked with, or have already invited, that student." };
+          return { ok: false, error: "Couldn't send. Check your device date and time, then try again." };
+        } catch (e2) { return { ok: false, error: friendlyError(e) }; }
+      }
     },
 
-    // Adult-side: list students across both directions, with names.
+    // Adult-side: list students across both directions. Only students who have
+    // accepted/been approved expose profile fields (grade, level, best, last played);
+    // never their email or uid.
     async listMyStudents() {
       if (!db || !auth || !auth.currentUser) return [];
       const me = auth.currentUser.uid;
@@ -871,17 +917,34 @@
           where("adultUid", "==", me),
           where("status", "in", ["invited", "accepted", "requested", "approved"]));
         const snap = await getDocs(q);
+        const docs = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+        // An accepted email invite leaves its original email|... doc 'invited'; hide that duplicate.
+        const acceptedEmails = new Set(docs
+          .filter(x => x.data.targetKind === "email" && (x.data.status === "accepted" || x.data.status === "approved"))
+          .map(x => x.data.targetValue));
         const rows = [];
-        for (const d of snap.docs) {
-          const data = d.data();
-          let label = data.targetValue || "(student)";
-          if (data.studentUid) {
+        for (const { id, data } of docs) {
+          if (data.status === "invited" && data.targetKind === "email" && acceptedEmails.has(data.targetValue)) continue;
+          const linked = data.status === "accepted" || data.status === "approved";
+          let name = data.targetValue || "(student)";
+          let progress = null;
+          if (data.status === "requested") name = data.studentName || "(a student)";
+          if (linked && data.studentUid) {
+            name = data.targetKind === "userid" ? (data.targetValue || "(student)") : "(student)";
             try {
               const us = await getDoc(doc(db, USERS, data.studentUid));
-              if (us.exists() && us.data().name) label = us.data().name;
-            } catch (e) { /* name unreadable until linked; fall back to label */ }
+              if (us.exists()) {
+                const u = us.data();
+                if (u.name) name = u.name;
+                const num = (v) => (typeof v === "number" && isFinite(v)) ? v : null;
+                progress = {
+                  grade: num(u.grade), level: num(u.level), best: num(u.best),
+                  updatedMs: (u.updated && typeof u.updated.toMillis === "function") ? u.updated.toMillis() : null,
+                };
+              }
+            } catch (e) { console.warn("progress unreadable", e); }
           }
-          rows.push({ linkId: d.id, studentUid: data.studentUid || null, name: label, source: data.source, status: data.status });
+          rows.push({ linkId: id, studentUid: data.studentUid || null, name, source: data.source, status: data.status, progress });
         }
         return rows;
       } catch (e) { console.warn("listMyStudents failed", e); return []; }
@@ -901,6 +964,15 @@
         const s1 = await getDocs(q1);
         s1.forEach(d => { byId[d.id] = d.data(); });
       } catch (e) { console.warn("listMyInvites (uid) failed", e); }
+      // Adults I am already linked with (shown as "Linked").
+      const linkedAdults = new Set();
+      try {
+        const q3 = query(collection(db, LINKS),
+          where("studentUid", "==", me),
+          where("status", "in", ["accepted", "approved"]));
+        const s3 = await getDocs(q3);
+        s3.forEach(d => { byId[d.id] = d.data(); linkedAdults.add(d.data().adultUid); });
+      } catch (e) { console.warn("listMyInvites (linked) failed", e); }
       if (myEmail) {
         try {
           const q2 = query(collection(db, LINKS),
@@ -914,14 +986,14 @@
       const rows = [];
       for (const linkId of Object.keys(byId)) {
         const data = byId[linkId];
-        let adultName = "An adult";
-        try {
-          const au = await getDoc(doc(db, USERS, data.adultUid));
-          if (au.exists() && au.data().name) adultName = au.data().name;
-        } catch (e) { /* adult name unreadable; use default */ }
+        // The original email|... invite stays 'invited' after an email accept; Accept on it would fail.
+        if (data.status === "invited" && data.targetKind === "email" && linkedAdults.has(data.adultUid)) continue;
+        // A canonical (student-created) accepted doc carries no adultName; borrow it from the adult's invite.
+        const adultName = data.adultName || Object.values(byId).map(x => x.adultUid === data.adultUid && x.adultName).find(Boolean) || "An adult";
         rows.push({
           linkId, adultUid: data.adultUid, adultName,
           adultRole: data.adultRole || null, targetKind: data.targetKind,
+          targetValue: data.targetValue || null,
           status: data.status,
         });
       }
@@ -929,13 +1001,16 @@
     },
 
     // Student-side: accept an invite. Links write FIRST, then users activate.
-    async acceptInvite({ linkId, targetKind, adultUid, adultRole }) {
+    // `activate` is true only for a PENDING student (also flips them to active). An already-active
+    // student only needs the link flip: the pending->active users write would be denied.
+    async acceptInvite({ linkId, targetKind, adultUid, adultRole, targetValue, activate = true }) {
       if (!db || !auth || !auth.currentUser) return { ok: false, error: "You need to be signed in." };
       const me = auth.currentUser.uid;
       try {
         if (targetKind === "email") {
           // Create the canonical accepted doc (rule branch c2).
-          const storedEmail = (auth.currentUser.email || "").trim().toLowerCase();
+          // targetValue is the invite's own (lowercased) address, so the adult's desk can match the rows.
+          const storedEmail = targetValue || (auth.currentUser.email || "").trim().toLowerCase();
           await setDoc(doc(db, LINKS, me + "_" + adultUid), {
             studentUid: me, adultUid, adultRole: (adultRole ?? null),
             source: "invite", targetKind: "email", targetValue: storedEmail,
@@ -945,7 +1020,7 @@
         } else {
           await updateDoc(doc(db, LINKS, linkId), { status: "accepted", decidedAt: serverTimestamp() });
         }
-        await updateDoc(doc(db, USERS, me), { status: "active", approvedBy: adultUid, updated: serverTimestamp() });
+        if (activate) await updateDoc(doc(db, USERS, me), { status: "active", approvedBy: adultUid, updated: serverTimestamp() });
         return { ok: true };
       } catch (e) { return { ok: false, error: friendlyError(e) }; }
     },
@@ -962,6 +1037,7 @@
         const { adultUid, role } = snap.data();
         await setDoc(doc(db, LINKS, me + "_" + adultUid), {
           studentUid: me, adultUid, adultRole: role || null,
+          studentName: String(auth.currentUser.displayName || "").slice(0, 40),
           source: "code", targetKind: null, targetValue: null,
           status: "requested", createdBy: me,
           createdAt: serverTimestamp(), decidedAt: null,
@@ -976,7 +1052,12 @@
       const me = auth.currentUser.uid;
       try {
         await updateDoc(doc(db, LINKS, studentUid + "_" + me), { status: "approved", decidedAt: serverTimestamp() });
-        await updateDoc(doc(db, USERS, studentUid), { status: "active", approvedBy: me, updated: serverTimestamp() });
+        // Activate only a genuinely pending student. An already-active (or role-less legacy) doc
+        // needs no users write; the link is now 'approved', which is what lets this adult see progress.
+        const us = await getDoc(doc(db, USERS, studentUid));
+        if (us.exists() && us.data().role === "student" && us.data().status === "pending") {
+          await updateDoc(doc(db, USERS, studentUid), { status: "active", approvedBy: me, updated: serverTimestamp() });
+        }
         return { ok: true };
       } catch (e) { return { ok: false, error: friendlyError(e) }; }
     },
@@ -1067,6 +1148,10 @@
     authMsg: document.getElementById("authMsg"),
     rolePicker: document.getElementById("rolePicker"),
     pendingApproval: document.getElementById("pendingApproval"),
+    studentInvites: document.getElementById("studentInvites"),
+    activeInviteList: document.getElementById("activeInviteList"),
+    activeCodeInput: document.getElementById("activeCodeInput"),
+    activeInviteMsg: document.getElementById("activeInviteMsg"),
     approvalDesk: document.getElementById("approvalDesk"),
     inviteList: document.getElementById("inviteList"),
     codeInput: document.getElementById("codeInput"),
@@ -1519,6 +1604,9 @@
     const role = profile.role;
     // "My students" menu item is for signed-in teachers/parents only.
     document.getElementById("studentsBtn").style.display = (role === "teacher" || role === "parent") ? "" : "none";
+    // "Invites / Link a grown-up" is for ACTIVE students (incl. legacy role-less docs read from Firestore).
+    document.getElementById("invitesBtn").style.display =
+      (role === "student" && profile.status !== "pending") || (!role && fromCloud) ? "" : "none";
     if (role === "teacher" || role === "parent") {
       // (1) Adult -> approval desk.
       if (cloud()) cloud().setLeaderboardEligible(true);
@@ -1549,16 +1637,17 @@
     renderMyInvites();
   }
 
-  async function renderMyInvites() {
+  // listEl/msgEl default to the pending screen; the active-student overlay passes its own.
+  async function renderMyInvites(listEl = el.inviteList, msgEl = el.pendingMsg) {
     if (!cloud()) return;
     const myEmail = (storedEmail || "").trim().toLowerCase();
     const rows = await cloud().listMyInvites({ myEmail });
-    el.inviteList.innerHTML = "";
+    listEl.innerHTML = "";
     if (!rows || rows.length === 0) {
       const d = document.createElement("div");
       d.className = "invite-row";
       d.innerHTML = `<span class="who">No invites yet.</span><span class="state">Ask your adult to add you.</span>`;
-      el.inviteList.appendChild(d);
+      listEl.appendChild(d);
       return;
     }
     rows.forEach(r => {
@@ -1572,36 +1661,53 @@
         const b = document.createElement("button");
         b.className = "btn small";
         b.textContent = "Accept";
-        b.onclick = () => onAcceptInvite(r.linkId, r.targetKind, r.adultUid, r.adultRole);
+        b.onclick = () => onAcceptInvite(r.linkId, r.targetKind, r.adultUid, r.adultRole, r.targetValue, listEl, msgEl);
         d.appendChild(b);
       } else {
         const s = document.createElement("span");
         s.className = "state";
-        s.textContent = "Waiting for approval…";
+        s.textContent = (r.status === "accepted" || r.status === "approved") ? "Linked ✓" : "Waiting for approval…";
         d.appendChild(s);
       }
-      el.inviteList.appendChild(d);
+      listEl.appendChild(d);
     });
   }
 
-  async function onAcceptInvite(linkId, targetKind, adultUid, adultRole) {
+  async function onAcceptInvite(linkId, targetKind, adultUid, adultRole, targetValue, listEl = el.inviteList, msgEl = el.pendingMsg) {
     if (!cloud()) return;
-    el.pendingMsg.textContent = "Linking…";
-    const res = await cloud().acceptInvite({ linkId, targetKind, adultUid, adultRole });
-    if (!res.ok) { el.pendingMsg.textContent = res.error; return; }
-    el.pendingMsg.textContent = "";
-    // onMyStatus will fire from the live snapshot and move to the start screen.
+    const pendingScreen = listEl === el.inviteList;
+    msgEl.textContent = "Linking…";
+    // Only the pending screen also activates the student; an active student just links.
+    const res = await cloud().acceptInvite({ linkId, targetKind, adultUid, adultRole, targetValue, activate: pendingScreen });
+    if (!res.ok) { msgEl.textContent = res.error; return; }
+    if (pendingScreen) {
+      msgEl.textContent = "";
+      // onMyStatus will fire from the live snapshot and move to the start screen.
+    } else {
+      // No status snapshot fires for a link-only accept, so refresh by hand.
+      msgEl.textContent = "Linked ✓";
+      renderMyInvites(listEl, msgEl);
+    }
   }
 
-  async function onRequestByCode() {
+  async function onRequestByCode(inputEl = el.codeInput, msgEl = el.pendingMsg, listEl = el.inviteList) {
     if (!cloud()) return;
-    const code = el.codeInput.value;
-    el.pendingMsg.textContent = "Sending…";
+    const code = inputEl.value;
+    msgEl.textContent = "Sending…";
     const res = await cloud().requestByCode({ code });
-    if (!res.ok) { el.pendingMsg.textContent = res.error; return; }
-    el.codeInput.value = "";
-    el.pendingMsg.textContent = "Sent — waiting for your adult to approve.";
-    renderMyInvites();
+    if (!res.ok) { msgEl.textContent = res.error; return; }
+    inputEl.value = "";
+    msgEl.textContent = "Sent — waiting for your adult to approve.";
+    renderMyInvites(listEl, msgEl);
+  }
+
+  // ---- Invites for ACTIVE students (menu item "Invites / Link a grown-up") ----
+  function showStudentInvites() {
+    hideAllOverlays();
+    el.activeInviteMsg.textContent = "";
+    el.activeCodeInput.value = "";
+    el.studentInvites.classList.add("show");
+    renderMyInvites(el.activeInviteList, el.activeInviteMsg);
   }
 
   function playSolo() {
@@ -1638,6 +1744,7 @@
       who.className = "who";
       who.textContent = r.name;
       d.appendChild(who);
+      const showProgress = !!r.progress;
       if (r.source === "code" && r.status === "requested") {
         const wrap = document.createElement("span");
         const approve = document.createElement("button");
@@ -1658,8 +1765,29 @@
           : (r.status === "invited") ? "sent" : r.status;
         d.appendChild(s);
       }
+      if (showProgress) {
+        const p = document.createElement("span");
+        p.className = "progress";
+        p.textContent = progressText(r.progress);
+        d.appendChild(p);
+      }
       el.studentList.appendChild(d);
     });
+  }
+
+  // "Grade 3 · Level 5 · Best 120 · Played 2 days ago"; legacy docs may miss any field.
+  function progressText(p) {
+    const parts = [];
+    if (p.grade !== null) parts.push(p.grade >= 1 ? `Grade ${p.grade}` : `Grade ${GRADE_SHORT[String(p.grade)] || p.grade}`);
+    if (p.level !== null) parts.push(`Level ${p.level}`);
+    if (p.best !== null) parts.push(`Best ${p.best}`);
+    if (!p.updatedMs) parts.push("Not played yet");
+    else {
+      const days = Math.floor((Date.now() - p.updatedMs) / 86400000);
+      parts.push(days <= 0 ? "Played today" : days === 1 ? "Played yesterday"
+        : days < 14 ? `Played ${days} days ago` : `Played ${new Date(p.updatedMs).toLocaleDateString()}`);
+    }
+    return parts.join(" · ");
   }
 
   async function onInviteStudent() {
@@ -1692,6 +1820,7 @@
   // Live status callback for a pending student (owns state/justActivated).
   function onMyStatus(data) {
     if (!data || data.status !== "active") return;
+    document.getElementById("invitesBtn").style.display = "";
     if (state !== "playing") {
       if (cloud()) cloud().setLeaderboardEligible(true);
       hideAllOverlays();
@@ -1720,6 +1849,7 @@
     justActivated = false;
     if (cloud()) cloud().setLeaderboardEligible(false);
     document.getElementById("studentsBtn").style.display = "none";
+    document.getElementById("invitesBtn").style.display = "none";
     if (cloud()) await cloud().logout();
     showAuth();
   }
@@ -2888,7 +3018,22 @@
     e.stopPropagation();
   });
 
+  // Active-student invites overlay controls.
+  document.getElementById("activeCodeSendBtn").onclick = () => onRequestByCode(el.activeCodeInput, el.activeInviteMsg, el.activeInviteList);
+  el.activeCodeInput.addEventListener("keydown", (e) => {
+    if (e.code === "Enter") { e.preventDefault(); onRequestByCode(el.activeCodeInput, el.activeInviteMsg, el.activeInviteList); }
+    e.stopPropagation();
+  });
+  document.getElementById("activeInvitesCloseBtn").onclick = playSolo;
+  document.getElementById("invitesBtn").onclick = () => {
+    pauseGame(); // same as "My students": no-op unless playing/battle
+    showStudentInvites();
+    paused = false; prePauseState = null;
+    state = "start";
+  };
+
   // Adult approval-desk controls.
+  document.getElementById("refreshStudentsBtn").onclick = renderMyStudents;
   document.getElementById("inviteSendBtn").onclick = onInviteStudent;
   document.getElementById("openGameBtn").onclick = playSolo;
   el.inviteInput.addEventListener("keydown", (e) => {
@@ -2984,7 +3129,7 @@
 
   function hideAllOverlays() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.approvalDesk]
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk]
       .forEach(o => o.classList.remove("show"));
   }
 
