@@ -1,0 +1,9 @@
+{"verdict":"CHANGES_REQUESTED","findings":[
+{"id":1,"severity":"MEDIUM","title":"Conflicting deploy order (intro says rules after merge; section 7 says rules first)","fix":"State once: deploy rules first, then merge; remove the intro sentence; put it in the PR body."},
+{"id":2,"severity":"MEDIUM","title":"Test plan requires the quota half to be valid in negative invite tests, impossible for N1/N4/N5","fix":"Use a positive-control batch (same helper, only tested field corrected) before each negative; note N1/N4/N5 are over-determined; optionally also run the old negatives against the previous rules file."},
+{"id":3,"severity":"NIT","title":"Literal `n in section 5 breaks a bullet","fix":"Split into two bullets."},
+{"id":4,"severity":"NIT","title":"Rules (b) and (c2) have no key allowlist","fix":"Add keys().hasOnly([...]) matching client writes."},
+{"id":5,"severity":"NIT","title":"lastLinkId may contain slash","fix":"Add !incoming().lastLinkId.matches('.*/.*')."},
+{"id":6,"severity":"NIT","title":"email| row dedupe by targetValue can mismatch auth email vs users.email","fix":"Document the edge or dedupe by adultUid for email rows."},
+{"id":7,"severity":"NIT","title":"Self-asserted users.email and usernames email leak not both listed as follow-ups","fix":"Add both to project-context Open items."}
+],"reviewDoc":"c:/Users/saban/Downloads/RIDHI projects/game 2/.agents/tasks/phase1b/design-review.md"}
