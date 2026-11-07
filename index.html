@@ -508,6 +508,7 @@
       </div>
       <div class="battle-tools">
         <button class="btn small" id="mathHelpBtn">💡 Math Help</button>
+        <button class="btn small" id="skipBtn" style="display:none;">⏭️ Free Skip</button>
         <button class="btn small" id="crayonBtn">🖍️ Crayon</button>
         <button class="btn small" id="videoBtn">📺 Watch Video</button>
       </div>
@@ -549,7 +550,17 @@
         <p style="margin-top:10px;"><b>Move:</b> Your hero runs on its own. Press <b>Space</b> or <b>↑</b> to jump (or tap the game on touch screens). Jump over the spikes. You can land safely on top of the gray rocks and the cactuses, just don't run straight into their side. Watch out for flying birds, stay on the ground to pass under them! Jump over spinning saw blades, flames, and rolling logs, and time your jumps to dodge the low-flying bats and swinging spikeballs. Watch for geysers that erupt from the ground, wait for them to rest before running past. Bounce on red springs to launch extra high, dodge rolling boulders, and run clear of falling icicles. Jump over the green poisonous mist, don't breathe it! Hop over the wiggly worms, the slow snails 🐌, the big bears, slithering snakes, buzzing beehives, and bubbling slime puddles too. And jump over the holes and ponds in the ground, falling in costs a life. Hitting an obstacle costs a life too.</p>
         <p style="margin-top:10px;"><b>Monster battles:</b> When you reach a monster, a math question appears. Pick the correct answer before the timer runs out, either tap a choice, or press <b>T</b> to jump to the type box, type your answer, and press Enter. Every correct answer earns you a life ❤️ (and answering fast gives bonus points), and 5 correct answers in a row earns a bonus life! 🔥 A wrong answer or running out of time costs a life and breaks your streak.</p>
         <p style="margin-top:10px;"><b>Lives:</b> You start with 3. Clearing a whole level rewards you with +1 life, and grabbing a gem 💎 gives +1 life too. ❤️</p>
-        <p style="margin-top:10px;"><b>Treasure chests:</b> Grab a chest 🎁 for a surprise advantage, +5 lives, a shield 🛡️ that blocks your next hit, extra time on upcoming questions ⏱️, or bonus points ⭐.</p>
+<p style="margin-top:10px;"><b>Treasure chests:</b> Grab a chest 🎁 for a surprise advantage, +5 lives, a shield 🛡 that blocks your next hit, extra time on upcoming questions ⏱, or bonus points ⭐. Chests can also hold these perks (active ones show in a little bar at the top left, under the message line):</p>
+      <ul style="margin:6px 0 0 22px;">
+        <li>🎯 <b>50/50:</b> two wrong answers vanish on your next 2 questions (store up to 4).</li>
+        <li>⏭ <b>Free Skip:</b> tap the Free Skip button in a battle to pass a question with no penalty (no points or life either). Store up to 2.</li>
+        <li>✖️2 <b>Double Points:</b> your next 3 correct answers earn double points (store up to 10).</li>
+        <li>🧲 <b>Gem Magnet:</b> gems nearby fly to you for 10 seconds. It ends when the level does.</li>
+        <li>🐌 <b>Slow-Mo:</b> the hero runs slower for 5 seconds, so it's easier to time jumps.</li>
+        <li>🦘 <b>Super Jump:</b> your next 4 jumps go higher (store up to 8).</li>
+        <li>🔥 <b>Streak Saver:</b> your answer streak survives your next mistake (you still lose the life). Store up to 2.</li>
+      </ul>
+      <p style="margin-top:6px;">Timed perks pause when you pause or fight a monster. Lucky perks you haven't used stay with you through levels, but are cleared when a new run starts or the game ends.</p>
         <p style="margin-top:10px;"><b>Mega gem:</b> Collect <b>most</b> of the gems in a level and a rainbow <b>mega-rare gem</b> ✨ appears near the finish, a mega gem is worth 4 gems (+4 lives)! And if you reach the end having collected most of the gems, you earn the mega gem anyway as a bonus. You also earn a mega gem each time you stockpile lots of lives (every 10 lives). Your mega gem count is shown in the HUD.</p>
         <p style="margin-top:10px;"><b>Ultra gem:</b> Stockpile a huge pile of lives and you earn a super-rare <b>ultra gem</b> 🌟, worth 8 gems (+8 lives)! You earn one ultra gem for every <b>30 lives</b> (at 30, 60, 90, and so on), and your ultra gem count is shown in the HUD.</p>
         <p style="margin-top:10px;"><b>Grade:</b> Pick your grade on the start screen to set the math difficulty (Grades 1–5).</p>
@@ -1177,6 +1188,7 @@
     answers: document.getElementById("answers"),
     typeInput: document.getElementById("typeInput"),
     hint: document.getElementById("hint"),
+  skipBtn: document.getElementById("skipBtn"),
     feedback: document.getElementById("feedback"),
     scratch: document.getElementById("scratch"),
     scratchQuestion: document.getElementById("scratchQuestion"),
@@ -1301,6 +1313,27 @@
   let chests = []; // { x, y, collected }
   let shieldActive = false;    // blocks the next obstacle hit for free
   let extraTimeQuestions = 0;  // number of upcoming questions that get +time
+  // More chest perks. Counted perks are spent on questions/jumps and carry
+  // across levels (like the shield); timed perks count down in update() steps
+  // (so they freeze during pause and battles) and are cleared when a level starts.
+  const PERK_CAPS = { fifty: 4, skip: 2, dbl: 10, saver: 2, jump: 8 };
+  const MAGNET_STEPS = 600;    // 10 seconds at 60 steps/sec
+  const MAGNET_RADIUS = 170;   // px around the hero that gems get pulled from
+  const SLOWMO_STEPS = 300;    // 5 seconds
+  const SLOWMO_FACTOR = 0.6;   // run speed multiplier while slow-mo is on
+  const SLOWMO_FLOOR = 1.6;    // never run slower than this (px/step)
+  const SUPER_JUMP = 1.2;      // jump velocity multiplier (~44% higher)
+  let fiftyLeft = 0;      // upcoming questions with two wrong answers removed
+  let skipsLeft = 0;      // stored free skips for a battle question
+  let doubleLeft = 0;     // upcoming correct answers worth double points
+  let saverLeft = 0;      // mistakes the answer streak survives
+  let superJumpsLeft = 0; // upcoming jumps that go higher
+  let magnetSteps = 0;    // gem magnet time remaining
+  let slowMoSteps = 0;    // slow-motion time remaining
+  function resetPerks() {
+    fiftyLeft = skipsLeft = doubleLeft = saverLeft = superJumpsLeft = 0;
+    magnetSteps = slowMoSteps = 0;
+  }
   const MEGA_PER_GAME = 4;   // at most 4 mega gems may be earned per game/run
   let megaGemsThisRun = 0;   // how many earned in the current run (reset each run)
   // Life-milestone reward: hitting a high life count earns a mega gem.
@@ -2201,6 +2234,7 @@
     megaGem = null;
     chests = [];
     monsters = [];
+    magnetSteps = 0; slowMoSteps = 0; // timed perks end with the level
     worldOffset = 0;
     player.y = GROUND_Y; player.vy = 0; player.onGround = true;
 
@@ -2485,9 +2519,21 @@
     // Draw a real chart for data questions; hide the canvas otherwise.
     if (q.graph) { drawGraph(q.graph); el.graphCanvas.style.display = "block"; }
     else { el.graphCanvas.style.display = "none"; }
+    // Chest "50/50" perk: drop two wrong answers (one if only 3 choices).
+    let fiftyMsg = "";
+    if (fiftyLeft > 0) {
+      fiftyLeft--;
+      let toRemove = Math.min(2, q.opts.length - 2);
+      q.opts = q.opts.filter(o => (o === q.answer || toRemove-- <= 0));
+      fiftyMsg = " 🎯 50/50!";
+      if (battleQuestionsNeeded <= 1) el.feedback.textContent = fiftyMsg.trim();
+      else el.feedback.textContent += fiftyMsg;
+    }
     el.hint.textContent = "";
     el.hint.classList.remove("show");
     clearScratch(); // fresh pad for each new question
+    el.skipBtn.style.display = skipsLeft > 0 ? "" : "none";
+    el.skipBtn.textContent = "⏭️ Free Skip (" + skipsLeft + ")";
     el.answers.innerHTML = "";
     q.opts.forEach(opt => {
       const b = document.createElement("button");
@@ -2545,13 +2591,40 @@
     el.timerFill.style.background = pct > 50 ? "#51cf66" : (pct > 20 ? "#ffd43b" : "#ff6b6b");
   }
 
+  // A mistake breaks the answer streak, unless a chest Streak Saver absorbs it.
+  // Returns true when the streak was saved.
+  function breakStreak() {
+    if (correctStreak > 0 && saverLeft > 0) { saverLeft--; return true; }
+    correctStreak = 0;
+    return false;
+  }
+
+  // Chest "Free Skip": pass the current question with no penalty and no reward.
+  function useFreeSkip() {
+    if (state !== "battle" || !currentQuestion || questionAnswered || skipsLeft <= 0) return;
+    skipsLeft--;
+    questionAnswered = true;
+    stopTimer();
+    battleQuestionsDone++;
+    el.skipBtn.style.display = "none";
+    if (battleQuestionsDone >= battleQuestionsNeeded) {
+      el.feedback.textContent = "⏭️ Skipped for free! The monster is defeated.";
+      currentMonster.alive = false;
+      persistProgress();
+      updateHUD();
+      setTimeout(endBattle, 800);
+    } else {
+      el.feedback.textContent = "⏭️ Skipped for free! Next question...";
+      setTimeout(loadQuestion, 900);
+    }
+  }
+
   function onTimeUp() {
     if (questionAnswered) return;
     questionAnswered = true;
     lives--;
-    correctStreak = 0; // running out of time breaks the streak
     sfx.timeup();
-    el.feedback.textContent = "Time's up! The monster hits you. ⏰";
+    el.feedback.textContent = "Time's up! The monster hits you. ⏰" + (breakStreak() ? " 🔥 Streak saved!" : "");
     updateHUD();
     persistProgress();
     if (lives <= 0) {
@@ -2592,7 +2665,10 @@
     if (chosen === correct) {
       // bonus points for answering quickly (no speed bonus if a hint was used)
       const speedBonus = hintUsed ? 0 : Math.round(timeLeft);
-      score += 10 + speedBonus;
+      let pts = 10 + speedBonus;
+      let dblTag = "";
+      if (doubleLeft > 0) { doubleLeft--; pts *= 2; dblTag = " ✖️2"; } // chest Double Points
+      score += pts;
       lives++; // reward: a correct answer earns a life
       battleQuestionsDone++;
       sfx.correct();
@@ -2610,26 +2686,22 @@
 
       if (battleQuestionsDone >= battleQuestionsNeeded) {
         // All questions for this monster answered — it's defeated.
-        el.feedback.textContent = (hintUsed
-          ? `Correct! +10 and +1 life ❤️ ✅`
-          : `Correct! +${10 + speedBonus} and +1 life ❤️ ✅`) + streakMsg;
+        el.feedback.textContent = `Correct! +${pts}${dblTag} and +1 life ❤️ ✅` + streakMsg;
         currentMonster.alive = false;
         persistProgress();
         updateHUD();
         setTimeout(endBattle, 800);
       } else {
         // More questions to go — show progress and load the next variety.
-        const gained = hintUsed ? 10 : 10 + speedBonus;
-        el.feedback.textContent = `Correct! +${gained} and +1 life ❤️ ✅${streakMsg}  Next question...`;
+        el.feedback.textContent = `Correct! +${pts}${dblTag} and +1 life ❤️ ✅${streakMsg}  Next question...`;
         persistProgress();
         updateHUD();
         setTimeout(loadQuestion, 900);
       }
     } else {
       lives--;
-      correctStreak = 0; // a wrong answer breaks the streak
       sfx.wrong();
-      el.feedback.textContent = "Oops! The monster hits you. ❌";
+      el.feedback.textContent = "Oops! The monster hits you. ❌" + (breakStreak() ? " 🔥 Streak saved!" : "");
       persistProgress();
       updateHUD();
       if (lives <= 0) {
@@ -2691,6 +2763,7 @@
 
   function gameOver() {
     stopTimer();
+    resetPerks();
     state = "gameOver";
     sfx.gameOver();
     persistProgress();
@@ -2945,7 +3018,8 @@
   // ---- Input ----
   function jump() {
     if (state === "playing" && player.onGround) {
-      player.vy = JUMP_V;
+      if (superJumpsLeft > 0) { superJumpsLeft--; player.vy = JUMP_V * SUPER_JUMP; }
+      else player.vy = JUMP_V;
       player.onGround = false;
       sfx.jump();
     }
@@ -3085,6 +3159,7 @@
     }
   };
   document.getElementById("mathHelpBtn").onclick = showMathHelp;
+  document.getElementById("skipBtn").onclick = useFreeSkip;
   document.getElementById("videoBtn").onclick = openVideo;
   document.getElementById("typeSubmit").onclick = submitTypedAnswer;
   el.typeInput.addEventListener("keydown", (e) => {
@@ -3105,7 +3180,7 @@
     ultraGemsThisRun = 0;     // fresh run: ultra gems can be earned again
     ultraMilestoneReached = 0;
     correctStreak = 0;        // fresh run: reset the answer streak
-    shieldActive = false; extraTimeQuestions = 0; // fresh run: clear chest perks
+    shieldActive = false; extraTimeQuestions = 0; resetPerks(); // fresh run: clear chest perks
     buildLevel(level);
     state = "playing";
   };
@@ -3122,7 +3197,7 @@
     ultraGemsThisRun = 0;     // fresh run: ultra gems can be earned again
     ultraMilestoneReached = 0;
     correctStreak = 0;        // fresh run: reset the answer streak
-    shieldActive = false; extraTimeQuestions = 0; // fresh run: clear chest perks
+    shieldActive = false; extraTimeQuestions = 0; resetPerks(); // fresh run: clear chest perks
     buildLevel(level); // resume from saved level, fresh lives/score
     state = "playing";
   };
@@ -3137,7 +3212,13 @@
   function update() {
     if (state !== "playing") return;
 
-    worldOffset += scrollSpeed;
+    // Chest Slow-Mo: scale the run speed down, but never below a playable floor.
+    let spd = scrollSpeed;
+    if (slowMoSteps > 0) {
+      slowMoSteps--;
+      spd = Math.max(scrollSpeed * SLOWMO_FACTOR, Math.min(scrollSpeed, SLOWMO_FLOOR));
+    }
+    worldOffset += spd;
 
     // remember where the player's feet were before moving this frame,
     // so we can tell "landing on top of a rock" from "running into its side"
@@ -3202,7 +3283,7 @@
       if (o.type === "boulder") {
         o.roll += 0.2;
         // rolls toward the player: creeps left on top of the world scroll
-        o.extra += scrollSpeed * 0.5;
+        o.extra += spd * 0.5;
       }
       if (o.type === "icicle") {
         const distX = (o.x - worldOffset) - player.x;
@@ -3265,6 +3346,23 @@
       // swinging spikeball, boulder, falling icicle, or the side of a rock/cactus)
       if (py + player.h > oy + 4 && py < oy + oh - 4) {
         loseLifeFromObstacle(o);
+      }
+    }
+
+    // Chest Gem Magnet: nearby gems drift toward the hero (they are still
+    // collected by the normal overlap check below, so lives rules are unchanged).
+    if (magnetSteps > 0) {
+      magnetSteps--;
+      const tx = worldOffset + player.x + player.w / 2 - 12;
+      const ty = player.y - player.h / 2 + 12;
+      for (const gem of gems) {
+        if (gem.collected) continue;
+        const dx = tx - gem.x, dy = ty - gem.y;
+        if (dx > MAGNET_RADIUS) continue;
+        if (dx < -MAGNET_RADIUS) continue;
+        if (dy * dy + dx * dx > MAGNET_RADIUS * MAGNET_RADIUS) continue;
+        gem.x += Math.max(-7, Math.min(7, dx));
+        gem.y += Math.max(-5, Math.min(5, dy));
       }
     }
 
@@ -3342,23 +3440,34 @@
   let chestMsgTimer = 0;   // frames remaining to show it
   function showChestMsg(text) { chestMsg = text; chestMsgTimer = 150; }
 
+  // Reward table. Original rewards weigh 20 each (59% of chests together);
+  // the 7 newer perks weigh 8 each (41%), so the classics stay the most common.
+  function topUp(key, field, add) { // add to a counted perk up to its cap
+    const before = field();
+    return Math.min(PERK_CAPS[key], before + add);
+  }
+  const CHEST_REWARDS = [
+    { w: 20, run() { lives += 5; showChestMsg("🎁 Chest: +5 lives! ❤️"); } },
+    { w: 20, run() { shieldActive = true; showChestMsg("🎁 Chest: Shield! Your next hit is blocked 🛡️"); } },
+    { w: 20, run() { extraTimeQuestions = 3; showChestMsg("🎁 Chest: Extra time on the next 3 questions ⏱️"); } },
+    { w: 20, run() { score += 100; showChestMsg("🎁 Chest: +100 points! ⭐"); } },
+    { w: 8, run() { fiftyLeft = topUp("fifty", () => fiftyLeft, 2); showChestMsg("🎁 Chest: 50/50! Two wrong answers vanish (" + fiftyLeft + " left) 🎯"); } },
+    { w: 8, run() { skipsLeft = topUp("skip", () => skipsLeft, 1); showChestMsg("🎁 Chest: Free Skip! Pass 1 question (" + skipsLeft + " stored) ⏭️"); } },
+    { w: 8, run() { doubleLeft = topUp("dbl", () => doubleLeft, 3); showChestMsg("🎁 Chest: Double Points on your next " + doubleLeft + " answers ✖️2"); } },
+    { w: 8, run() { magnetSteps = MAGNET_STEPS; showChestMsg("🎁 Chest: Gem Magnet! Gems fly to you for 10 seconds 🧲"); } },
+    { w: 8, run() { slowMoSteps = SLOWMO_STEPS; showChestMsg("🎁 Chest: Slow-Mo! Run slower for 5 seconds 🐌"); } },
+    { w: 8, run() { superJumpsLeft = topUp("jump", () => superJumpsLeft, 4); showChestMsg("🎁 Chest: Super Jump! Your next " + superJumpsLeft + " jumps go higher 🦘"); } },
+    { w: 8, run() { saverLeft = topUp("saver", () => saverLeft, 1); showChestMsg("🎁 Chest: Streak Saver! Protects your streak from " + saverLeft + " mistake 🔥"); } },
+  ];
+  const CHEST_TOTAL_WEIGHT = CHEST_REWARDS.reduce((t, r) => t + r.w, 0);
+
   function openChest() {
     sfx.extraLife();
-    // Pick a random advantage.
-    const roll = Math.floor(Math.random() * 4);
-    if (roll === 0) {
-      lives += 5;
-      showChestMsg("🎁 Chest: +5 lives! ❤️");
-    } else if (roll === 1) {
-      shieldActive = true;
-      showChestMsg("🎁 Chest: Shield! Your next hit is blocked 🛡️");
-    } else if (roll === 2) {
-      extraTimeQuestions = 3;
-      showChestMsg("🎁 Chest: Extra time on the next 3 questions ⏱️");
-    } else {
-      score += 100;
-      showChestMsg("🎁 Chest: +100 points! ⭐");
-    }
+    // Weighted random pick (one roll per chest, no re-rolls).
+    let roll = Math.random() * CHEST_TOTAL_WEIGHT;
+    let pick = CHEST_REWARDS[0];
+    for (const r of CHEST_REWARDS) { if (roll < r.w) { pick = r; break; } roll -= r.w; }
+    pick.run();
     updateHUD();
     persistProgress();
   }
@@ -3541,6 +3650,8 @@
       ctx.fill();
     }
 
+    drawPerkStrip();
+
     // floating chest message (advantage earned / shield blocked)
     if (chestMsgTimer > 0) {
       chestMsgTimer--;
@@ -3560,6 +3671,40 @@
     }
 
     if (obstacleCooldown > 0) obstacleCooldown--;
+  }
+
+  // Small pill under the top bar listing active chest perks. The text is only
+  // rebuilt when a number changes (signature), so there is no per-frame churn.
+  let perkSig = -1, perkText = "";
+  function drawPerkStrip() {
+    const mag = Math.ceil(magnetSteps / 60), slow = Math.ceil(slowMoSteps / 60);
+    const sig = fiftyLeft + skipsLeft * 8 + doubleLeft * 32 + saverLeft * 512 +
+                superJumpsLeft * 2048 + mag * 32768 + slow * 524288;
+    if (sig !== perkSig) {
+      perkSig = sig;
+      const t = [];
+      if (fiftyLeft) t.push("🎯" + fiftyLeft);
+      if (skipsLeft) t.push("⏭️" + skipsLeft);
+      if (doubleLeft) t.push("✖️2 ×" + doubleLeft);
+      if (saverLeft) t.push("🔥" + saverLeft);
+      if (superJumpsLeft) t.push("🦘" + superJumpsLeft);
+      if (mag) t.push("🧲" + mag + "s");
+      if (slow) t.push("🐌" + slow + "s");
+      perkText = t.join("  ");
+    }
+    if (!perkText) return;
+    ctx.save();
+    ctx.font = "bold 16px 'Comic Sans MS', 'Trebuchet MS', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const tw = ctx.measureText(perkText).width + 20;
+    ctx.fillStyle = "rgba(43,58,103,0.8)";
+    roundRect(8, 56, tw, 28, 10);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(perkText, 18, 71);
+    ctx.restore();
+    ctx.textAlign = "left";
   }
 
   function drawObstacle(o, ox) {
