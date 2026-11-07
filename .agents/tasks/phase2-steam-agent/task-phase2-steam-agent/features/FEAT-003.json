@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Commit 4: Firestore rules for games and usage, games composite index, 16 new rules tests, attack-case comment block A17-A21. Independent of FEAT-001/002 code (touches only firestore.rules, firestore.indexes.json, rules-test/).",
+  "status": "completed",
+  "steps": [
+    "Read firestore.rules header (A1-A16/N1-N6 block) and helpers (signedIn, existing, adultLinkedTo). Append the A17-A21 'Phase 2 cases' comment block before the closing // ==== line per design sec 6.1.",
+    "Insert the `match /games/{gameId}` block (get,list: signedIn && (existing().createdBy == request.auth.uid || adultLinkedTo(existing().createdBy)); create,update,delete: false) and `match /usage/{id}` (read,write: false) after the leaderboard match block and before the users match. Check existing() semantics against how it is used for list queries elsewhere in the file.",
+    "Add the games composite index (createdBy ASC, createdAt DESC, COLLECTION scope) to firestore.indexes.json keeping existing indexes.",
+    "Append the 16 tests of design sec 6.3 to rules-test/rules.test.js with a seedGame helper, each negative paired with a positive control. For the adult list query (test 15 / A21), determine in the emulator whether a createdBy-pinned list is accepted for the consented-adult branch; if rejected, switch rules to `allow get` (creator or adultLinkedTo) and `allow list` (creator only), adjust the tests and the A21 comment accordingly, and record the outcome in findings.",
+    "Update rules-test/README.md test count/notes briefly. Commit: 'feat(rules): games and usage rules with tests (A17-A21)'."
+  ],
+  "acceptance_criteria": [
+    "rules suite reports 69 passing (53 existing + 16 new), 0 failing, from real output",
+    "firestore.rules header lists A17-A21; clients cannot create/update/delete games or touch usage",
+    "firestore.indexes.json is valid JSON and keeps prior indexes"
+  ],
+  "verification": [
+    "firebase emulators:exec --only firestore --project demo-mathquest \"node --test rules-test/rules.test.js\" -> 69 pass",
+    "node -e \"JSON.parse(require('fs').readFileSync('firestore.indexes.json','utf8'))\""
+  ],
+  "blocked_reason": null,
+  "findings": "EXECUTED: emulator rules suite 69 tests, 69 pass, 0 fail (53 existing + 16 new G1-G16); indexes JSON parses. Open point resolved in the emulator: a list query pinned with where(createdBy==studentUid) IS accepted for a consented (accepted/approved) adult, so rules kept as `allow get, list` (creator or adultLinkedTo); no fallback needed (G15 asserts adult pinned list ok, unpinned list denied, list pinned to unlinked student denied). Games index (createdBy ASC, createdAt DESC) added, prior 3 links indexes kept. NOT executed: deploy of rules/indexes to the live project; the createdAt-ordered query needs the index only on live Firestore (emulator does not enforce indexes), so the client failed-precondition fallback is untested here. Test seedGame uses fields createdBy/title/questions etc. as a stand-in; rules only read createdBy."
+}

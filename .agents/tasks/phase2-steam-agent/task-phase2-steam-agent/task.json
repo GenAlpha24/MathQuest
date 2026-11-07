@@ -1,0 +1,7 @@
+{
+  "task_id": "task-phase2-steam-agent",
+  "task_description": "Phase 2 MathQuest: Cloud Functions (2nd gen, callable generateGame) with Gemini on Vertex AI (mock in tests), games/usage Firestore rules + tests, and a Create a Game / My games client in index.html, per .agents/design/phase2-steam-agent.md. Local commits only on feature/steam-agent-backend.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

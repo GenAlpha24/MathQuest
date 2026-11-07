@@ -197,6 +197,33 @@
   }
   .link-code-box b { font-size: 20px; letter-spacing: 2px; }
 
+  /* Create a Game / My games (Phase 2 STEAM agent) */
+  .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .cg-textarea {
+    font-family: inherit; font-size: 18px; padding: 10px 12px; border-radius: 12px; border: none;
+    width: 100%; max-width: 440px; resize: none; color: #2b3a67;
+  }
+  #cgChips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin:8px 0; max-width:460px; }
+  .cg-chip {
+    font-family: inherit; font-size: 14px; font-weight: bold; cursor: pointer;
+    border: none; border-radius: 12px; padding: 6px 12px;
+    background: #fff; color: #2b3a67; box-shadow: 0 3px 0 #cfd8ff;
+  }
+  .cg-chip:disabled, #cgCreateBtn:disabled, #cgGrade:disabled, .cg-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+  #cgGrade { font-family:inherit; font-size:16px; font-weight:bold; border:none; border-radius:10px; padding:6px 10px; margin:0 0 8px 6px; }
+  #cgMsg { min-height: 22px; color: #ffd43b; margin: 6px 0; max-width: 460px; }
+  .cg-preview, .game-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #fff; color: #2b3a67; border-radius: 14px;
+    padding: 10px 14px; margin: 6px 0; box-shadow: 0 3px 0 #cfd8ff;
+    max-width: 440px; width: 100%;
+  }
+  .cg-preview { flex-direction: column; text-align: center; }
+  .cg-preview[hidden] { display: none; }
+  .game-row .who { font-weight: bold; text-align: left; }
+  .game-row .state { font-size: 13px; opacity: 0.85; display: block; }
+  #gameList { width: 100%; max-width: 440px; }
+
   /* Battle box */
   #battle .question {
     font-size: 32px;
@@ -343,6 +370,8 @@
         <button class="menu-item" id="musicBtn">🎵 Music: On</button>
         <button class="menu-item" id="studentsBtn" style="display:none">👪 My students</button>
         <button class="menu-item" id="invitesBtn" style="display:none">📨 Invites / Link a grown-up</button>
+        <button class="menu-item" id="createGameBtn" style="display:none">✨ Create a Game</button>
+        <button class="menu-item" id="myGamesBtn" style="display:none">🎮 My games</button>
         <button class="menu-item" id="leaderboardBtn">🏆 Leaderboard</button>
         <button class="menu-item" id="helpBtn">❓ Help</button>
         <div class="menu-sep"></div>
@@ -444,6 +473,44 @@
         Share this code as a backup: <b id="myLinkCode">—</b>
       </div>
       <button class="btn big" id="openGameBtn">Open game</button>
+    </div>
+
+    <!-- Create a Game (STEAM agent) -->
+    <div id="createGame" class="overlay">
+      <h2>✨ Create a Game</h2>
+      <div id="cgForm">
+        <p>Tell me what you want to learn about! I make science, tech, engineering, art and math quizzes.</p>
+        <label for="cgPrompt" class="sr-only">Your game idea</label>
+        <textarea id="cgPrompt" class="cg-textarea" maxlength="200" rows="3" placeholder="Make a puzzle about the water cycle"></textarea>
+        <div id="cgChips">
+          <button class="cg-chip" type="button">The water cycle</button>
+          <button class="cg-chip" type="button">How bridges stay up</button>
+          <button class="cg-chip" type="button">Fractions with pizza</button>
+        </div>
+        <label for="cgGrade">Grade:</label><select id="cgGrade"></select>
+        <div><button class="btn big" id="cgCreateBtn">Build my game</button></div>
+      </div>
+      <div id="cgMsg" role="status" aria-live="polite"></div>
+      <div id="cgPreview" class="cg-preview" hidden>
+        <b id="cgPreviewTitle"></b>
+        <span id="cgPreviewMeta" class="state"></span>
+        <div>
+          <button class="btn big" id="cgPlayBtn">Play</button>
+          <button class="btn small" id="cgAnotherBtn">Make another</button>
+        </div>
+      </div>
+      <div>
+        <button class="btn small" id="cgMyGamesBtn">🎮 My games</button>
+        <button class="btn small" id="cgCloseBtn">Back to game</button>
+      </div>
+    </div>
+
+    <!-- My games -->
+    <div id="myGames" class="overlay">
+      <h2>🎮 My games</h2>
+      <div id="gameList"></div>
+      <div id="gameMsg" role="status" aria-live="polite" style="min-height:22px; color:#ffd43b; margin:6px 0;"></div>
+      <button class="btn big" id="myGamesCloseBtn">Back to game</button>
     </div>
 
     <!-- Start -->
@@ -615,6 +682,7 @@
     getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs,
     query, where, orderBy, limit, onSnapshot, serverTimestamp, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDRNgB_mcdVfc-hiCLXisMmut8wvxdoeJg",
@@ -627,10 +695,16 @@
   };
 
   let auth = null, db = null;
+  let functionsClient = null;
   try {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    functionsClient = getFunctions(app, "us-central1");
+    // Local testing only: never active on the live site (hostname check + explicit flag).
+    if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && /[?&]mqEmulator=1(&|$)/.test(location.search)) {
+      connectFunctionsEmulator(functionsClient, "127.0.0.1", 5001);
+    }
   } catch (e) {
     console.warn("Firebase init failed; the game will run in local-only mode.", e);
   }
@@ -653,6 +727,7 @@
   const QUOTA = "inviteQuota";   // per-adult per-UTC-day invite counter (rules enforce the limit)
   const INVITE_LIMIT = 30;       // keep in sync with inviteDailyLimit() in firestore.rules
   const LEADERBOARD = "leaderboard"; // denormalized world-readable top scores
+  const GAMES = "games";             // AI-built games (written only by the generateGame function)
 
   // A userid must be simple + safe to use as a Firestore doc id.
   function normalizeUserid(raw) {
@@ -1099,6 +1174,36 @@
       } catch (e) { console.warn("backfillRole failed", e); return false; }
     },
 
+    // ---- STEAM game builder (Cloud Function) ----
+    async generateGame({ prompt, grade }) {
+      if (!functionsClient || !auth || !auth.currentUser) return { ok: false, kind: "offline" };
+      try {
+        const call = httpsCallable(functionsClient, "generateGame", { timeout: 100000 });
+        const d = (await call({ prompt, grade })).data || {};
+        if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining };
+        if (d.status === "refused") return { ok: false, kind: "refused", reason: d.reason, message: String(d.message || "") };
+        return { ok: false, kind: "error", code: "unavailable" };
+      } catch (e) {
+        const code = String((e && e.details && e.details.code) || (e && e.code) || "").replace("functions/", "");
+        return { ok: false, kind: "error", code };
+      }
+    },
+    // My saved games, newest first. Returns [] (and warns) on failure.
+    async listMyGames() {
+      if (!db || !auth || !auth.currentUser) return [];
+      const me = auth.currentUser.uid;
+      const rows = [];
+      const collect = (snap) => snap.forEach(d => rows.push({ ...d.data(), id: d.id }));
+      try {
+        collect(await getDocs(query(collection(db, GAMES), where("createdBy", "==", me), orderBy("createdAt", "desc"), limit(30))));
+      } catch (e) {
+        if (!(e && e.code === "failed-precondition")) { console.warn("listMyGames failed", e); return null; }
+        try { collect(await getDocs(query(collection(db, GAMES), where("createdBy", "==", me), limit(30)))); }
+        catch (e2) { console.warn("listMyGames failed", e2); return null; }
+      }
+      return rows;
+    },
+
     // ---- Leaderboard: denormalized world-readable top scores ----
     async topScores(max = 10) {
       if (!db) return null; // null => cloud unavailable, caller shows local
@@ -1164,6 +1269,18 @@
     activeCodeInput: document.getElementById("activeCodeInput"),
     activeInviteMsg: document.getElementById("activeInviteMsg"),
     approvalDesk: document.getElementById("approvalDesk"),
+    createGame: document.getElementById("createGame"),
+    myGames: document.getElementById("myGames"),
+    cgPrompt: document.getElementById("cgPrompt"),
+    cgGrade: document.getElementById("cgGrade"),
+    cgMsg: document.getElementById("cgMsg"),
+    cgCreateBtn: document.getElementById("cgCreateBtn"),
+    cgPreview: document.getElementById("cgPreview"),
+    cgPreviewTitle: document.getElementById("cgPreviewTitle"),
+    cgPreviewMeta: document.getElementById("cgPreviewMeta"),
+    cgPlayBtn: document.getElementById("cgPlayBtn"),
+    gameList: document.getElementById("gameList"),
+    gameMsg: document.getElementById("gameMsg"),
     inviteList: document.getElementById("inviteList"),
     codeInput: document.getElementById("codeInput"),
     pendingMsg: document.getElementById("pendingMsg"),
@@ -1271,6 +1388,12 @@
   const SUBJECTS = [["math", "🔢 Math"], ["ela", "📖 ELA"], ["science", "🔬 Science"]];
   const VALID_SUBJECTS = ["math", "ela", "science"];
   let subject = "math";
+
+  // Custom (AI-built) game run. While customRun is set, saved progress is frozen
+  // (see persistProgress and the MQ-CUSTOM region below).
+  let customRun = null;
+  let creatingGame = false;
+  let lastCreatedGame = null;
 
   const player = { x: 80, y: GROUND_Y, w: 40, h: 46, vy: 0, onGround: true };
   const GRAVITY = 0.8;
@@ -1571,6 +1694,7 @@
 
   // Called by the auth-state listener once we have a signed-in user.
   async function enterGame(user) {
+    endCustomRun();
     currentUid = user.uid;
     currentUser = user.name || "Player";
 
@@ -1640,6 +1764,8 @@
     // "Invites / Link a grown-up" is for ACTIVE students (incl. legacy role-less docs read from Firestore).
     document.getElementById("invitesBtn").style.display =
       (role === "student" && profile.status !== "pending") || (!role && fromCloud) ? "" : "none";
+    // "Create a Game" / "My games": adults and active students (legacy role-less docs only after backfill succeeds).
+    setCreateMenu(role === "teacher" || role === "parent" || (role === "student" && profile.status !== "pending"));
     if (role === "teacher" || role === "parent") {
       // (1) Adult -> approval desk.
       if (cloud()) cloud().setLeaderboardEligible(true);
@@ -1657,7 +1783,10 @@
       el.start.classList.add("show");
       state = "start";
       // Backfill only a genuine legacy doc (exists, no role) — never a missing/cached/default one.
-      if (!role && fromCloud && cloud()) cloud().backfillRole(currentUid);
+      if (!role && fromCloud && cloud()) {
+        const uidAtStart = currentUid;
+        Promise.resolve(cloud().backfillRole(uidAtStart)).then(ok => { if (ok && currentUid === uidAtStart) setCreateMenu(true); });
+      }
     }
   }
 
@@ -1854,6 +1983,7 @@
   function onMyStatus(data) {
     if (!data || data.status !== "active") return;
     document.getElementById("invitesBtn").style.display = "";
+    setCreateMenu(true);
     if (state !== "playing") {
       if (cloud()) cloud().setLeaderboardEligible(true);
       hideAllOverlays();
@@ -1869,6 +1999,7 @@
 
   async function logout() {
     await persistProgress({ immediate: true });
+    endCustomRun();
     stopMusic();
     stopTimer();
     paused = false;
@@ -1883,8 +2014,247 @@
     if (cloud()) cloud().setLeaderboardEligible(false);
     document.getElementById("studentsBtn").style.display = "none";
     document.getElementById("invitesBtn").style.display = "none";
+    setCreateMenu(false);
+    lastCreatedGame = null;
     if (cloud()) await cloud().logout();
     showAuth();
+  }
+
+  // =====================================================================
+  //  CREATE A GAME / MY GAMES  (AI-built STEAM quizzes, Phase 2)
+  //  A custom run never changes saved level/best/gems/leaderboard:
+  //  persistProgress writes the pre-run snapshot (customRun.base) while it is active.
+  //  All game text comes from a model, so it is only ever set via textContent.
+  // =====================================================================
+  /* MQ-CUSTOM:BEGIN */
+  const COPY = {
+    closed: "The game workshop is closed for a moment. Try again soon. Your regular game still works!",
+    building: "Building your game... this can take up to a minute",
+    emptyPrompt: "Tell me your idea first!",
+    cantPlay: "This game can't be played. Try making another one!",
+    runDone: "Great run! This was a custom game, so your regular progress was not changed.",
+    noGames: "No games yet. Make your first one!",
+    listFail: "I couldn't load your games right now.",
+    refused: "Hmm, I can't make that one. Try a science, tech, engineering, art or math idea!",
+    defaultHint: "Think about what you know and pick the best answer.",
+  };
+  // Keyed by the callable's error code (e.details.code or e.code without "functions/").
+  const CG_ERRORS = {
+    "unauthenticated": "Please log in again.",
+    "pending": "Ask a parent or teacher to link with you first, then you can make games.",
+    "profile": "Please log out and log back in, then try again.",
+    "daily_quota": "You've made lots of games today! Come back tomorrow for more.",
+    "global_cap": "The game workshop is very busy today. Please try again tomorrow.",
+    "busy": "Hang on, I'm still building your last game.",
+    "invalid-argument": "Hmm, that didn't work. Check your idea and try again.",
+  };
+  function cgErrorCopy(code) {
+    return Object.prototype.hasOwnProperty.call(CG_ERRORS, code) ? CG_ERRORS[code] : COPY.closed;
+  }
+
+  function shuffledCopy(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // Stored/returned game definition -> { id, title, topic, subject, questions } or null (fewer than 3 playable questions).
+  // Malformed questions are skipped, never thrown on. The stored option order is never mutated.
+  function adaptGame(def) {
+    if (!def || typeof def !== "object" || !Array.isArray(def.questions)) return null;
+    const topic = (typeof def.topic === "string" && def.topic.trim()) ? def.topic.trim().slice(0, 60) : "science";
+    const questions = [];
+    for (const q of def.questions) {
+      if (!q || typeof q !== "object") continue;
+      if (typeof q.text !== "string" || q.text.length < 1 || q.text.length > 300) continue;
+      const options = q.options;
+      if (!Array.isArray(options) || options.length < 2 || options.length > 6) continue;
+      if (!options.every(o => typeof o === "string" && o.trim() !== "" && o.length <= 80)) continue;
+      if (new Set(options.map(o => o.trim().toLowerCase())).size !== options.length) continue;
+      if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex >= options.length) continue;
+      const emoji = (typeof q.emoji === "string" && q.emoji.length > 0 && q.emoji.length <= 8) ? q.emoji : "";
+      questions.push({
+        text: (emoji ? emoji + " " : "") + q.text,
+        answer: options[q.correctIndex],
+        opts: shuffledCopy(options),
+        topic: "custom",
+        custom: true,
+        hint: (typeof q.hint === "string" && q.hint.trim()) ? q.hint : COPY.defaultHint,
+        explanation: (typeof q.explanation === "string") ? q.explanation : "",
+        videoWord: topic,
+      });
+    }
+    if (questions.length < 3) return null;
+    return {
+      id: typeof def.id === "string" ? def.id : "",
+      title: typeof def.title === "string" ? def.title : "My game",
+      topic,
+      subject: typeof def.subject === "string" ? def.subject : "",
+      questions,
+    };
+  }
+
+  function startCustomGame(raw) {
+    const g = adaptGame(raw);
+    if (!g) { setCgMsg(COPY.cantPlay); el.gameMsg.textContent = COPY.cantPlay; return; }
+    if (!customRun) { // snapshot ONCE; replays keep the same base
+      customRun = { base: { level, best: bestScore, mega: megaGemsCollected, ultra: ultraGemsCollected } };
+    }
+    customRun.deck = []; customRun.game = g; customRun.last = null;
+    stopTimer();
+    hideAllOverlays();
+    level = 1; lives = 3; score = 0;
+    lifeMilestoneReached = 0; megaGemsThisRun = 0; ultraGemsThisRun = 0; ultraMilestoneReached = 0;
+    correctStreak = 0; shieldActive = false; extraTimeQuestions = 0;
+    buildLevel(level); updateHUD(); state = "playing";
+  }
+
+  function endCustomRun() {
+    if (!customRun) return;
+    level = customRun.base.level; bestScore = customRun.base.best;
+    megaGemsCollected = customRun.base.mega; ultraGemsCollected = customRun.base.ultra;
+    score = 0; customRun = null;
+    // Drop leftover run state first, or updateHUD would re-fire life-milestone gem rewards from the custom run's lives.
+    lives = 3; lifeMilestoneReached = 0; ultraMilestoneReached = 0; megaGemsThisRun = 0; ultraGemsThisRun = 0;
+    updateHUD();
+  }
+
+  // Shuffled deck; reshuffled when empty; never the same question twice in a row.
+  function nextCustomQuestion() {
+    if (customRun.deck.length === 0) {
+      customRun.deck = shuffledCopy(customRun.game.questions);
+      const n = customRun.deck.length;
+      if (n > 1 && customRun.deck[n - 1] === customRun.last) {
+        const t = customRun.deck[0]; customRun.deck[0] = customRun.deck[n - 1]; customRun.deck[n - 1] = t;
+      }
+    }
+    const q = customRun.deck.pop();
+    customRun.last = q;
+    return Object.assign({}, q, { opts: shuffledCopy(q.opts) });
+  }
+
+  // Custom questions stay on screen longer so the explanation can be read.
+  function qDelay(ms) { return currentQuestion && currentQuestion.custom ? 2600 : ms; }
+  function showExplanation() {
+    if (currentQuestion && currentQuestion.custom && currentQuestion.explanation) {
+      el.feedback.textContent += " 💡 " + currentQuestion.explanation;
+    }
+  }
+
+  function setCreateMenu(on) {
+    const show = !!on && !!(cloud() && cloud().available);
+    document.getElementById("createGameBtn").style.display = show ? "" : "none";
+    document.getElementById("myGamesBtn").style.display = show ? "" : "none";
+  }
+  function setCgMsg(t) { el.cgMsg.textContent = t || ""; }
+  /* MQ-CUSTOM:END */
+
+  function setCgBusy(b) {
+    creatingGame = b;
+    el.cgCreateBtn.disabled = b;
+    el.cgPrompt.disabled = b;
+    el.cgGrade.disabled = b;
+    document.querySelectorAll("#cgChips .cg-chip").forEach(c => { c.disabled = b; });
+  }
+
+  function showCreateGame() {
+    hideAllOverlays();
+    el.cgGrade.innerHTML = "";
+    for (const g of GRADE_ORDER) {
+      const opt = document.createElement("option");
+      opt.value = String(g);
+      opt.textContent = GRADE_BTN_TEXT[g];
+      if (g === grade) opt.selected = true;
+      el.cgGrade.appendChild(opt);
+    }
+    if (!creatingGame) { el.cgPreview.hidden = true; setCgMsg(""); }
+    el.createGame.classList.add("show");
+  }
+
+  async function onBuildGame() {
+    if (creatingGame) return;
+    const prompt = el.cgPrompt.value.trim();
+    if (!prompt) { setCgMsg(COPY.emptyPrompt); return; }
+    if (!cloud() || !cloud().available || !cloud().generateGame) { setCgMsg(COPY.closed); return; }
+    setCgBusy(true);
+    el.cgPreview.hidden = true;
+    setCgMsg(COPY.building);
+    let res;
+    try { res = await cloud().generateGame({ prompt, grade: Number(el.cgGrade.value) }); }
+    catch (e) { res = { ok: false, kind: "error", code: "unavailable" }; }
+    setCgBusy(false);
+    if (res && res.ok && res.game) {
+      lastCreatedGame = res.game;
+      const n = Number(res.game.questionCount) || (Array.isArray(res.game.questions) ? res.game.questions.length : 0);
+      el.cgPreviewTitle.textContent = String(res.game.title || "My game");
+      el.cgPreviewMeta.textContent = `${res.game.subject || "STEAM"} · ${res.game.topic || ""} · ${n} questions`;
+      setCgMsg("");
+      el.cgPreview.hidden = false;
+    } else if (res && res.kind === "refused") {
+      setCgMsg(res.message || COPY.refused);
+    } else if (res && res.kind === "error") {
+      setCgMsg(cgErrorCopy(res.code));
+    } else {
+      setCgMsg(COPY.closed);
+    }
+  }
+
+  function showMyGames() {
+    hideAllOverlays();
+    el.gameMsg.textContent = "";
+    el.myGames.classList.add("show");
+    renderGameList();
+  }
+
+  function gameListNote(text, withRetry) {
+    el.gameList.textContent = "";
+    const d = document.createElement("div");
+    d.className = "game-row";
+    const s = document.createElement("span");
+    s.className = "who";
+    s.textContent = text;
+    d.appendChild(s);
+    if (withRetry) {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.textContent = "Retry";
+      b.onclick = renderGameList;
+      d.appendChild(b);
+    }
+    el.gameList.appendChild(d);
+  }
+
+  async function renderGameList() {
+    if (!cloud() || !cloud().available || !cloud().listMyGames) { gameListNote(COPY.closed, false); return; }
+    gameListNote("Loading...", false);
+    let rows;
+    try { rows = await cloud().listMyGames(); } catch (e) { rows = null; }
+    if (rows === null || rows === undefined) { gameListNote(COPY.listFail, true); return; }
+    if (rows.length === 0) { gameListNote(COPY.noGames, false); return; }
+    el.gameList.textContent = "";
+    rows.forEach(r => {
+      const d = document.createElement("div");
+      d.className = "game-row";
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = String(r.title || "My game");
+      const meta = document.createElement("span");
+      meta.className = "state";
+      const n = Number(r.questionCount) || (Array.isArray(r.questions) ? r.questions.length : 0);
+      const when = (r.createdAt && typeof r.createdAt.toDate === "function") ? r.createdAt.toDate().toLocaleDateString() : "";
+      meta.textContent = [r.subject, r.topic, `${n} questions`, when].filter(Boolean).join(" · ");
+      who.appendChild(meta);
+      d.appendChild(who);
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.textContent = "Play";
+      b.onclick = () => startCustomGame(r);
+      d.appendChild(b);
+      el.gameList.appendChild(d);
+    });
   }
 
   // =====================================================================
@@ -1907,8 +2277,10 @@
   // cloud write. Pass {immediate:true} on lifecycle events to write right away.
   function persistProgress(opts) {
     if (!currentUid) return Promise.resolve();
-    bestScore = Math.max(bestScore, score);
-    const profile = { name: currentUser, best: bestScore, level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected, ultraGemsCollected, subject, musicOn };
+    // During a custom (AI-built) run the saved values stay at the pre-run snapshot.
+    const b = customRun && customRun.base;
+    if (!b) bestScore = Math.max(bestScore, score);
+    const profile = { name: currentUser, best: b ? b.best : bestScore, level: b ? b.level : level, grade, speed: speedSetting, heroColor, hairColor, eyeColor, heroHair, heroGender, gemMatchColor, megaGemsCollected: b ? b.mega : megaGemsCollected, ultraGemsCollected: b ? b.ultra : ultraGemsCollected, subject, musicOn };
     cacheProfile(currentUid, profile); // instant local cache (deferred disk)
     if (opts && opts.immediate) {
       if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
@@ -2319,7 +2691,7 @@
     el.level.textContent = level;
     el.lives.textContent = lives;
     el.score.textContent = score;
-    el.best.textContent = Math.max(bestScore, score);
+    el.best.textContent = customRun ? bestScore : Math.max(bestScore, score);
     el.monstersLeft.textContent = monsters.filter(m => m.alive).length;
     el.megaCount.textContent = megaGemsCollected;
     if (el.ultraCount) el.ultraCount.textContent = ultraGemsCollected;
@@ -2375,6 +2747,7 @@
   }
 
   function makeQuestion(lv) {
+    if (customRun && customRun.deck) return nextCustomQuestion();
     return window.MathQuest.Questions.make(subject, grade, lv);
   }
 
@@ -2493,7 +2866,7 @@
     el.feedback.textContent = "";
     // Starting Grade 3, a monster takes at least 2 questions of different
     // variety to defeat. Earlier grades keep the single-question battle.
-    battleQuestionsNeeded = grade >= 3 ? 2 : 1;
+    battleQuestionsNeeded = (!customRun && grade >= 3) ? 2 : 1;
     battleQuestionsDone = 0;
     lastQuestionKind = null;
     loadQuestion();
@@ -2630,7 +3003,7 @@
     if (lives <= 0) {
       setTimeout(() => { el.battle.classList.remove("show"); gameOver(); }, 800);
     } else {
-      setTimeout(loadQuestion, 900);
+      setTimeout(loadQuestion, qDelay(900));
     }
   }
 
@@ -2690,13 +3063,15 @@
         currentMonster.alive = false;
         persistProgress();
         updateHUD();
-        setTimeout(endBattle, 800);
+        showExplanation();
+        setTimeout(endBattle, qDelay(800));
       } else {
         // More questions to go — show progress and load the next variety.
         el.feedback.textContent = `Correct! +${pts}${dblTag} and +1 life ❤️ ✅${streakMsg}  Next question...`;
         persistProgress();
         updateHUD();
-        setTimeout(loadQuestion, 900);
+        showExplanation();
+        setTimeout(loadQuestion, qDelay(900));
       }
     } else {
       lives--;
@@ -2704,10 +3079,11 @@
       el.feedback.textContent = "Oops! The monster hits you. ❌" + (breakStreak() ? " 🔥 Streak saved!" : "");
       persistProgress();
       updateHUD();
+      showExplanation();
       if (lives <= 0) {
-        setTimeout(() => { el.battle.classList.remove("show"); gameOver(); }, 800);
+        setTimeout(() => { el.battle.classList.remove("show"); gameOver(); }, qDelay(800));
       } else {
-        setTimeout(loadQuestion, 900);
+        setTimeout(loadQuestion, qDelay(900));
       }
     }
   }
@@ -2750,7 +3126,8 @@
     sfx.levelClear();
     setTimeout(sfx.extraLife, 500); // little "1-up" jingle after the fanfare
     if (megaBonus) setTimeout(sfx.extraLife, 900); // extra chime for the mega bonus
-    el.levelClearText.textContent = megaBonus
+    el.levelClearText.textContent = customRun ? COPY.runDone
+      : megaBonus
       ? `Amazing! You collected most of the gems and earned a MEGA gem 💎✨ (worth 4 gems, +4 lives), plus a life for clearing the level! Score: ${score}. Next up: level ${level}.`
       : `Awesome! You beat every monster and earned an extra life! ❤️ Score: ${score}. Next up: level ${level}.`;
     el.levelClear.classList.add("show");
@@ -2768,7 +3145,9 @@
     sfx.gameOver();
     persistProgress();
     submitBestToCloud(); // update global leaderboard
-    el.gameOverText.textContent = `You ran out of lives. Final score: ${score}. Best: ${Math.max(bestScore, score)}. Your level (${level}) is saved.`;
+    el.gameOverText.textContent = customRun
+      ? `You ran out of lives. Final score: ${score}. ${COPY.runDone}`
+      : `You ran out of lives. Final score: ${score}. Best: ${Math.max(bestScore, score)}. Your level (${level}) is saved.`;
     el.gameOver.classList.add("show");
     if (justActivated) {
       justActivated = false;
@@ -2849,14 +3228,14 @@
   function showMathHelp() {
     if (state !== "battle" || !currentQuestion || questionAnswered) return;
     hintUsed = true; // no speed bonus once help is opened
-    el.hint.textContent = window.MathQuest.Questions.hint(currentQuestion);
+    el.hint.textContent = currentQuestion.custom ? currentQuestion.hint : window.MathQuest.Questions.hint(currentQuestion);
     el.hint.style.whiteSpace = "pre-line"; // keep the line breaks from \n
     el.hint.classList.add("show");
   }
 
   function openVideo() {
     if (!currentQuestion) return;
-    const word = window.MathQuest.Questions.videoTopic(currentQuestion);
+    const word = currentQuestion.custom ? currentQuestion.videoWord : window.MathQuest.Questions.videoTopic(currentQuestion);
     const query = encodeURIComponent(`how to do ${word} for kids`);
     // Opens a YouTube search in a new tab (always a valid link).
     window.open(`https://www.youtube.com/results?search_query=${query}`, "_blank", "noopener");
@@ -3106,6 +3485,30 @@
     state = "start";
   };
 
+  // Create a Game / My games (same freeze pattern as the other menu screens).
+  document.getElementById("createGameBtn").onclick = () => {
+    pauseGame();
+    showCreateGame();
+    paused = false; prePauseState = null;
+    state = "start";
+  };
+  document.getElementById("myGamesBtn").onclick = () => {
+    pauseGame();
+    showMyGames();
+    paused = false; prePauseState = null;
+    state = "start";
+  };
+  el.cgPrompt.addEventListener("keydown", (e) => { e.stopPropagation(); }); // don't let Space jump
+  document.querySelectorAll("#cgChips .cg-chip").forEach(c => {
+    c.onclick = () => { if (!creatingGame) el.cgPrompt.value = c.textContent; };
+  });
+  el.cgCreateBtn.onclick = onBuildGame;
+  el.cgPlayBtn.onclick = () => { if (lastCreatedGame) startCustomGame(lastCreatedGame); };
+  document.getElementById("cgAnotherBtn").onclick = () => { el.cgPreview.hidden = true; setCgMsg(""); el.cgPrompt.focus(); };
+  document.getElementById("cgMyGamesBtn").onclick = showMyGames;
+  document.getElementById("cgCloseBtn").onclick = playSolo;
+  document.getElementById("myGamesCloseBtn").onclick = playSolo;
+
   // Adult approval-desk controls.
   document.getElementById("refreshStudentsBtn").onclick = renderMyStudents;
   document.getElementById("inviteSendBtn").onclick = onInviteStudent;
@@ -3172,6 +3575,7 @@
   initScratch();
 
   document.getElementById("startBtn").onclick = () => {
+    endCustomRun(); // a regular Play restores the saved level/best/gems
     el.start.classList.remove("show");
     // keep saved level; reset the run's lives and score
     lives = 3; score = 0;
@@ -3204,7 +3608,7 @@
 
   function hideAllOverlays() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk]
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk, el.createGame, el.myGames]
       .forEach(o => o.classList.remove("show"));
   }
 

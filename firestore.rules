@@ -74,6 +74,18 @@
 //  A16 (NEW) name labels (adultName/studentName) rewritten after the fact, or
 //          oversized/non-string -> <= 40 chars at create, and updates may only
 //          touch status/decidedAt.
+// --- Phase 2 cases (AI game builder) ---
+//  A17 (NEW) client creates, edits (e.g. flips correctIndex / injects text) or deletes a
+//          game -> games write is `false`; only the generateGame function (Admin SDK,
+//          bypasses rules) writes.
+//  A18 (NEW) signed-out user, or a stranger / unrelated teacher, reads a game -> games read
+//          requires creator, or an adult whose link to the creator is accepted/approved.
+//  A19 (NEW) adult reads a child's games through an un-accepted invite, unapproved
+//          code-request or denied link -> same adultLinkedTo() consent gate as users (A11).
+//  A20 (NEW) client reads or writes usage counters (reset own quota, clear the in-flight
+//          lock, read the global counter) -> usage is `false` for every client operation.
+//  A21 (NEW) enumerate other users' games with an unfiltered list query -> list is allowed
+//          only when the query pins createdBy to the caller (or to a consented student).
 // =====================================================================
 rules_version = '2';
 service cloud.firestore {
@@ -139,6 +151,21 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/users/$(uid)).data.status == 'active')
         && incoming().keys().hasOnly(['name','best','level','updated']);
       allow delete: if false;
+    }
+
+    // ---- games/{gameId}: AI-generated quiz definitions. WRITTEN ONLY BY THE generateGame
+    //      CLOUD FUNCTION (Admin SDK bypasses rules). Clients can never create/update/
+    //      delete. Read = the creator, or an adult linked to the creator with a consented
+    //      (accepted/approved) link. No public listing (community browse is Phase 4). [A17-A19][A21]
+    match /games/{gameId} {
+      allow get, list: if signedIn()
+        && (existing().createdBy == request.auth.uid || adultLinkedTo(existing().createdBy));
+      allow create, update, delete: if false;
+    }
+
+    // ---- usage/{id}: generation quota counters + in-flight lock. Admin SDK only. [A20]
+    match /usage/{id} {
+      allow read, write: if false;
     }
 
     // ---- users/{uid}

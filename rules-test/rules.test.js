@@ -3,7 +3,7 @@ import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 
 let env;
 before(async () => {
@@ -545,4 +545,118 @@ test("4-who students and parents-of-others cannot write or read the wrong quota"
   await assertFails(getDoc(D(as(PAR), qpath(TEA))));
   await assertFails(getDoc(D(anon(), qpath(TEA))));
   await assertSucceeds(getDoc(D(as(PAR), qpath(PAR))));   // own, missing doc is readable
+});
+
+// ---------------- Phase 2: games + usage (A17-A21) ----------------
+const seedGame = (id, createdBy) => seed((db) => setDoc(D(db, `games/${id}`), {
+  createdBy, createdByRole: "student", title: "T", subject: "math", topic: "fractions", grade: 3, difficulty: "easy",
+  questions: [{ q: "1+1?", options: ["1", "2", "3", "4"], correctIndex: 1 }], createdAt: serverTimestamp(),
+}));
+const gamesOf = (db, uid) => getDocs(query(collection(db, "games"), where("createdBy", "==", uid)));
+const gameLink = (status, stu = STU, adult = TEA) => seedLink(`${stu}_${adult}`, { ...useridInvite(stu, adult), status });
+
+test("G1 creator getDoc own game", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertSucceeds(getDoc(D(as(STU), "games/g1")));
+});
+test("G2 creator list where createdBy == me", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  const snap = await assertSucceeds(gamesOf(as(STU), STU));
+  assert.equal(snap.size, 1);
+});
+test("G3 creator list with orderBy createdAt + limit (the real client query)", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertSucceeds(getDocs(query(collection(as(STU), "games"), where("createdBy", "==", STU), orderBy("createdAt", "desc"), limit(30))));
+});
+test("G4 A18 other student denied getDoc; creator succeeds", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertSucceeds(getDoc(D(as(STU), "games/g1")));
+  await assertFails(getDoc(D(as(STU2), "games/g1")));
+});
+test("G5 A18 signed-out getDoc and list denied", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertSucceeds(getDoc(D(as(STU), "games/g1")));
+  await assertFails(getDoc(D(anon(), "games/g1")));
+  await assertFails(gamesOf(anon(), STU));
+});
+test("G6 A18 unlinked teacher denied getDoc and list", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertSucceeds(gamesOf(as(STU), STU));
+  await assertFails(getDoc(D(as(TEA), "games/g1")));
+  await assertFails(gamesOf(as(TEA), STU));
+});
+test("G7 A19 adult with 'invited' link denied; same adult with 'accepted' succeeds", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await gameLink("invited");
+  await assertFails(getDoc(D(as(TEA), "games/g1")));
+  await gameLink("accepted");
+  await assertSucceeds(getDoc(D(as(TEA), "games/g1")));
+});
+test("G8 A19 adult with 'requested' link denied; 'approved' succeeds", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await gameLink("requested");
+  await assertFails(getDoc(D(as(TEA), "games/g1")));
+  await gameLink("approved");
+  await assertSucceeds(getDoc(D(as(TEA), "games/g1")));
+});
+test("G9 A19 adult with 'denied' link denied (control: accepted link for a different adult works)", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await gameLink("accepted", STU, PAR);
+  await gameLink("denied");
+  await assertSucceeds(getDoc(D(as(PAR), "games/g1")));
+  await assertFails(getDoc(D(as(TEA), "games/g1")));
+});
+test("G10 A18 adult linked to student A denied on student B's game", async () => {
+  await seedUsers(); await seedGame("gA", STU); await seedGame("gB", STU2);
+  await gameLink("accepted");
+  await assertSucceeds(getDoc(D(as(TEA), "games/gA")));
+  await assertFails(getDoc(D(as(TEA), "games/gB")));
+});
+test("G11 A17 creator cannot setDoc a new valid game", async () => {
+  await seedUsers();
+  const valid = { createdBy: STU, title: "T", questions: [{ q: "1+1?", options: ["1", "2", "3", "4"], correctIndex: 1 }], createdAt: serverTimestamp() };
+  await assertFails(setDoc(D(as(STU), "games/new1"), valid));
+  await assertFails(setDoc(D(as(TEA), "games/new2"), { ...valid, createdBy: TEA }));
+});
+test("G12 A17 creator cannot updateDoc own game; read still works", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertFails(updateDoc(D(as(STU), "games/g1"), { title: "hacked" }));
+  await assertFails(updateDoc(D(as(STU), "games/g1"), { "questions": [{ q: "x", options: ["a", "b", "c", "d"], correctIndex: 0 }] }));
+  await assertSucceeds(getDoc(D(as(STU), "games/g1")));
+});
+test("G13 A17 creator cannot deleteDoc own game; read still works", async () => {
+  await seedUsers(); await seedGame("g1", STU);
+  await assertFails(deleteDoc(D(as(STU), "games/g1")));
+  await assertSucceeds(getDoc(D(as(STU), "games/g1")));
+});
+test("G14 A17 linked adult cannot create/update/delete a game; read works", async () => {
+  await seedUsers(); await seedGame("g1", STU); await gameLink("accepted");
+  const t = as(TEA);
+  await assertSucceeds(getDoc(D(t, "games/g1")));
+  await assertFails(setDoc(D(t, "games/new1"), { createdBy: STU, title: "T" }));
+  await assertFails(updateDoc(D(t, "games/g1"), { title: "hacked" }));
+  await assertFails(deleteDoc(D(t, "games/g1")));
+});
+test("G15 A21 unfiltered list denied for creator and linked adult; createdBy-pinned list allowed (incl. consented adult)", async () => {
+  await seedUsers(); await seedGame("g1", STU); await gameLink("accepted");
+  await assertSucceeds(gamesOf(as(STU), STU));
+  await assertFails(getDocs(collection(as(STU), "games")));
+  await assertFails(getDocs(collection(as(TEA), "games")));
+  await assertSucceeds(gamesOf(as(TEA), STU));      // consented adult, pinned query
+  await assertFails(gamesOf(as(TEA), STU2));        // pinned to a student they are not linked to
+});
+test("G16 A20 client cannot read or write usage docs", async () => {
+  await seedUsers();
+  const day = utcDayKey();
+  await seed((db) => setDoc(D(db, `usage/${STU}_${day}`), { count: 1 }));
+  await seed((db) => setDoc(D(db, `usage/global_${day}`), { count: 1 }));
+  const s = as(STU);
+  await assertSucceeds(getDoc(D(s, `users/${STU}`)));   // control: the client works, usage is what is denied
+  await assertFails(getDoc(D(s, `usage/${STU}_${day}`)));
+  await assertFails(getDoc(D(s, `usage/global_${day}`)));
+  await assertFails(setDoc(D(s, `usage/${STU}_${day}`), { count: 0 }));
+  await assertFails(updateDoc(D(s, `usage/${STU}_${day}`), { count: 0 }));
+  await assertFails(setDoc(D(s, `usage/${STU2}_${day}`), { count: 0 }));
+  await assertFails(deleteDoc(D(s, `usage/${STU}_${day}`)));
+  await assertFails(getDocs(collection(s, "usage")));
 });

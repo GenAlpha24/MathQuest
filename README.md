@@ -20,3 +20,7 @@ There is no in-app role change on purpose: roles are immutable in the rules, and
 3. Delete any `links` docs where `studentUid` is `<uid>` (old student links), and `leaderboard/<uid>` if you want the row gone.
 4. Ask the user to log out and back in.
 Never do this for an account you cannot verify is an adult.
+
+## Create a Game (STEAM agent)
+Adults and active students get "Create a Game" and "My games" in the account menu. It calls the `generateGame` Cloud Function (Gemini on Vertex AI); the game runs as a custom run that never changes saved level, best score, gems or the leaderboard.
+Deploy order: rules and indexes, then functions, then merge the client. Full checklist, tests and rollback: `functions/README.md`.
