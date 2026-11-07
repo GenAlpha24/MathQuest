@@ -34,6 +34,6 @@ exports.generateGame = onCall({
   maxInstances: 5,
   concurrency: 8,
   cors: IS_EMULATOR ? true : ["https://genalpha24.github.io"],
-  serviceAccount: "mq-game-builder",
+  serviceAccount: "mq-game-builder@",
   enforceAppCheck: false,
 }, (request) => handleGenerate(request, { db: getFirestore(), model: getModel(), now: () => new Date(), logger }));
