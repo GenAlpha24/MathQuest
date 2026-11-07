@@ -100,13 +100,49 @@ const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const HANDLE_RE = /(?:^|[\s(])@\w+/;
 const PHONE_RE = /(?<!\d)\d{10,15}(?!\d)|(?<!\d)(?:\+?\d{1,3}[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/;
 
+// Reading level (see design 4.3 rule 6). Per question text: words (numbers/units excluded),
+// words in the longest sentence, and vocabulary difficulty; per option: words only.
+// Common STEAM terms (REL_ALLOW) never count as "hard" words, and a single hard word never fails a question.
 const READING = [
-  { max: 0, words: 12, optWords: 4, avg: 6.5 },
-  { max: 2, words: 18, optWords: 6, avg: 6.5 },
-  { max: 5, words: 30, optWords: 10, avg: 7.5 },
+  { max: 0, total: 12, sentence: 12, opt: 4, avg: 6.5, longRatio: 0.15 },
+  { max: 1, total: 22, sentence: 15, opt: 6, avg: 6.5, longRatio: 0.2 },
+  { max: 2, total: 28, sentence: 18, opt: 7, avg: 6.5, longRatio: 0.2 },
+  { max: 3, total: 42, sentence: 24, opt: 10, avg: 7, longRatio: 0.25 },
+  { max: 4, total: 48, sentence: 28, opt: 11, avg: 7.5, longRatio: 0.3 },
+  { max: 5, total: 54, sentence: 30, opt: 12, avg: 7.5, longRatio: 0.3 },
 ];
-const readingFor = (grade) => READING.find((r) => grade <= r.max) || READING[2];
+const LONG_WORD_LEN = 9;
+const REL_ALLOW = new Set((
+  "graph axis category frequency compare comparison measure measurement estimate equation fraction numerator denominator " +
+  "triangle rectangle pentagon hexagon octagon perimeter area volume symmetry pattern sequence multiplication addition " +
+  "subtraction division temperature thermometer planet gravity electricity magnet magnetic habitat ecosystem " +
+  "photosynthesis evaporation condensation precipitation solar energy engineer engineering technology computer " +
+  "algorithm program robot vertical horizontal tally pictograph data scale bridge triangle diameter circumference " +
+  "rotation reflection rhombus parallelogram quadrilateral predator vitamin mineral molecule material insect " +
+  "butterfly dinosaur volcano earthquake telescope microscope experiment observation prediction population " +
+  "environment recycle absorb reflect orbit galaxy rainbow vibration instrument rhythm melody pattern symmetrical"
+).split(/\s+/));
+const readingFor = (grade) => READING.find((r) => grade <= r.max) || READING[READING.length - 1];
 const wordsOf = (s) => s.split(/\s+/).filter(Boolean);
+// Alphabetic words only; numbers, units glued to numbers and symbols are ignored.
+const letterWords = (s) => s.match(/\p{L}[\p{L}'’-]*/gu) || [];
+const isAllowed = (w) => {
+  const k = w.toLowerCase().replace(/['’-]/g, "");
+  return REL_ALLOW.has(k) || REL_ALLOW.has(k.replace(/(?:es|s)$/, ""));
+};
+function textTooHard(text, rl) {
+  const words = letterWords(text);
+  if (words.length > rl.total) return true;
+  const sentences = text.split(/[.!?;:]+(?:\s|$)/).filter((x) => x.trim());
+  if (sentences.some((x) => letterWords(x).length > rl.sentence)) return true;
+  const plain = words.filter((w) => !isAllowed(w));
+  if (plain.length < 3) return false;
+  const lens = plain.map((w) => w.replace(/['’-]/g, "").length);
+  const long = lens.filter((n) => n >= LONG_WORD_LEN).length;
+  const avg = lens.reduce((a, n) => a + n, 0) / lens.length;
+  return avg > rl.avg || (long >= 2 && long / plain.length > rl.longRatio);
+}
+const optionTooHard = (opt, rl) => letterWords(opt).length > rl.opt;
 const normKey = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") || s.trim().toLowerCase();
 
 // Checks a generated string; pushes stable codes only.
@@ -154,9 +190,7 @@ function validateGame(raw, opts) {
       if (text === null) errors.add("q_text");
       else {
         checkText(text, errors);
-        const ws = wordsOf(text);
-        const avg = ws.reduce((a, w) => a + w.replace(/[^\p{L}\p{N}]/gu, "").length, 0) / (ws.length || 1);
-        if (ws.length > rl.words || avg > rl.avg) errors.add("reading_level");
+        if (textTooHard(text, rl)) errors.add("reading_level");
         const key = normKey(text);
         if (seen.has(key)) errors.add("questions_duplicate");
         seen.add(key);
@@ -171,7 +205,7 @@ function validateGame(raw, opts) {
       else {
         options.forEach((x) => {
           checkText(x, errors);
-          if (wordsOf(x).length > rl.optWords) errors.add("reading_level");
+          if (optionTooHard(x, rl)) errors.add("reading_level");
         });
         if (new Set(options.map(normKey)).size !== options.length) errors.add("options_duplicate");
       }

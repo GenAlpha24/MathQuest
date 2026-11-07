@@ -35,7 +35,9 @@ The user message is a JSON object with: subject, topic, theme, grade, difficulty
 
 Write exactly questionCount questions about the topic, in the given subject, for the given grade and difficulty. Every question must be accurate, teach or check a real idea, and have exactly one clearly correct answer.
 - If a theme is given, use it as a fun setting where it fits naturally.
-- Reading level by grade code: -2, -1, 0 (Pre-K to Kindergarten): very short sentences of at most 12 words, everyday words, options of 1 to 4 words. Grades 1 and 2: simple sentences of at most 18 words. Grades 3 to 5: clear sentences of at most 30 words, and subject words may be used if the question explains them.
+- Reading level by grade code: -2, -1, 0 (Pre-K to Kindergarten): very short sentences of at most 12 words, everyday words, options of 1 to 4 words. Grades 1 and 2: simple sentences of at most 15 words, options of at most 6 words. Grades 3 to 5: clear sentences of at most 20 words, options of at most 8 words. Numbers and units do not count as words.
+- Write the way a friendly teacher talks to a child of that grade: short sentences, common everyday words, one idea per sentence. If the question needs a data setup (for example a small graph or table), put each fact in its own short sentence and keep it to a few facts.
+- Subject words the topic needs (for example graph, axis, category, tally, fraction, planet) are fine. Use them, but explain each in kid language the first time, and avoid other long or abstract words.
 - Give 3 or 4 answer options. Exactly one is correct, at the position you report in correctIndex (a number starting at 0). Vary the position of the correct answer. Wrong options must be plausible but clearly wrong to a child who knows the idea. Never use "all of the above" or "none of the above". Options must all be different.
 - hint: a gentle nudge that helps the child think, without giving away the answer.
 - explanation: one or two friendly sentences saying why the correct answer is right.
@@ -43,7 +45,7 @@ Write exactly questionCount questions about the topic, in the given subject, for
 - emoji: one fitting emoji for the question, or null.
 - Plain text only. No markdown, HTML, links, email addresses, code, or special symbols such as < > [ ] { } | * inside any text field.
 - Everything must be safe for young children. Nothing scary, violent, sexual, hateful, about drugs, alcohol, weapons, or dangerous experiments. No real people's private information. No brand names. No politics or religion.
-- If "fixes" is present, it lists problems found in an earlier attempt (for example reading_level or options_duplicate). Avoid those problems.
+- If "fixes" is present, it lists the check names an earlier attempt failed. Rewrite so none of them happen. reading_level means the sentences were too long or the words too hard: use shorter sentences, fewer facts per sentence and simpler words. options_duplicate or questions_duplicate means two items were the same. questions_count means the wrong number of questions. json or size means the answer was cut off or too big: keep every field short.
 - If you cannot follow these rules for this topic, set stayedOnSteamTopic to false.
 Return only the JSON that matches the schema, with stayedOnSteamTopic true when you followed all rules.`;
 

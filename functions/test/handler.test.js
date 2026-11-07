@@ -262,13 +262,13 @@ test("invalid generation then valid: saved after exactly 2 generate calls, retry
   assert.equal((await gamesOf(uid)).length, 1);
 });
 
-test("invalid twice -> unavailable model, refund applied, no game; refund cap 3 per day, global never refunded", async () => {
+test("invalid twice -> unavailable gen_failed, refund applied, no game; refund cap 3 per day, global never refunded", async () => {
   const ms = nextDay();
   const uid = newUid("s");
   await seedUser(uid);
   const model = scripted({ classify: [res(clsText())], generate: [res("not json")] });
   for (let i = 1; i <= 4; i++) {
-    await rejectsWith(call(uid, { prompt: PROMPT }, mk(model, ms)), "unavailable", "model");
+    await rejectsWith(call(uid, { prompt: PROMPT }, mk(model, ms)), "unavailable", "gen_failed");
     const u = await usageDoc(uid, ms);
     assert.equal(u.requests, i <= 3 ? 0 : 1, "after failure " + i);
     assert.equal(u.refunds, Math.min(i, 3));
@@ -329,6 +329,28 @@ test("two safety blocks in generate -> refused unsafe, 2 generate calls, no game
   assert.equal((await usageDoc(uid, ms)).refunds, 0);
 });
 
+test("reading_level failure: retry carries only the check name; two failures -> gen_failed", async () => {
+  const ms = nextDay();
+  const uid = newUid("s");
+  await seedUser(uid);
+  const hard = JSON.parse(gameText());
+  hard.questions[0].text = "Considering the aforementioned distribution, which representation accurately illustrates proportional relationships between categorical observations and corresponding quantitative magnitudes?";
+  const model = scripted({ classify: [res(clsText({ grade: 3 }))], generate: [res(JSON.stringify(hard))] });
+  await rejectsWith(call(uid, { prompt: PROMPT, grade: 3 }, mk(model, ms)), "unavailable", "gen_failed");
+  assert.equal(model.calls.generate.length, 2);
+  assert.equal(JSON.parse(model.calls.generate[0].userText).fixes, undefined);
+  assert.deepEqual(JSON.parse(model.calls.generate[1].userText).fixes, ["reading_level"]);
+  assert.ok(!model.calls.generate[1].userText.includes("aforementioned"));
+});
+test("generate call throws twice -> unavailable model (outage), not gen_failed", async () => {
+  const ms = nextDay();
+  const uid = newUid("s");
+  await seedUser(uid);
+  const err = Object.assign(new Error("boom"), { status: 503 });
+  const model = scripted({ classify: [res(clsText())], generate: [err] });
+  await rejectsWith(call(uid, { prompt: PROMPT }, mk(model, ms)), "unavailable", "model");
+  assert.equal(model.calls.generate.length, 2);
+});
 test("model throws 503 -> retried once, then unavailable model with refund", async () => {
   const ms = nextDay();
   const uid = newUid("s");
@@ -470,5 +492,5 @@ test("mock model is steered by trigger words", async () => {
   assert.equal((await call(uid, { prompt: "mockoffTopic please" }, mk(m, ms))).reason, "off_topic");
   assert.equal((await call(uid, { prompt: "mockblocked volcano" }, mk(m, ms))).reason, "unsafe");
   assert.equal((await call(uid, { prompt: "mockinvalidonce volcano" }, mk(m, ms))).status, "ok");
-  await rejectsWith(call(uid, { prompt: "mockinvalidtwice volcano" }, mk(m, ms)), "unavailable", "model");
+  await rejectsWith(call(uid, { prompt: "mockinvalidtwice volcano" }, mk(m, ms)), "unavailable", "gen_failed");
 });
