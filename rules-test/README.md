@@ -12,7 +12,7 @@ firebase emulators:exec --only firestore --project demo-mathquest "node --test r
 ```
 If `java` isn't on PATH in your shell, prepend its `bin` dir to `$env:PATH` first.
 
-## Covered (33 tests, `node:test`)
+## Covered (53 tests, `node:test`; the Phase 1b block adds profile-read consent, name/key checks, legacy-active flows and the invite quota)
 - Positive: signup (student/teacher/parent), legacy role backfill (rule 1b) + later progress saves,
   userid invite chain, email invite chain with mixed-case stored email (c2), code fallback,
   leaderboard writes/reads, linked-adult and self reads.

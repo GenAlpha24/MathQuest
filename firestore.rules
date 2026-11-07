@@ -53,6 +53,27 @@
 //  N6 student flips a DIFFERENT student's 'invited' link to 'accepted'
 //          -> links accept branch (c) requires incoming().studentUid==auth.uid
 //          and the userid/email addressee check; mirrors N3 at the links layer.
+// --- Phase 1b cases ---
+//  A11 (NEW) adult reads a student profile via an un-accepted invite (or an
+//          unapproved code-request / denied link) -> adultLinkedTo requires the
+//          link status to be 'accepted' or 'approved' (student consent / adult
+//          holding the student's code). A stranger who signs up as a parent
+//          and invites any userid learns nothing until the child accepts.
+//  A12 (NEW) adult exceeds the daily invite limit -> inviteQuota update requires
+//          count == old+1 and count <= inviteDailyLimit(); the invite link
+//          create requires the paired quota bump in the SAME batch (getAfter).
+//  A13 (NEW) adult resets/decrements/deletes quota or picks another day -> quota
+//          doc id and `day` are derived from request.time; count may only go +1;
+//          delete is denied.
+//  A14 (NEW) student / non-adult writes quota -> callerRoleIs(teacher,parent);
+//          reads limited to your own quota ids.
+//  A15 (NEW) one quota bump covering several invites, a bump with no invite, or
+//          an invite with no bump -> lastLinkId must name a NEW link in the same
+//          batch, owned by the adult, status 'invited'; the link create requires
+//          getAfter(quota).lastLinkId == its own id.
+//  A16 (NEW) name labels (adultName/studentName) rewritten after the fact, or
+//          oversized/non-string -> <= 40 chars at create, and updates may only
+//          touch status/decidedAt.
 // =====================================================================
 rules_version = '2';
 service cloud.firestore {
@@ -95,6 +116,17 @@ service cloud.firestore {
                     && incoming().role in ['teacher','parent']
                     && callerRoleIs([incoming().role]);   // real adult of that role
       allow update, delete: if false;
+    }
+
+    // ---- inviteQuota/{adultUid_yyyymmdd}: invites sent today. Client can only
+    //      +1 it together with a new invite link in the same batch. [A12-A15]
+    match /inviteQuota/{qid} {
+      allow read: if signedIn() && qid.matches(request.auth.uid + '_[0-9]{8}');
+      allow create: if quotaOk(qid) && incoming().count == 1;
+      allow update: if quotaOk(qid)
+                    && incoming().count == existing().count + 1
+                    && incoming().count <= inviteDailyLimit();
+      allow delete: if false;
     }
 
     // ---- leaderboard/{uid}: denormalized world-readable scores (no PII beyond
@@ -197,7 +229,14 @@ service cloud.firestore {
                && incoming().studentUid == null
                && linkId == 'email|' + request.auth.uid + '|' + incoming().targetValue
                && incoming().targetValue == incoming().targetValue.lower())  // email stored lowercased
-           );
+           )
+        && incoming().keys().hasOnly(['studentUid','adultUid','adultRole','adultName','source','targetKind',
+                                      'targetValue','status','createdBy','createdAt','decidedAt'])
+        && okName('adultName')
+        // Rate limit [A12][A15]: the SAME batch must bump today's quota doc by exactly 1 for THIS link.
+        && getAfter(quotaPath(request.auth.uid)).data.lastLinkId == linkId
+        && getAfter(quotaPath(request.auth.uid)).data.count ==
+             ((exists(quotaPath(request.auth.uid)) ? get(quotaPath(request.auth.uid)).data.count : 0) + 1);
 
       // (b) STUDENT requests a link by CODE (fallback). No self-links; the
       //     adultUid must be an existing teacher/parent. [A2][A3]
@@ -207,6 +246,9 @@ service cloud.firestore {
         && incoming().status == 'requested'
         && incoming().createdBy == request.auth.uid
         && linkId == incoming().studentUid + '_' + incoming().adultUid
+        && incoming().keys().hasOnly(['studentUid','adultUid','adultRole','studentName','source','targetKind',
+                                      'targetValue','status','createdBy','createdAt','decidedAt'])
+        && okName('studentName')            // display label only; trust comes from the adult's secret code
         && exists(/databases/$(database)/documents/users/$(incoming().adultUid))
         && get(/databases/$(database)/documents/users/$(incoming().adultUid)).data.role in ['teacher','parent'];
 
@@ -218,7 +260,8 @@ service cloud.firestore {
         && incoming().status == 'accepted'
         && incoming().adultUid == existing().adultUid
         && incoming().studentUid == existing().studentUid
-        && incoming().targetKind == existing().targetKind;
+        && incoming().targetKind == existing().targetKind
+        && onlyStatusDecided();
 
       // (c2) STUDENT accepts an EMAIL INVITE by CREATING the canonical link doc
       //      links/{auth.uid}_{adultUid} in 'accepted'. The student proves the
@@ -230,6 +273,8 @@ service cloud.firestore {
         && incoming().targetKind == 'email'
         && incoming().status == 'accepted'
         && incoming().studentUid != incoming().adultUid
+        && incoming().keys().hasOnly(['studentUid','adultUid','adultRole','source','targetKind',
+                                      'targetValue','status','createdBy','createdAt','decidedAt'])
         && linkId == incoming().studentUid + '_' + incoming().adultUid
         && emailInviteToMe(incoming().adultUid);          // a matching 'invited' email invite exists for my email
 
@@ -238,12 +283,14 @@ service cloud.firestore {
         && existing().status == 'requested'
         && incoming().status in ['approved','denied']
         && incoming().studentUid == existing().studentUid
-        && incoming().adultUid == existing().adultUid;
+        && incoming().adultUid == existing().adultUid
+        && onlyStatusDecided();
 
       // (e) EITHER party may DECLINE a pending invite ('invited' -> 'denied').
       allow update: if existing().status == 'invited'
         && incoming().status == 'denied'
         && incoming().adultUid == existing().adultUid
+        && onlyStatusDecided()
         && (isSelf(existing().adultUid)
             || (existing().targetKind == 'userid' && existing().studentUid == request.auth.uid)
             || (existing().targetKind == 'email' && existing().targetValue == callerEmail()));
@@ -252,14 +299,45 @@ service cloud.firestore {
     }
 
     function adultLinkedTo(studentUid) {
-      // An adult may read a student's users doc once a deterministic-id link to
-      // them exists in a non-denied state. (Email invites use an 'email|...' id
-      // and are not accepted until the student stamps their uid; the adult does
-      // not read the invitee's users doc before accept — they show the typed
-      // email — so this helper need not cover the email-id case.)
+      // An adult may read a student's users doc ONLY after the student's side is
+      // consented: link status 'accepted' (userid invite flipped, or the email
+      // invite's canonical studentUid_adultUid doc created) or 'approved' (the
+      // adult approved a code-request, i.e. the student gave them the code).
+      // 'invited' / 'requested' / 'denied' grant nothing. [A11]
       return signedIn()
         && exists(/databases/$(database)/documents/links/$(studentUid + '_' + request.auth.uid))
-        && get(/databases/$(database)/documents/links/$(studentUid + '_' + request.auth.uid)).data.status != 'denied';
+        && get(/databases/$(database)/documents/links/$(studentUid + '_' + request.auth.uid)).data.status in ['accepted','approved'];
+    }
+    function okName(k) {
+      // optional display label: absent, or a string of at most 40 chars
+      return !(k in incoming()) || (incoming()[k] is string && incoming()[k].size() <= 40);
+    }
+    function onlyStatusDecided() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['status','decidedAt']);
+    }
+
+    // ---- invite rate limit (per adult, per UTC day), see match /inviteQuota ----
+    function inviteDailyLimit() { return 30; }
+    function todayKey() { return request.time.year() * 10000 + request.time.month() * 100 + request.time.day(); }
+    function quotaId(uid) { return uid + '_' + string(todayKey()); }
+    function quotaPath(uid) { return /databases/$(database)/documents/inviteQuota/$(quotaId(uid)); }
+    function invitePaired() {
+      // the quota write travels with a NEW invite link of mine in the same batch
+      return !incoming().lastLinkId.matches('.*/.*')
+        && !exists(/databases/$(database)/documents/links/$(incoming().lastLinkId))
+        && existsAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId))
+        && getAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId)).data.adultUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/links/$(incoming().lastLinkId)).data.status == 'invited';
+    }
+    function quotaOk(qid) {
+      return signedIn() && callerRoleIs(['teacher','parent'])
+        && incoming().keys().hasOnly(['adultUid','day','count','lastLinkId'])
+        && incoming().adultUid == request.auth.uid
+        && qid == quotaId(request.auth.uid)        // day comes from request.time, never the client
+        && incoming().day == todayKey()
+        && incoming().count is int
+        && incoming().lastLinkId is string
+        && invitePaired();
     }
     function approvedLinkExists(studentUid, adultUid) {
       // exists()-guarded. Used by the ADULT code-request approval branch (3).
