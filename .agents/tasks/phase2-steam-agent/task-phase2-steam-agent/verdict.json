@@ -1,0 +1,30 @@
+﻿{
+    "verdict":  "APPROVED",
+    "findings":  [
+                     {
+                         "detail":  "Pre-filter refusals return before quota.reserve, so an authenticated caller can loop on refused prompts at no quota cost; bounded by maxInstances 5. Consider a cheap counter later.",
+                         "file":  "functions/lib/handler.js",
+                         "severity":  "LOW"
+                     },
+                     {
+                         "detail":  "Model id gemini-3.8-flash and SDK versions were not independently verified by the reviewer; they rest on design section 0. Owner confirms in Vertex before deploy; the smoke test covers it.",
+                         "file":  "functions/lib/config.js",
+                         "severity":  "LOW"
+                     },
+                     {
+                         "detail":  "Real Vertex call path, production cors/serviceAccount and 80s/25s timing are traced only, never executed.",
+                         "file":  "functions/lib/model.js",
+                         "severity":  "LOW"
+                     },
+                     {
+                         "detail":  "Unrelated removal of ctx.shadowBlur = 0; in the rainbow gem draw (inside save/restore, harmless). Restore to keep the diff scoped.",
+                         "file":  "index.html",
+                         "severity":  "NIT"
+                     },
+                     {
+                         "detail":  "test:e2e script omits MQ_MOCK_MODEL=1; tests skip safely but the emulated function would use the real Vertex client if invoked.",
+                         "file":  "functions/package.json",
+                         "severity":  "NIT"
+                     }
+                 ]
+}

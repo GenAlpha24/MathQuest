@@ -1,0 +1,26 @@
+{
+    "id":  "FEAT-001",
+    "type":  "feat",
+    "description":  "Commit 1 (design doc) and commit 2: functions/ scaffold and the pure, network-free modules with unit tests. Independent of rules and client work.",
+    "status":  "completed",
+    "steps":  [
+                  "Commit the design doc alone: `git add .agents/design/phase2-steam-agent.md` (check `git status` first; do NOT add .agents/tasks/** or .kiro/**; if the design file is already tracked/ignored, skip) and commit \u0027docs: phase 2 STEAM agent design\u0027.",
+                  "Create functions/package.json (engines.node \"24\", exact deps firebase-admin 14.5.0, firebase-functions 7.4.0, @google/genai 3.0.0; devDeps firebase 13.2.0, jsdom 31.0.0; scripts test:unit etc.), run `npm install` in functions/ to produce package-lock.json, then verify `npm ci` works. Add .gitignore entries from design sec 8 (functions/node_modules/, functions/.env.local, functions/.runtimeconfig.json, functions/*.log, *-debug.log, pubsub-debug.log, database-debug.log, .firebase/).",
+                  "Create functions/lib/config.js (ONE MODEL_ID = \u0027gemini-3.8-flash\u0027, FUNCTIONS_REGION \u0027us-central1\u0027, limits: student 10, adult 25, global 1000, refund cap 3, lock 120 s, prompt 200, questions 5..15 default 8, token caps, timeouts, GLOBAL_DAILY_CAP).",
+                  "Create functions/lib/prefilter.js (sanitizePrompt, prefilter with injectable {banned}, containsBanned, URL/contact patterns, BANNED stems composed by you, order per design sec 3).",
+                  "Create functions/lib/validate.js (validateClassification incl. grade drift rule, validateGame per sec 4.3 with reading-level limits, stable error codes, no content echo) and functions/lib/prompts.js (PROMPT_VERSION 1, verbatim system prompts sec 5.1/5.2, supported-field-only response schemas using SDK Type constants or string literals, user-content builders via JSON.stringify, fixed REFUSALS copy table sec 5.3 may live here or in handler.js).",
+                  "Write functions/test/unit.test.js with \u003e= 90 cases per design sec 9(a): prefilter reasons + twins, unicode tricks, 20 harmless science words pass, boundary lengths, injection families, validateClassification and validateGame adversarial cases (HTML/URL/markdown/newline, dup options, bad correctIndex, reading level, prototype-pollution keys), prompts round-trip, schema field whitelist, and a test that MODEL_ID string appears only in functions/lib/config.js (grep test over functions/ excluding node_modules and test)."
+              ],
+    "acceptance_criteria":  [
+                                "`node --test functions/test/unit.test.js` from repo root passes with \u003e= 90 test cases and 0 failures",
+                                "`cd functions; npm ci` succeeds with the committed lockfile; package.json uses exact versions (no ^ or ~)",
+                                "No node_modules or log files are staged; two commits exist (design doc, then functions pure modules) unless the design doc was already tracked"
+                            ],
+    "verification":  [
+                         "cd functions; npm ci",
+                         "node --test functions/test/unit.test.js",
+                         "git status --short (confirm only intended files staged) and git log --oneline -3"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED: cd functions; npm ci (exit 0, 373 packages, lockfile committed, exact versions); node --test functions/test/unit.test.js =\u003e tests 262, pass 262, fail 0. Design doc already tracked (2 prior commits), so only one new commit. For later steps: validate.js exports FIX_CODES, CLASSIFICATION_KEYS, REFUSAL_REASONS, validateClassification(raw,{gradeHint}), validateGame(raw,{count,grade}); raw may be JSON string or parsed object; refusals return topic \u0027none\u0027/theme null. prompts.js exports buildClassifyRequest({prompt,gradeHint}) and buildGenerateRequest({subject,topic,theme,grade,difficulty,questionCount,fixes}) returning {systemInstruction,userText,responseSchema,maxOutputTokens,thinkingLevel:\u0027LOW\u0027|\u0027MEDIUM\u0027,timeoutMs}, plus REFUSALS (in prompts.js, not handler.js) and PROMPT_VERSION. prefilter.js exports sanitizePrompt, prefilter(sanitized,{banned}), containsBanned. config.js exports MODEL_ID, limits (also spread flat, e.g. cfg.STUDENT_DAILY), GLOBAL_DAILY_CAP, GRADES, SUBJECTS, DIFFICULTIES. BANNED list stored ROT13-encoded. Gotchas: the MODEL_ID string must not appear in any non-test file under functions/ except lib/config.js, including functions/README.md (grep test scans .js/.json/.md; refer to it as \u0027the model id in config.js\u0027). Prefilter checks URL before contact, so emails on common TLDs (.org/.com) report url. Output-text contact check skips the street-address pattern to avoid false positives. quota.js unit tests (fake Firestore) were not part of FEAT-001 steps and are NOT written yet. TRACED only (not executed): nothing in functions/lib is wired to Firebase/Gemini yet; model.js, handler.js, quota.js, index.js not created; no emulator runs in this FEAT."
+}
