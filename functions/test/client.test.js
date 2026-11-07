@@ -40,7 +40,7 @@ const HOOK = `
     get mega() { return megaGemsCollected; }, get ultra() { return ultraGemsCollected; },
     get lives() { return lives; }, set lives(v) { lives = v; }, get score() { return score; },
     get customRun() { return customRun; }, get currentQuestion() { return currentQuestion; },
-    get monsters() { return monsters; }, adaptGame, startBattle,
+    get monsters() { return monsters; }, get grade() { return grade; }, adaptGame, startBattle,
   };`;
 
 async function webClient(uid) {
@@ -300,6 +300,8 @@ if (!MOCK_ON) {
       unavailable: "The game workshop is closed for a moment. Try again soon. Your regular game still works!",
       internal: "The game workshop is closed for a moment. Try again soon. Your regular game still works!",
       "weird-code": "The game workshop is closed for a moment. Try again soon. Your regular game still works!",
+      model: "The game workshop is closed for a moment. Try again soon. Your regular game still works!",
+      gen_failed: "I couldn't build a good quiz about that one. Try asking in a different way, or pick a simpler topic.",
     };
     for (const [code, copy] of Object.entries(table)) {
       const e = await boot("er" + code.replace(/\W/g, "") + tag, {}, { gen: async () => ({ ok: false, kind: "error", code }) });
@@ -319,6 +321,112 @@ if (!MOCK_ON) {
     assert.equal(thrower.$("cgCreateBtn").disabled, false, "form usable again after a failure");
   });
 
+  test("gen_failed shows its own friendly copy end to end; outage keeps the 'workshop is closed' copy", async () => {
+    const GEN_FAILED = "I couldn't build a good quiz about that one. Try asking in a different way, or pick a simpler topic.";
+    const CLOSED = "The game workshop is closed for a moment. Try again soon. Your regular game still works!";
+    const bad = await boot("gf" + tag);
+    await bad.enter();
+    await bad.build("mockinvalidtwice volcanoes");   // real function path: model output invalid twice
+    assert.equal(bad.$("cgMsg").textContent, GEN_FAILED);
+    assert.notEqual(bad.$("cgMsg").textContent, CLOSED);
+    const off = await boot("gfo" + tag);
+    await off.enter();
+    await off.build("mockoffTopic please");           // refusal copy is the server message
+    assert.notEqual(off.$("cgMsg").textContent, GEN_FAILED);
+    assert.notEqual(off.$("cgMsg").textContent, CLOSED);
+    const outage = await boot("gfu" + tag, {}, { gen: async () => ({ ok: false, kind: "error", code: "model" }) });
+    await outage.enter();
+    await outage.build("volcanoes and rocks");
+    assert.equal(outage.$("cgMsg").textContent, CLOSED);
+  });
+
+  test("home page: Create a Game / My games buttons follow the same eligibility as the menu entries", async () => {
+    const shownHome = (e) => e.$("homeCreate").classList.contains("show");
+    const stu = await boot("hs" + tag);
+    await stu.enter();
+    assert.deepEqual(stu.shown(), ["start"]);
+    assert.equal(shownHome(stu), true);
+    assert.equal(stu.$("homeCreateBtn").textContent, "✨ Create a Game");
+    assert.equal(stu.$("start").contains(stu.$("homeCreateBtn")), true, "button lives on the start screen");
+    stu.$("homeCreateBtn").click();
+    assert.deepEqual(stu.shown(), ["createGame"]);
+    stu.$("cgCloseBtn").click();
+    stu.$("homeMyGamesBtn").click();
+    assert.deepEqual(stu.shown(), ["myGames"]);
+    stu.$("myGamesCloseBtn").click();
+    stu.$("logoutBtn").click();
+    await waitFor(() => stu.$("auth").classList.contains("show"), "auth screen");
+    assert.equal(shownHome(stu), false, "hidden after logout");
+
+    const pend = await boot("hp" + tag, { status: "pending" });
+    await pend.enter();
+    assert.equal(shownHome(pend), false);
+    pend.statusCb({ status: "active" });
+    assert.equal(shownHome(pend), true, "appears once the student becomes active");
+
+    for (const role of ["teacher", "parent"]) {
+      const a = await boot("ha" + role + tag, { role, status: "active", linkCode: "ABC2345" });
+      await a.enter();
+      assert.deepEqual(a.shown(), ["approvalDesk"]);
+      a.$("openGameBtn").click();
+      assert.deepEqual(a.shown(), ["start"], role);
+      assert.equal(shownHome(a), true, role + " reaches the home button via Open game");
+    }
+    const legacy = await boot("hl" + tag, { role: DEL, status: DEL });
+    await legacy.enter();
+    assert.equal(shownHome(legacy), true);
+    const offline = await boot("ho" + tag, {}, { available: false });
+    assert.equal(shownHome(offline), false);
+  });
+
+  test("home grade selector: defaults to the profile grade, persists via the normal save, stays in sync with Create a Game", async () => {
+    const env = await boot("gs" + tag, { grade: 3 });
+    await env.enter();
+    assert.deepEqual(env.shown(), ["start"]);
+    const sel = env.$("gradeSelect");
+    assert.equal(sel.value, "3");
+    assert.deepEqual([...sel.options].map((o) => o.value), ["-2", "-1", "0", "1", "2", "3", "4", "5"]);
+    assert.deepEqual([...sel.options].map((o) => o.textContent), ["Pre-K", "TK", "Kinder", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"]);
+    assert.equal(sel.closest("#start") !== null, true);
+    // change on the home screen -> same save path (debounced saveProfile), no new fields
+    sel.value = "5";
+    sel.dispatchEvent(new env.win.Event("change", { bubbles: true }));
+    assert.equal(env.mq.grade, 5);
+    env.flush();
+    const last = env.saves[env.saves.length - 1];
+    assert.equal(last.grade, 5);
+    assert.deepEqual(Object.keys(last).sort(), ["best", "eyeColor", "gemMatchColor", "hairColor", "heroColor", "heroGender", "heroHair", "grade", "level", "megaGemsCollected", "musicOn", "name", "speed", "subject", "ultraGemsCollected"].sort());
+    // Create a Game defaults to it, and changing it there updates the home selector
+    env.$("homeCreateBtn").click();
+    assert.equal(env.$("cgGrade").value, "5");
+    env.$("cgGrade").value = "2";
+    env.$("cgGrade").dispatchEvent(new env.win.Event("change", { bubbles: true }));
+    assert.equal(env.mq.grade, 2);
+    assert.equal(sel.value, "2");
+    env.flush();
+    assert.equal(env.saves[env.saves.length - 1].grade, 2);
+    // the build request uses the synced grade
+    env.$("cgPrompt").value = "how bridges stay up";
+    env.$("cgCreateBtn").click();
+    await waitFor(() => !env.$("cgPreview").hidden, "preview");
+    assert.equal(env.lastResult.game.grade, 2);
+  });
+
+  test("home grade change during a custom run still never writes best/level (pre-run snapshot saved)", async () => {
+    const env = await boot("gc" + tag, { level: 4, best: 7, grade: 3 });
+    await env.enter();
+    await env.build("tell me about volcanoes");
+    env.$("cgPlayBtn").click();
+    assert.ok(env.mq.customRun);
+    env.$("createGameBtn").click();
+    env.$("cgGrade").value = "1";
+    env.$("cgGrade").dispatchEvent(new env.win.Event("change", { bubbles: true }));
+    env.flush();
+    const last = env.saves[env.saves.length - 1];
+    assert.equal(last.grade, 1);
+    assert.equal(last.level, 4);
+    assert.equal(last.best, 7);
+  });
   test("preview -> Play: question, options and answer match the stored game; options are shuffled copies; hint, video word, explanation", async () => {
     const env = await boot("fid" + tag, { level: 4, best: 5 });
     await env.enter();

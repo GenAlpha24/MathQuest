@@ -305,6 +305,14 @@
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path fill='%232b3a67' d='M4 6l4 4 4-4z'/></svg>");
     background-repeat:no-repeat; background-position:right 14px center; }
   #gradeSelect:focus { outline:3px solid #ff5a8c; }
+  #cgGrade:focus, #homeCreateBtn:focus-visible, #homeMyGamesBtn:focus-visible { outline:3px solid #ff5a8c; }
+  /* The start screen is taller than a small window: top-align (auto margins still centre it when it fits)
+     so the title and grade picker are never clipped above the scroll area. */
+  #start { justify-content:flex-start; }
+  #start > :first-child { margin-top:auto; }
+  #start > :last-child { margin-bottom:auto; }
+  #homeCreate { display:none; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; margin:4px 0 14px; }
+  #homeCreate.show { display:flex; }
   #battle .monster-face { font-size: 44px; margin-bottom: 2px; }
   #battle .feedback { font-size: 18px; min-height: 22px; margin-top: 8px; }
   #battle .battle-tools { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; justify-content:center; }
@@ -518,8 +526,12 @@
       <h2>Welcome, <span id="startName">Hero</span>!</h2>
       <p>Run and JUMP over the spikes. When you reach a monster, answer the math question before the timer runs out! Clear all monsters to advance.</p>
       <div id="gradePick">
-        <p style="margin-bottom:8px;">Pick your grade (this sets the math difficulty):</p>
+        <p style="margin-bottom:8px;"><label for="gradeSelect">Pick your grade (this sets the math difficulty):</label></p>
         <select id="gradeSelect"></select>
+      </div>
+      <div id="homeCreate">
+        <button class="btn big" id="homeCreateBtn">✨ Create a Game</button>
+        <button class="btn small" id="homeMyGamesBtn">🎮 My games</button>
       </div>
       <div id="speedPick">
         <p style="margin-bottom:8px;">Pick the running speed:</p>
@@ -2035,6 +2047,7 @@
     runDone: "Great run! This was a custom game, so your regular progress was not changed.",
     noGames: "No games yet. Make your first one!",
     listFail: "I couldn't load your games right now.",
+    genFailed: "I couldn't build a good quiz about that one. Try asking in a different way, or pick a simpler topic.",
     refused: "Hmm, I can't make that one. Try a science, tech, engineering, art or math idea!",
     defaultHint: "Think about what you know and pick the best answer.",
   };
@@ -2047,6 +2060,7 @@
     "global_cap": "The game workshop is very busy today. Please try again tomorrow.",
     "busy": "Hang on, I'm still building your last game.",
     "invalid-argument": "Hmm, that didn't work. Check your idea and try again.",
+    "gen_failed": COPY.genFailed,
   };
   function cgErrorCopy(code) {
     return Object.prototype.hasOwnProperty.call(CG_ERRORS, code) ? CG_ERRORS[code] : COPY.closed;
@@ -2148,6 +2162,7 @@
     const show = !!on && !!(cloud() && cloud().available);
     document.getElementById("createGameBtn").style.display = show ? "" : "none";
     document.getElementById("myGamesBtn").style.display = show ? "" : "none";
+    document.getElementById("homeCreate").classList.toggle("show", show);
   }
   function setCgMsg(t) { el.cgMsg.textContent = t || ""; }
   /* MQ-CUSTOM:END */
@@ -2322,11 +2337,16 @@
       if (g === grade) opt.selected = true;
       el.gradeSelect.appendChild(opt);
     }
-    el.gradeSelect.onchange = () => {
-      grade = Number(el.gradeSelect.value);
-      persistProgress();
-      updateHUD();
-    };
+    el.gradeSelect.onchange = () => setGrade(Number(el.gradeSelect.value));
+  }
+  // One source of truth for the grade: the start-screen picker and the Create a Game picker both call this.
+  function setGrade(g) {
+    if (!GRADE_ORDER.includes(g)) return;
+    grade = g;
+    el.gradeSelect.value = String(g);
+    el.cgGrade.value = String(g);
+    persistProgress();
+    updateHUD();
   }
 
   // ---- Speed selection ----
@@ -3498,6 +3518,9 @@
     paused = false; prePauseState = null;
     state = "start";
   };
+  document.getElementById("homeCreateBtn").onclick = document.getElementById("createGameBtn").onclick;
+  document.getElementById("homeMyGamesBtn").onclick = document.getElementById("myGamesBtn").onclick;
+  el.cgGrade.onchange = () => setGrade(Number(el.cgGrade.value));
   el.cgPrompt.addEventListener("keydown", (e) => { e.stopPropagation(); }); // don't let Space jump
   document.querySelectorAll("#cgChips .cg-chip").forEach(c => {
     c.onclick = () => { if (!creatingGame) el.cgPrompt.value = c.textContent; };
