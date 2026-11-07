@@ -142,7 +142,7 @@ if (!MOCK_ON) {
     const c = await client(uid, "inv");
     const ok = await c.generate({ prompt: "mockinvalidonce volcanoes" });
     assert.equal(ok.data.status, "ok");
-    await rejects(c.generate({ prompt: "mockinvalidtwice volcanoes" }), "unavailable", "model");
+    await rejects(c.generate({ prompt: "mockinvalidtwice volcanoes" }), "unavailable", "gen_failed");
   });
 
   test("bad arguments -> invalid-argument", async () => {

@@ -84,10 +84,10 @@ async function handleGenerate(request, deps) {
       return null;
     }
   };
-  const failModel = async (outcome) => {
+  const failModel = async (outcome, detail = "model") => {
     await settle({ outcome: "failure", refund: true });
     log("warn", { outcome });
-    return fail("unavailable", "model", "Try again soon.");
+    return fail("unavailable", detail, "Try again soon.");
   };
 
   try {
@@ -128,6 +128,7 @@ async function handleGenerate(request, deps) {
     let fixes;
     let blocks = 0;
     let attempts = 0;
+    let invalid = 0;
     for (let attempt = 1; attempt <= 2 && !game; attempt++) {
       attempts = attempt;
       let res = null;
@@ -147,6 +148,7 @@ async function handleGenerate(request, deps) {
         const v = res.finishReason === "MAX_TOKENS" ? { ok: false, errors: ["json"] } : validateGame(res.text, { count: args.count, grade: cls.grade });
         if (v.ok) game = v.value;
         else {
+          invalid++;
           fixes = v.errors;
           log("warn", { outcome: "gen_invalid", attempt, inTokens: res.inTokens, outTokens: res.outTokens, checks: v.errors.join(",") });
         }
@@ -158,7 +160,8 @@ async function handleGenerate(request, deps) {
         const s = await settle({ outcome: "refused" });
         return { status: "refused", reason: "unsafe", message: REFUSALS.unsafe, remaining: s ? s.remaining : ctx.remaining };
       }
-      throw await failModel("gen_failed");
+      // Model answered but never produced a valid game (details.code "gen_failed") vs. no usable answer at all ("model").
+      throw await failModel("gen_failed", invalid > 0 ? "gen_failed" : "model");
     }
 
     // 8. save game + counters in one transaction

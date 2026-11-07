@@ -427,3 +427,60 @@ test("prompts: REFUSALS covers every prefilter and classifier reason", () => {
 test("prompts: REFUSALS copy never echoes templates", () => {
   for (const m of Object.values(prompts.REFUSALS)) assert.ok(!/\$\{|%s|\{\}/.test(m));
 });
+
+// ---- reading level fixtures: realistic Grade 2/3 bar-graph quizzes (principled check, STEAM terms allowed) ----
+const barGame = (qs) => ({
+  stayedOnSteamTopic: true, title: "Bar Graph Fun",
+  questions: qs.map(([text, options], i) => ({ text, options, correctIndex: 0, hint: "Look at the bars one at a time.", explanation: "The tallest bar shows the most votes.", emoji: i % 2 ? null : "📊" })),
+});
+const G3_GOOD = barGame([
+  ["Look at the bar graph. Pizza has 8 votes. Tacos have 5 votes. Pasta has 3 votes. How many votes are there altogether?", ["16 votes", "12 votes", "10 votes"]],
+  ["The bar graph shows our favorite fruits. Which category has the fewest votes? Look for the shortest bar.", ["Grapes", "Apples", "Bananas"]],
+  ["On a bar graph, the axis at the bottom lists the categories. What does the axis on the side show?", ["The number of votes", "The title", "The colors"]],
+  ["Mia made a tally chart of pets: cats 6, dogs 9, fish 4. Which bar will be the tallest on her graph?", ["The dogs bar", "The cats bar", "The fish bar"]],
+  ["Look at the bar graph. Pizza has 8 votes. Tacos have 5 votes. Pasta has 3 votes. Salad has 6 votes. Soup has 2 votes. Which food has the fewest votes?", ["Soup", "Salad", "Pasta"]],
+  ["How many more votes does the dog bar have than the fish bar? Dogs have 9 and fish have 4.", ["5 more votes", "4 more votes", "13 more votes"]],
+]);
+const G2_GOOD = barGame([
+  ["Look at the graph. Cats have 6. Dogs have 9. Fish have 4. Which bar is tallest?", ["Dogs", "Cats", "Fish"]],
+  ["Which pet has fewer votes, cats or fish? Use the graph to compare.", ["Fish", "Cats", "Dogs"]],
+  ["The graph has bars for red, blue and green. Blue has 7. Red has 3. How many altogether?", ["10", "4", "21"]],
+  ["Each tally mark is one vote. Pia drew 5 marks for pizza. How many votes?", ["5 votes", "4 votes", "6 votes"]],
+  ["The axis shows numbers. What does the tallest bar tell you?", ["The most votes", "The fewest votes", "The title"]],
+]);
+const HARD_Q = [
+  "Considering the aforementioned distribution, which representation accurately illustrates proportional relationships between categorical observations and corresponding quantitative magnitudes?",
+  "Photosynthesis, transpiration, and chlorophyll absorption demonstrate environmental interdependence throughout ecosystems.",
+  "Because the horizontal axis represents discrete categories while the vertical axis represents quantities, analysts frequently misinterpret relationships between independent variables and outcomes.",
+];
+const withHard = (base, text) => { const g = JSON.parse(JSON.stringify(base)); g.questions[2].text = text; return g; };
+
+for (const g of [3, 4, 5]) test(`reading: realistic Grade 3 bar-graph quiz passes at grade ${g}`, () => assert.deepEqual(gcodes(G3_GOOD, { count: 8, grade: g }), []));
+for (const g of [2, 3]) test(`reading: realistic Grade 2 bar-graph quiz passes at grade ${g}`, () => assert.deepEqual(gcodes(G2_GOOD, { count: 8, grade: g }), []));
+test("reading: data-heavy grade 3 text with numbers passes (numbers are not reading words)", () =>
+  assert.deepEqual(gcodes(withQ({ text: "Look at the bar graph. Pizza has 8 votes. Tacos have 5 votes. Pasta has 3 votes. Salad has 6 votes. Soup has 2 votes. Which food has the fewest votes?" }, 1), { count: 8, grade: 3 }), []));
+test("reading: grade 2 data text with four short number sentences passes", () =>
+  assert.deepEqual(gcodes(withQ({ text: "Look at the graph. Cats have 6. Dogs have 9. Fish have 4. Which bar is tallest?" }), { count: 8, grade: 2 }), []));
+test("reading: Grade 3 quiz is too hard for Pre-K and TK", () => {
+  assert.ok(gcodes(G3_GOOD, { count: 8, grade: -2 }).includes("reading_level"));
+  assert.ok(gcodes(G3_GOOD, { count: 8, grade: -1 }).includes("reading_level"));
+});
+for (const [i, text] of HARD_Q.entries()) {
+  for (const g of [3, 5]) test(`reading: genuinely hard text #${i + 1} still rejected at grade ${g}`, () => assert.ok(gcodes(withHard(G3_GOOD, text), { count: 8, grade: g }).includes("reading_level")));
+}
+test("reading: a single hard word in a short question does not fail it", () =>
+  assert.deepEqual(gcodes(withQ({ text: "Which bar shows the biggest quantity of votes?" }), { count: 8, grade: 3 }), []));
+test("reading: STEAM terms are allowed at grade 3 even when long", () =>
+  assert.deepEqual(gcodes(withQ({ text: "Which fraction is bigger, the numerator or the denominator? Compare the graph categories." }), { count: 8, grade: 3 }), []));
+test("reading: many long non-STEAM words are rejected at grade 3", () =>
+  assert.ok(gcodes(withQ({ text: "Unfortunately, extraordinary circumstances disappeared unexpectedly overnight?" }), { count: 8, grade: 3 }).includes("reading_level")));
+test("reading: hard options (too many words) still rejected, short options with numbers pass", () => {
+  assert.ok(gcodes(withQ({ options: ["The pizza bar is taller than the tacos bar by three votes", "Tacos", "Pasta"], correctIndex: 0 }), { count: 8, grade: 3 }).includes("reading_level"));
+  assert.deepEqual(gcodes(withQ({ options: ["16 votes in all", "12 votes", "10 votes"], correctIndex: 0 }), { count: 8, grade: 1 }), []);
+});
+test("reading: a long run-on sentence is rejected even when the total is small", () =>
+  assert.ok(gcodes(withQ({ text: "Look at how the tall red bar on the left side of this bar graph is much taller than the little blue bar?" }), { count: 8, grade: 1 }).includes("reading_level")));
+test("reading: other safety checks are unchanged by the reading-level change", () => {
+  assert.ok(gcodes(withQ({ text: "Visit www.example.com for the graph answer today" }), { count: 8, grade: 3 }).includes("text_url"));
+  assert.ok(gcodes(withQ({ options: ["Dogs", "dogs", "Fish"], correctIndex: 0 }), { count: 8, grade: 3 }).includes("options_duplicate"));
+});
