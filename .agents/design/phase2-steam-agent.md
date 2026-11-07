@@ -60,9 +60,10 @@ const { handleGenerate } = require("./lib/handler");
 
 initializeApp();
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
-// Mock only inside the Functions emulator AND with an explicit flag AND never on Cloud Run
-// (K_SERVICE is set by Cloud Run / deployed 2nd gen functions, not by the emulator).
-const USE_MOCK = IS_EMULATOR && process.env.MQ_MOCK_MODEL === "1" && !process.env.K_SERVICE;
+// Mock only inside the Functions emulator AND with an explicit flag. FUNCTIONS_EMULATOR is set
+// only by the emulator (getEmulatorEnvs), never on Cloud Run. Do NOT test K_SERVICE: the emulator
+// sets K_SERVICE for every loaded trigger (getSystemEnvs), so such a check would disable the mock.
+const USE_MOCK = IS_EMULATOR && process.env.MQ_MOCK_MODEL === "1";
 
 let model;               // lazy: the real Vertex client is created on first call
 function getModel() {
@@ -298,7 +299,7 @@ Length limits and everything else are **server-validated** because unsupported s
 
 ### 4.3 Validation (`lib/validate.js`, pure, returns `{ok:true, value}` or `{ok:false, errors:[codes]}`)
 
-`validateClassification(raw)`: parse JSON (reject > 4 KB); object with exactly the schema keys; `isSteam`/`safe` booleans; enums in set; `topic` 3..60 and `theme` null or 2..40, each passing `sanitizePrompt` idempotently, the `url`/`contact`/`injection`/`profanity` checks, and the output charset; `grade` integer in set, **if the request supplied a grade hint and the classifier's grade differs by more than 2 steps, use the hint** (stops a prompt from forcing a wildly different level); coherent combination (`refusalReason == "none"` iff `isSteam && safe`). Output: the validated form.
+`validateClassification(raw)`: parse JSON (reject > 4 KB); object with exactly the schema keys; `isSteam`/`safe` booleans; enums in set; `topic` 3..60 and `theme` null or 2..40, each passing `sanitizePrompt` idempotently, the `url`/`contact`/`injection`/`profanity` checks, and the output charset; `grade` integer in set, **grade authority: the grade selector (`gradeHint`, always present) is the anchor; a grade named in the prompt wins only when within 2 steps of the hint, otherwise the hint is used** (so "fractions for 5th grade" works with the selector at 3, but cannot force a wildly different level) (stops a prompt from forcing a wildly different level); coherent combination (`refusalReason == "none"` iff `isSteam && safe`). Output: the validated form.
 
 `validateGame(raw, {count, grade})`, in order, collecting stable error codes (never content):
 1. JSON.parse of `response.text` (size cap 64 KB), object, `stayedOnSteamTopic === true` else `off_topic_attested`.
@@ -350,7 +351,7 @@ When the request is valid, fill in:
 - subject: the best fit of Science, Technology, Engineering, Art, Math.
 - topic: a short plain-English name of the topic, at most 60 characters, written in your own words. No quotes, links, or special symbols.
 - theme: a fun setting or context from the request if there is one (for example "pizza"), at most 40 characters, otherwise null.
-- grade: the grade the request names if it names one; otherwise use gradeHint. Grade codes: -2 Pre-K, -1 TK, 0 Kindergarten, 1 to 5 for grades 1 to 5.
+- grade: the grade the request names if it names one; otherwise use gradeHint. (The server then applies the drift rule in 4.3: a named grade more than 2 steps from gradeHint is replaced by gradeHint.) Grade codes: -2 Pre-K, -1 TK, 0 Kindergarten, 1 to 5 for grades 1 to 5.
 - difficulty: easy, medium, or hard, suited to that grade.
 When the request is not valid, still fill every field with the closest safe values (subject "Science", topic "none", grade gradeHint, difficulty "easy").
 Return only the JSON form.
@@ -643,7 +644,7 @@ Normalized return: `{ text, blocked, blockReason, finishReason, inTokens, outTok
 
 (c) **Rules tests**: section 6.3 (`firebase emulators:exec --only firestore --project demo-mathquest "node --test rules-test/rules.test.js"`). Expected 69 passing.
 
-(d) **Callable e2e through the Functions emulator** (`firebase emulators:exec --only auth,firestore,functions --project demo-mathquest "node --test functions/test/e2e.test.js"` with `MQ_MOCK_MODEL=1`): Admin SDK creates Auth users in the Auth emulator and `users/{uid}` docs; the Web SDK (`firebase` 13.2.0 in Node) signs in with a custom token, points `connectFunctionsEmulator`, and calls `httpsCallable(..., "generateGame")`. Cases: unauthenticated call rejected; pending student rejected; active student happy path (game readable by the creator through the **rules** with a Firestore client, and not by another user); refusal; quota exhaustion (seed `usage` near the limit via Admin SDK); invalid-once mock (trigger word in the prompt) succeeds after retry; client write to `games` denied by deployed rules (emulator loads `firestore.rules`). Mock steering uses plain trigger words the mock inspects (`mockinvalidonce`, `mockinvalidtwice`, `mockblocked`, `mockoffTopic`) so no special characters are needed. The test also asserts the mock is **not** active when `MQ_MOCK_MODEL` is unset (call fails with `unavailable`/`internal`, not a mock game) and `index.js` contains the three-part guard.
+(d) **Callable e2e through the Functions emulator** (`firebase emulators:exec --only auth,firestore,functions --project demo-mathquest "node --test functions/test/e2e.test.js"` with `MQ_MOCK_MODEL=1`): Admin SDK creates Auth users in the Auth emulator and `users/{uid}` docs; the Web SDK (`firebase` 13.2.0 in Node) signs in with a custom token, points `connectFunctionsEmulator`, and calls `httpsCallable(..., "generateGame")`. Cases: unauthenticated call rejected; pending student rejected; active student happy path (game readable by the creator through the **rules** with a Firestore client, and not by another user); refusal; quota exhaustion (seed `usage` near the limit via Admin SDK); invalid-once mock (trigger word in the prompt) succeeds after retry; client write to `games` denied by deployed rules (emulator loads `firestore.rules`). Mock steering uses plain trigger words the mock inspects (`mockinvalidonce`, `mockinvalidtwice`, `mockblocked`, `mockoffTopic`) so no special characters are needed. The test also asserts the mock is **not** active when `MQ_MOCK_MODEL` is unset (call fails with `unavailable`/`internal`, not a mock game) and `index.js` contains the two-part guard (`FUNCTIONS_EMULATOR === "true" && MQ_MOCK_MODEL === "1"`) and does not reference `K_SERVICE`.
 
 (e) **Client harness** (`node --test functions/test/client.test.js`, jsdom 31.0.0). jsdom does **not** execute `<script type="module">`, so the Firebase module block cannot run there. The harness loads the **real** `index.html` and `questions.js` with `runScripts: "dangerously"`, stubs `HTMLCanvasElement.prototype.getContext` with a no-op Proxy, `requestAnimationFrame`, `AudioContext`, `localStorage`, and injects a `window.MathQuestCloud` bridge in `beforeParse`. The bridge exposes `available:true`, the profile/invite methods used by `enterGame`, and `generateGame` / `listMyGames` that forward to the **Functions + Firestore emulators** using a Node Web SDK client signed in as the test user (so the callable path and mock model are real). It exercises: menu visibility per role/status; overlay open/close and `hideAllOverlays` coverage (open every new overlay, then open another screen, assert only one `.overlay.show`); Space typed in the textarea is not swallowed; double-click on Build makes exactly one callable invocation; refusal and error copy rendering; preview -> Play -> first battle question text/options/answer match the stored game and options are shuffled copies; hint and video word; explanation shown after an answer; **custom run isolation**: record every `saveProfile` payload and assert `level`, `best`, `megaGemsCollected`, `ultraGemsCollected` never differ from the pre-run values through level clear, game over, retry, logout and a later regular Play; a malformed question in the stored doc is skipped and a game with < 3 valid questions shows the "can't be played" message; model strings containing `<img onerror>` render as text (no element created). 
 What stays **traced, not executed**: the 30 lines of glue in the module block (`getFunctions`, `httpsCallable`, `connectFunctionsEmulator`, query construction) and real-browser layout/scrolling. The e2e test (d) covers the same callable protocol from Node. If jsdom cannot run the main script even with stubs, the fallback is to evaluate only the `MQ-CUSTOM` block and the `adaptGame` function with `vm` and report the rest as traced. The final report states which happened.
@@ -665,7 +666,7 @@ Counts to report from real output: unit N, handler N, e2e N, client N, rules 69,
 | Cross-user data access | read others' games/usage | creator-or-consented-adult read; usage deny-all; tests A17-A21 | adult list query behaviour confirmed in emulator (6.1) |
 | Quota tampering | client resets counters | `usage` deny-all; counters only via Admin transaction | none |
 | Role forgery | claims a role in request | role read from `users/{uid}`; rules make role immutable | self-chosen role at signup (Decision 1) |
-| Mock model in production | env flag set by mistake | `FUNCTIONS_EMULATOR==="true"` AND `MQ_MOCK_MODEL==="1"` AND `!K_SERVICE`; mock file lazily required; test asserts the guard | owner would have to set all three on Cloud Run |
+| Mock model in production | env flag set by mistake | `FUNCTIONS_EMULATOR==="true"` AND `MQ_MOCK_MODEL==="1"` (K_SERVICE deliberately not used: the emulator sets it); mock file lazily required; test asserts the guard | owner would have to set `FUNCTIONS_EMULATOR`, which only the emulator sets, plus the flag, on Cloud Run |
 | CORS / CSRF | foreign site calls the function | ID token required (not cookie-based); `cors` restricted to the Pages origin in production | CORS is not an auth control; the token is |
 | Replay / duplicate submit | double click, retries | client `creatingGame` flag + server `lockUntil` + quota | none |
 | Log injection | prompt text in logs | prompts never logged | none |
@@ -713,4 +714,7 @@ Owner manual live checks (after deploy): adult creates a game; active student cr
 Matching/sequence/fill-in-blank types (Phase 3), community browse, sharing, adult dashboards and assigning games, per-game leaderboards, deleting/editing games, report-a-question, App Check enforcement, non-English prompts, images or audio generation, any changes to the existing question bank or runner physics.
 
 ## 14. Responses to design-review findings
-None yet (first draft). This section is filled in on each revision.
+Review 1 (CHANGES_REQUESTED):
+1. HIGH, mock guard: FIXED. Guard is now `FUNCTIONS_EMULATOR === "true" && MQ_MOCK_MODEL === "1"`; `K_SERVICE` removed (the emulator sets it per trigger). Updated section 1 `index.js`, the threat-model row, and the 9d guard assertion.
+2. NIT, grade authority: FIXED. Selector is the anchor; a named grade wins only within 2 steps of it (4.3), and the classifier prompt (5.1) now says so.
+3. NIT, empty section 14: FIXED (this list).
