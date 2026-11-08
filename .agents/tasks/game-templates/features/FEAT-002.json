@@ -1,0 +1,25 @@
+{
+    "id":  "FEAT-002",
+    "type":  "feat",
+    "description":  "Client SVG visual renderer in a /* MQ-VISUALS:BEGIN/END */ region of index.html, with jsdom tests and server parity test, and the #battleVisual slot so the existing runner quiz shows pictures. Depends on FEAT-001 only for the parity test.",
+    "status":  "completed",
+    "steps":  [
+                  "Read design sections 3.2, 4.1, 4.3, 4.5, 7, 8. Locate banner comment \u0027CREATE A GAME / MY GAMES\u0027 in index.html and insert the region just before it.",
+                  "Implement VIS_LIMITS (copy of server LIMITS), EMOJI_DENY, sanitizeVisual(v,host) rebuilding a fresh object (null on any failure), describeVisual(def), renderVisual(def,opts) using only createElementNS, setAttribute with fmt() numbers or constants, textContent; try/catch dispatcher returning null. Drawers: barChart, pie (pizza/pie/chocolate/plain with toppings on shaded slices, dashed unshaded), numberLine, clock, shape, emojiGroup, pictograph, thermometer. Animations only under prefers-reduced-motion: no-preference.",
+                  "Add \u003cdiv id=\"battleVisual\"\u003e\u003c/div\u003e between #graphCanvas and #question in #battle; add to el map; render/clear in loadQuestion/makeQuestion for custom quiz questions (adaptGame keeps per-question visual; drop questions whose raw visual fails sanitize).",
+                  "Create functions/test/visuals.test.js (jsdom; check functions/package.json first and add jsdom pinned only if missing): extract region by markers, per-kind element and aria assertions, malformed -\u003e null, hostile strings -\u003e text nodes only, no script/foreignObject/a/image/use, no on* or href attributes, LIMITS and EMOJI_DENY parity with functions/lib/visuals.js.",
+                  "Commit: feat(client): svg visual renderer."
+              ],
+    "acceptance_criteria":  [
+                                "node --test functions/test/visuals.test.js passes",
+                                "Renderer never uses innerHTML and never throws on malformed input",
+                                "Runner quiz still plays v1 games unchanged (client.test.js passes)"
+                            ],
+    "verification":  [
+                         "node --test functions/test/visuals.test.js",
+                         "node --test functions/test/unit.test.js",
+                         "$env:MQ_MOCK_MODEL=\u00271\u0027; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\"; Remove-Item Env:MQ_MOCK_MODEL"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED: node --test functions/test/visuals.test.js = 23 pass/0 fail (jsdom 31.0.0 already in devDependencies, no package change); unit.test.js = 397 pass/0 fail; emulators:exec (auth,firestore,functions, MQ_MOCK_MODEL=1) e2e+client = 26 pass/0 fail; ports free before and after. Region /* MQ-VISUALS:BEGIN/END */ sits just before the CREATE A GAME banner, outside MQ-CUSTOM, so client.test.js HOOK is unaffected. Later steps: use sanitizeVisual(v,host), describeVisual(def), renderVisual(def,{host,maxWidth}) (sanitizes itself; null on failure; console.warn(\u0027visual render failed\u0027) only). adaptGame keeps q.visual (sanitized, or null) and drops any question that has an own \u0027visual\u0027 key (any value, incl. null) that fails sanitize; v1 games unchanged. #battleVisual slot + showBattleVisual(q) (returns false if picture cannot draw; loadQuestion re-picks up to 6 times). CSS: #battleVisual and bar-grow animation only under prefers-reduced-motion: no-preference. Test file also checks LIMITS/EMOJI_DENY/KINDS/HOSTS/KEYS/EDGES parity with functions/lib/visuals.js, client-vs-server sanitizer agreement, hostile strings, forbidden tags/attrs, node cap (\u003c=130), and adaptGame drop. TRACED only (not executed): real-browser layout/visual look (no screenshots yet), runner loadQuestion rendering of a visual in a live page, text overflow of rotated bar labels; client sanitizer lacks server banned-word/reading-level checks by design (server is first line); URL check on client is a regex (VIS_URL_RE). Not done in this FEAT: createGame/template UI, MQ-TEMPLATES, showVisual helper for templates."
+}

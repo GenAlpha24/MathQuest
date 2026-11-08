@@ -1,0 +1,26 @@
+﻿{
+    "id":  "FEAT-006",
+    "type":  "docs",
+    "description":  "Docs, headless-browser visual check, fixes for what is seen, and full four-suite regression. Depends on all earlier features.",
+    "status":  "completed",
+    "steps":  [
+                  "Update functions/README.md: schema v2 per type, templates, visual kinds and limits, answerCheck and its honest limits, tuning knobs (VARIETY_WINDOW, counts, GENERATE_MAX_OUTPUT_TOKENS unchanged), mock trigger words, deploy order (functions first, then client PR) and old/new compatibility, rollback note. Do not edit .kiro/.",
+                  "Visual check: check ports 8080, 9099, 5001, 4400, 4500, 9150 free; install playwright and a browser under $env:TEMP (outside repo); copy index.html to a temp folder with a throwaway test hook (not committed) that injects sample v2 games through adaptGame; serve locally; screenshot each of 6 templates and each of 8 visual kinds at 1280 and 360 px width into $env:TEMP; view them and record layout bugs, overlaps, unreadable text, pizza/bar chart quality.",
+                  "Fix every defect found in index.html and re-screenshot; if no headless browser can run, record \u0027rendering NOT visually verified\u0027.",
+                  "Run all four suites and report counts before/after (baseline unit 282, handler 29, e2e+client 26, rules 69). Ensure no emulator or server process is left running and git status shows no stray files.",
+                  "Commits: docs: functions README for schema v2; fix(client): visual check findings. Record executed vs traced and screenshot descriptions in findings."
+              ],
+    "acceptance_criteria":  [
+                                "All four suites pass with real output observed",
+                                "Every template and visual kind has a screenshot description or an explicit NOT visually verified statement",
+                                "Screenshots, playwright, .kiro/, .env files not in any commit"
+                            ],
+    "verification":  [
+                         "node --test functions/test/unit.test.js functions/test/visuals.test.js functions/test/templates.test.js",
+                         "firebase emulators:exec --only auth,firestore --project demo-mathquest \"node --test functions/test/handler.test.js\"",
+                         "$env:MQ_MOCK_MODEL=\u00271\u0027; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\"; Remove-Item Env:MQ_MOCK_MODEL",
+                         "firebase emulators:exec --only firestore --project demo-mathquest \"node --test rules-test/rules.test.js\""
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED: README updated (a9d957c). Headless Chromium (playwright under TEMP\\mqvis, test hook injected into a temp copy of index.html, nothing in repo) screenshots at 1280 and 360 px of all 8 visual kinds (plus barChart 8 bars, pie 5/12 parts variants, hexagon) and of 6 templates (quiz runner, picturequiz, catch, memory, sequence, sort); 0 page errors, 0 horizontal overflow. Seen OK: pizza (toppings on shaded slices, dashed pale unshaded), bar chart (axis, gridlines, labels, 8 bars readable at 360), number line, clock, rectangle with labels and split, emoji group with crossed, pictograph with key, thermometer. DEFECT FIXED (1e4ad33): Sound toggle left-aligned alone on its own row when header wrapped (memory/sequence/sort); now right-aligned (measured). Minor not fixed: question text sits slightly left of the centered picture in the picture card; overlay scrolls (overflow-y auto) so options below the fold at 360 are reachable. Not exercised visually: results screens, flipped memory cards, in-progress states, quiz-runner battle overlay with a visual, Create-a-Game chooser/preview. Suites: unit+visuals+templates 451/451, handler 50/50, e2e+client 44/44 (MQ_MOCK_MODEL set then removed), rules 69/69. Baseline was 282/29/26/69. No emulators or servers left running (ports free). git status: only untracked .agents/tasks, .kiro, functions/.env.mathquest-ca395."
+}

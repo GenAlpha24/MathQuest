@@ -1,0 +1,24 @@
+﻿{
+    "id":  "FEAT-005",
+    "type":  "feat",
+    "description":  "Create a Game UX: template chips, generateGame forwarding, preview with template and thumbnail visual, My games icons, fallback note; end-to-end tests with the mock model for each template and visual kind. Depends on FEAT-001 to FEAT-004.",
+    "status":  "completed",
+    "steps":  [
+                  "Read design sections 6.1 (createGame/myGames anchors), 6.6.",
+                  "Add role=radiogroup #cgTemplates of .tpl-chip buttons (Surprise me default, then Monster Run, Picture Pick, Memory Match, Order It, Sort It, Bubble Pop; icon, name, 3-word blurb; roving tabindex and arrows) below #cgChips; cgTemplate local var reset to \u0027auto\u0027 on each open; disable chips in setCgBusy.",
+                  "Module-block generateGame({prompt,grade,template}) forwards template; preview shows icon+name, title, \u0027subject Â· topic Â· N unit\u0027, #cgPreviewVisual with first visual at maxWidth 160; templateNote \u0027fallback\u0027 appends COPY.templateFallback; renderGameList rows start with template icon (missing or unknown type -\u003e runner icon) and unit.",
+                  "Update the client.test.js bridge and add e2e cases via trigger words for each template and each of the 8 visual kinds, template override, fallback, variety after 3 identical games, seeded v1 docs still list and play, malformed-visual seeded doc, logout/menu teardown.",
+                  "Commit: feat(client): template chooser, preview and My games icons."
+              ],
+    "acceptance_criteria":  [
+                                "Default chip is Surprise me and is sent as template \u0027auto\u0027",
+                                "Preview and My games show the template icon; v1 games show the runner icon",
+                                "All e2e and client tests pass"
+                            ],
+    "verification":  [
+                         "$env:MQ_MOCK_MODEL=\u00271\u0027; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\"; Remove-Item Env:MQ_MOCK_MODEL",
+                         "node --test functions/test/templates.test.js functions/test/visuals.test.js"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED (emulators auth+firestore+functions, MQ_MOCK_MODEL=1): node --test e2e.test.js client.test.js = 44 tests, 44 pass, 0 fail (baseline 26; +5 e2e callable cases, +8 jsdom client cases incl. chooser, per-template preview/Play, 8 visual kinds, fallback, variety, My games icons, malformed visual, teardown). node --test templates.test.js visuals.test.js = 54 pass. Ports were free before and after; emulators not left running. TRACED only: module-block generateGame glue in index.html (template forwarded, templateNote returned) - the test bridge mirrors it. Not run this FEAT: unit, handler, rules (no change to functions/ or rules). Notes for later steps: chips built in JS (buildTemplateChips) from TEMPLATE_META; code lives after MQ-TEMPLATES:END; mock needs trigger words (mock\u003ctemplate\u003e) for non-quiz fits, otherwise a chosen template falls back to quiz with templateNote \u0027fallback\u0027; preview uses #cgPreviewTpl and #cgPreviewVisual (first valid visual, maxWidth 160); My games rows use span.row-icon (aria-hidden). Visual rendering in a real browser NOT verified here."
+}

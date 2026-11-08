@@ -1,0 +1,5 @@
+{"verdict": "APPROVED", "findings": [
+{"id": 1, "severity": "NIT", "where": "4.4", "problem": "Numeric answerCheck parse must be signed (thermometer goes negative).", "fix": "Use /-?\\d+/ and add a unit case."},
+{"id": 2, "severity": "NIT", "where": "6.4", "problem": "sfx.correct/wrong line numbers off by one (1557/1558).", "fix": "Correct or drop the numbers."},
+{"id": 3, "severity": "NIT", "where": "6.6", "problem": "Client generateGame must also return templateNote from the callable data.", "fix": "Add templateNote: d.templateNote || null to the returned object."}
+], "reviewDoc": "c:/Users/saban/Downloads/RIDHI projects/game 2/.agents/tasks/game-templates/design-review.md"}

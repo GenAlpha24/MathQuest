@@ -1,0 +1,1 @@
+{"verdict": "APPROVED", "findings": [{"severity": "NIT", "file": "index.html", "detail": "A UTF-8 BOM was added at line 1, so the first line shows as changed. Harmless."}, {"severity": "NIT", "file": "index.html", "detail": "The MQ-TEMPLATES header comment says only picture quiz and bubble pop exist (more templates are added later). It is stale now that 6 templates ship."}]}
