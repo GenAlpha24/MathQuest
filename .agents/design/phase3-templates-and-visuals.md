@@ -381,4 +381,12 @@ Pros: free-form pictures for any topic. Cons (why not now): (1) cost and latency
 
 ## 14. Revision notes
 
-First iteration; no design review existed at authoring time (`design-review.json` absent), so there are no findings to answer yet.
+Iteration 2 (answers to `design-review.json`, verdict CHANGES_REQUESTED, 0 HIGH / 3 MEDIUM / 4 NIT). All seven addressed; none backlogged or ignored.
+
+1. MEDIUM, picture-dependent questions without a picture: fixed in 5.8 (`allowedKinds = []` for legacy requests, so the legacy response is exactly the Phase 2 game) and 5.6 (choice body split into always-on paragraph A and paragraph B included only when `allowedKinds` is non-empty; degraded `picturequiz` is text-only). Handler tests added in section 9.
+2. MEDIUM, 4.3 contradiction: fixed in 4.3. `adaptGame` drops any item whose `visual` fails `sanitizeVisual` (all families); under-minimum games return `null`; a draw-time renderer failure is auto-skipped without penalty. Tests added.
+3. MEDIUM, global keydown handler: anchor added to 6.1; 6.3 requires `if (state === "template") return;` as the first statement; section 7 updated; global-handler test added to section 9.
+4. NIT, `null` template: `parseArgs` normalises it to absent (5.2).
+5. NIT, pizza `answerCheck`: adopted op `shadedFraction` (4.4).
+6. NIT, sfx: mapping named explicitly in 6.4; `sfx.correct` line corrected to 1556, `sfx.wrong` 1557.
+7. NIT, `answerCheck` sub-schema: specified in 4.4 (op enum per allowed kinds, labels must match a visual label by `normKey`, else `visual_mismatch`).
