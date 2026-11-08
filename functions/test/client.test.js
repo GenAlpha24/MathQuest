@@ -607,4 +607,107 @@ if (!MOCK_ON) {
     assert.equal(env.mq.customRun, null);
     assert.deepEqual([env.mq.level, env.mq.best, env.mq.mega, env.mq.ultra], [snap.level, snap.best, snap.mega, snap.ultra]);
   });
+
+  test("source: the global keydown handler returns first in template state; the overlay is registered", () => {
+    assert.match(INDEX, /document\.addEventListener\("keydown", \(e\) => \{\s*if \(state === "template"\) return;\s*if \(e\.code === "Space"/);
+    assert.match(INDEX, /function hideAllOverlays\(\) \{\s*tplTeardown\(\);/);
+    assert.match(INDEX, /tpl: document\.getElementById\("tpl"\)/);
+    assert.match(INDEX, /function endCustomRun\(\) \{\s*tplTeardown\(\);/);
+  });
+
+  test("template games: own overlay, Space/ArrowUp/Enter not swallowed, saves untouched, teardown on every menu path, unknown types", async () => {
+    const uid = "tpl" + tag;
+    const base = { level: 4, best: 5, megaGemsCollected: 2, ultraGemsCollected: 1 };
+    const same = (p) => p.level === 4 && p.best === 5 && p.megaGemsCollected === 2 && p.ultraGemsCollected === 1;
+    const env = await boot(uid, base);
+    await env.enter();
+    const pie = { kind: "pie", parts: 8, shaded: 3, theme: "pizza" };
+    const qs = [goodQ(0, { visual: pie }), goodQ(1), goodQ(2), goodQ(3), goodQ(4)];
+    await seedGame(uid, "pq" + tag, { schemaVersion: 2, type: "picturequiz", title: "Pic game", questions: qs, questionCount: 5, createdAt: new Date(Date.now() - 1000) });
+    await seedGame(uid, "mem" + tag, { schemaVersion: 2, type: "memory", title: "Memory game", questions: qs, questionCount: 5, createdAt: new Date(Date.now() - 3000) });
+        const open = async () => {
+      env.$("myGamesBtn").click();
+      await waitFor(() => env.doc.querySelectorAll("#gameList .game-row").length === 2 && !/Loading/.test(env.$("gameList").textContent), "two rows");
+      return [...env.doc.querySelectorAll("#gameList .game-row")];
+    };
+    const rowFor = (rows, name) => rows.find((r) => r.textContent.includes(name)).querySelector("button");
+    const key = (code) => new env.win.KeyboardEvent("keydown", { code, key: code === "Space" ? " " : code, bubbles: true, cancelable: true });
+    const savesBefore = env.saves.length;
+    let rows = await open();
+    // unknown (not yet implemented) type: friendly message, nothing mounted
+    rowFor(rows, "Memory game").click();
+    assert.equal(env.$("gameMsg").textContent, "This game can't be played. Try making another one!");
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    // picture quiz in its own overlay
+    rows = await open();
+    rowFor(rows, "Pic game").click();
+    assert.equal(env.mq.state, "template");
+    assert.deepEqual(env.shown(), ["tpl"]);
+    assert.equal(env.$("tpl").getAttribute("data-tpl"), "picturequiz");
+    for (const code of ["Space", "ArrowUp", "Enter"]) {
+      const ev = key(code);
+      (env.doc.querySelector("#tpl .tpl-ans") || env.doc.body).dispatchEvent(ev);
+      assert.equal(ev.defaultPrevented, false, code + " on a tile is left alone");
+    }
+    const sp = key("Space"); env.doc.body.dispatchEvent(sp);
+    assert.equal(sp.defaultPrevented, false);
+    assert.equal(env.mq.state, "template");
+    // play a few answers: no saves, runner state untouched
+    const first = env.doc.querySelector("#tpl .tpl-ans");
+    first.click();
+    assert.equal(env.saves.length, savesBefore, "template play wrote nothing");
+    assert.deepEqual([env.mq.level, env.mq.best, env.mq.mega, env.mq.ultra], [4, 5, 2, 1]);
+    // leaving through a menu path tears the screen down
+    env.$("createGameBtn").click();
+    assert.deepEqual(env.shown(), ["createGame"]);
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    assert.equal(env.$("tpl").getAttribute("data-tpl"), "");
+    assert.equal(env.mq.state, "start");
+    env.$("cgCloseBtn").click();
+    // Back to home from the header and from the results card
+    rows = await open();
+    rowFor(rows, "Pic game").click();
+    env.doc.querySelector("#tpl .tpl-head .tpl-icon").click();
+    assert.deepEqual(env.shown(), ["start"]);
+    assert.equal(env.mq.state, "start");
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    // logout while a template runs: final save equals the snapshot, nothing left behind
+    rows = await open();
+    rowFor(rows, "Pic game").click();
+    assert.equal(env.mq.state, "template");
+    const beforeLogout = env.saves.length;
+    env.$("logoutBtn").click();
+    await waitFor(() => env.loggedOut && env.$("auth").classList.contains("show"), "logout");
+    env.flush();
+    assert.ok(env.saves.length > beforeLogout, "logout wrote a final save");
+    assert.ok(env.saves.every(same), JSON.stringify(env.saves.filter((p) => !same(p))));
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    assert.deepEqual(env.shown(), ["auth"]);
+  });
+
+  test("v1 game (no type, schema 1) still lists and plays as the runner; Space still jumps", async () => {
+    const uid = "v1r" + tag;
+    const env = await boot(uid);
+    await env.enter();
+    await seedGame(uid, "v1" + tag, { title: "Old runner" });
+    env.$("myGamesBtn").click();
+    await waitFor(() => env.doc.querySelectorAll("#gameList .game-row").length === 1 && !/Loading/.test(env.$("gameList").textContent), "row");
+    env.$("gameList").querySelector("button").click();
+    assert.equal(env.mq.state, "playing");
+    assert.ok(env.mq.customRun);
+    assert.deepEqual(env.shown(), []);
+    const ev = new env.win.KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true, cancelable: true });
+    env.doc.body.dispatchEvent(ev);
+    assert.equal(ev.defaultPrevented, true);
+  });
+  test("adaptGame v2: type kept, v1 doc without type is a quiz, unknown type and newer schema are not playable", async () => {
+    const env = await boot("ag2" + tag);
+    const mk = (over) => ({ schemaVersion: 2, title: "T", topic: "t", subject: "S", questions: [0, 1, 2].map((i) => goodQ(i)), ...over });
+    assert.equal(env.mq.adaptGame(mk({ type: "catch" })).type, "catch");
+    assert.equal(env.mq.adaptGame(mk({ type: "picturequiz" })).type, "picturequiz");
+    assert.equal(env.mq.adaptGame(mk({ schemaVersion: 1 })).type, "quiz");
+    assert.equal(env.mq.adaptGame(mk({ type: "hologram" })), null);
+    assert.equal(env.mq.adaptGame(mk({ schemaVersion: 3 })), null);
+    assert.equal(env.mq.adaptGame(mk({ questions: [goodQ(0, { visual: { kind: "pie", parts: 3, shaded: 9 } }), goodQ(1), goodQ(2)] })), null);
+  });
 }
