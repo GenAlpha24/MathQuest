@@ -1,0 +1,28 @@
+﻿{
+    "id":  "FEAT-003",
+    "type":  "feat",
+    "description":  "Shared template framework (overlay, teardown, helpers, themes, COPY) plus the first two templates, picturequiz and catch, which reuse the choice-family question payload. Depends on FEAT-002.",
+    "status":  "completed",
+    "steps":  [
+                  "Read design sections 2, 6.1-6.5, 6.7, 6.8, 7.",
+                  "Add \u003cdiv id=\"tpl\" class=\"overlay\" data-tpl=\"\"\u003e\u003cdiv id=\"tplBody\"\u003e\u003c/div\u003e\u003c/div\u003e; register in el map AND the hideAllOverlays() array; hideAllOverlays() calls tplTeardown() first; endCustomRun() also calls tplTeardown().",
+                  "Add /* MQ-TEMPLATES:BEGIN/END */ right after /* MQ-CUSTOM:END */: TEMPLATE_META, helpers h/btn/setLive/hearts/stars/results/reduceMotion/tplLater/tplFrame/tplOn/rovingGrid/showVisual, header sound toggle mapped onto existing sfx, mountTemplate dispatch, picturequiz and catch modules (hearts, stars math, hints, explanations, calm layout, 12 s timer paused when document.hidden). Module reads no progress globals (level, lives, score, bestScore, gems, persistProgress, saveProfile, submitBestToCloud, customRun) and takes api={home,myGames,sound}.",
+                  "Update adaptGame: keep v1 behavior, return type and per-question visual, drop questions with malformed visual, minimum 3 playable else null; unknown type or schemaVersion \u003e 2 -\u003e null. startCustomGame: type quiz -\u003e existing runner path; others -\u003e stopTimer(); hideAllOverlays(); state=\u0027template\u0027; mountTemplate(g).",
+                  "Make `if (state === \"template\") return;` the first statement of the global document keydown handler.",
+                  "Add CSS block \u0027/* Templates (Phase 3) */\u0027 after the Phase 2 block with per-template themes via #tpl[data-tpl], 48px touch targets, flex-wrap, animations under prefers-reduced-motion: no-preference. Extend COPY with tplInstr, tplWin, tplLose, tplAgain, tplHome, tplMyGames, tplHint, tplCheck, tplCalm*, tplSound*, tplStarsNote, templateFallback.",
+                  "Create functions/test/templates.test.js (jsdom, region extraction): win/lose/complete, star math, hint, replay, home/myGames callbacks, keys 1-4, reduced-motion static catch, fake-timer teardown, source scan for forbidden identifiers. Extend client.test.js: key-handler first statement and Space/ArrowUp behaviour in template vs playing state, saveProfile payload identical during/after template play, v1 game plays as quiz.",
+                  "Commit: feat(client): template framework, Picture Pick and Bubble Pop."
+              ],
+    "acceptance_criteria":  [
+                                "Template runs never change best, level, gems or leaderboard payloads",
+                                "Navigating away from a template via any menu path leaves no timers or listeners",
+                                "Space/Enter on a focused tile is not preventDefault-ed by the global handler in template state",
+                                "v1 games still list and play as the runner"
+                            ],
+    "verification":  [
+                         "node --test functions/test/templates.test.js",
+                         "$env:MQ_MOCK_MODEL=\u00271\u0027; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\"; Remove-Item Env:MQ_MOCK_MODEL"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED: node --test templates.test.js visuals.test.js unit.test.js = 436 pass/0 fail (templates.test.js alone 16 new tests, jsdom with fake timers/rAF, real regions of index.html). Emulator run (auth,firestore,functions, MQ_MOCK_MODEL=1) e2e.test.js + client.test.js = 30 pass/0 fail (was 26; +4 client tests). Emulators stopped, ports free. NOT run: handler/rules suites (untouched files), real browser/visual check (FEAT later). TRACED only: CSS look, sound mapping onto real sfx, module-block glue. Notes for later steps: adaptGame returns null for memory/sequence/sort (FEAT-004 must add adaptTemplateGame and register modules in TPL_MODULES + tplReady uses TPL_MODULES); TEMPLATE_META already lists all six; COPY already has tplInstr for all five templates plus tplCheck; shared helpers h/btn/setLive/hearts/stars/tplResults/tplShell/rovingGrid/showVisual/tplLater/tplFrame/tplOn/tplStarsFor/reduceMotion exist in MQ-TEMPLATES; module signature (body,g,api)-\u003ebool; mountTemplate(g,api) in startCustomGame passes api={home:playSolo,myGames,sound-\u003esfx[k]}; sound kinds used: correct,wrong,levelClear,gameOver,jump. adaptGame question objects gained plain and emoji fields and result gained type. Only picturequiz/catch themes in CSS; add #tpl[data-tpl=...] for others. Test source scan forbids words level/lives/score/gems/customRun etc in TEMPLATES region code. Existing regex test requires hideAllOverlays array to end with el.createGame, el.myGames (el.tpl placed before them). Pre-existing: customRun lingers after leaving a runner game until logout/regular Play (not changed)."
+}

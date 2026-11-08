@@ -1,0 +1,33 @@
+{
+  "project_type": "Firebase: build-less single-file index.html client (inline CSS/JS, no framework) + plain JS Cloud Functions (Node, @google/genai 3.0.0) + Firestore rules",
+  "language": "JavaScript (CommonJS in functions/, browser JS in index.html)",
+  "build_system": "No build step. functions/ uses npm (npm ci). Design: .agents/design/phase3-templates-and-visuals.md is the contract; brief at .agents/tasks/game-templates/brief.md.",
+  "test_framework": "node:test via `node --test`; Firebase emulators for handler/e2e/client/rules; jsdom for region tests",
+  "build_command": "none (run tests)",
+  "test_command": "node --test functions/test/unit.test.js ; firebase emulators:exec --only auth,firestore --project demo-mathquest \"node --test functions/test/handler.test.js\" ; $env:MQ_MOCK_MODEL='1'; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\" (then remove MQ_MOCK_MODEL) ; firebase emulators:exec --only firestore --project demo-mathquest \"node --test rules-test/rules.test.js\"",
+  "verification_instructions": "Run from repo root. Baseline (brief): unit 282, handler 29, e2e+client 26, rules 69. Check ports 8080, 9099, 5001, 4400, 4500, 9150 are free before emulators (Get-NetTCPConnection -State Listen -LocalPort p); stop only a stale emulator pid. Never leave emulators running. Redirect long output to $env:TEMP files.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Windows PowerShell, Node 26, Java 21, firebase CLI emulators only, project id demo-mathquest. NO push, PR, deploy, login, real model calls, live project access. Screenshots and playwright live in $env:TEMP, never in repo. Do not edit .kiro/. Do not commit .kiro/, functions/.env.mathquest-ca395, .agents/tasks/, node_modules, logs, screenshots. Stage by file name. Stay on branch feature/game-templates.",
+  "contribution_requirements": "Local logical commits; no new dependencies unless justified and pinned (jsdom for renderer tests only if missing); firestore.rules and indexes unchanged; generated/custom games never write best score, level, gems or leaderboard; model text only via textContent/setAttribute of validated plain text, no innerHTML; overlays registered in el map AND hideAllOverlays(); never claim unrun tests.",
+  "key_patterns": "Region markers MQ-CUSTOM:BEGIN/END in index.html; extend single COPY table; adaptGame builds fresh objects; server validators rebuild output from allowlisted keys, ids regenerated; fix codes are stable strings; mock model uses trigger words in the prompt topic; client.test.js extracts MQ-CUSTOM via a HOOK.",
+  "relevant_files": [
+    ".agents/design/phase3-templates-and-visuals.md",
+    ".agents/tasks/game-templates/brief.md",
+    "index.html",
+    "functions/lib/config.js",
+    "functions/lib/validate.js",
+    "functions/lib/prompts.js",
+    "functions/lib/handler.js",
+    "functions/lib/mock-model.js",
+    "functions/lib/visuals.js (new)",
+    "functions/lib/templates.js (new)",
+    "functions/test/unit.test.js",
+    "functions/test/handler.test.js",
+    "functions/test/e2e.test.js",
+    "functions/test/client.test.js",
+    "functions/test/visuals.test.js (new)",
+    "functions/test/templates.test.js (new)",
+    "functions/README.md"
+  ],
+  "directory_structure": "index.html + questions.js (client); functions/{index.js,lib/,test/}; rules-test/; firestore.rules; .agents/design and .agents/tasks (not committed tasks)"
+}

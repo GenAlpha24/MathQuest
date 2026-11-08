@@ -209,6 +209,20 @@
     border: none; border-radius: 12px; padding: 6px 12px;
     background: #fff; color: #2b3a67; box-shadow: 0 3px 0 #cfd8ff;
   }
+  #cgTemplates { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin:8px 0; max-width:460px; }
+  .tpl-chip {
+    font-family: inherit; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+    min-width: 88px; border: 3px solid transparent; border-radius: 12px; padding: 6px 8px;
+    background: #fff; color: #2b3a67; box-shadow: 0 3px 0 #cfd8ff;
+  }
+  .tpl-chip .tc-icon { font-size: 22px; }
+  .tpl-chip .tc-name { font-weight: bold; }
+  .tpl-chip .tc-blurb { font-size: 11px; opacity: 0.8; }
+  .tpl-chip[aria-checked="true"] { border-color: #ff5a8c; background: #fff0f5; }
+  .tpl-chip:focus-visible { outline: 3px solid #ff5a8c; }
+  .tpl-chip:disabled { opacity: 0.6; cursor: not-allowed; }
+  #cgPreviewVisual:empty { display: none; }
+  .row-icon { margin-right: 6px; }
   .cg-chip:disabled, #cgCreateBtn:disabled, #cgGrade:disabled, .cg-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
   #cgGrade { font-family:inherit; font-size:16px; font-weight:bold; border:none; border-radius:10px; padding:6px 10px; margin:0 0 8px 6px; }
   #cgMsg { min-height: 22px; color: #ffd43b; margin: 6px 0; max-width: 460px; }
@@ -223,6 +237,86 @@
   .game-row .who { font-weight: bold; text-align: left; }
   .game-row .state { font-size: 13px; opacity: 0.85; display: block; }
   #gameList { width: 100%; max-width: 440px; }
+
+  /* Templates (Phase 3) */
+  #tpl { justify-content: flex-start; padding: 12px; }
+  #tplBody { width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #tpl[data-tpl="picturequiz"] { background: linear-gradient(160deg, #74c0fc 0%, #a5d8ff 55%, #e7f5ff 100%); color: #12325c; }
+  #tpl[data-tpl="catch"] { background: linear-gradient(180deg, #0b7285 0%, #083d4f 100%); color: #fff; }
+  #tpl[data-tpl="memory"] { background: linear-gradient(160deg, #e5dbff 0%, #fcc2d7 100%); color: #3b1f6b; }
+  #tpl[data-tpl="sequence"] { background: linear-gradient(160deg, #c3fae8 0%, #e6fcf5 100%); color: #0b4f3f; }
+  #tpl[data-tpl="sort"] { background: linear-gradient(160deg, #ffd8a8 0%, #fff4e6 100%); color: #5c2e00; }
+  .tpl-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+  .tpl-head > .tpl-btn:last-child { margin-left: auto; }
+  .tpl-title { flex: 1 1 140px; font-size: 20px; font-weight: bold; text-align: left; }
+  .tpl-mascot { font-size: 28px; display: inline-block; }
+  .tpl-status { font-size: 18px; font-weight: bold; }
+  .tpl-instr { font-size: 16px; margin: 0; }
+  .tpl-stage { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tpl-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
+  .tpl-live { min-height: 44px; width: 100%; font-size: 17px; font-weight: bold; }
+  #tpl[data-tpl="catch"] .tpl-live { color: #ffe066; }
+  .tpl-btn {
+    min-width: 48px; min-height: 48px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer;
+    border: none; border-radius: 14px; padding: 8px 16px; background: #fff; color: #2b3a67; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+  }
+  .tpl-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .tpl-btn:focus-visible, .tpl-ans:focus-visible { outline: 4px solid #ffd43b; outline-offset: 2px; }
+  .tpl-card { background: #fff; color: #2b3a67; border-radius: 16px; padding: 12px; width: 100%; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15); }
+  .tpl-pic svg { display: block; margin: 0 auto; max-width: 100%; max-height: 34vh; height: auto; }
+  .tpl-emoji { font-size: 96px; line-height: 1.1; }
+  .tpl-q { font-size: 20px; font-weight: bold; margin: 8px 0 0; }
+  .tpl-answers { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
+  .tpl-ans {
+    flex: 1 1 200px; min-height: 56px; font-family: inherit; font-size: 20px; font-weight: bold; cursor: pointer;
+    border: 3px solid transparent; border-radius: 14px; padding: 8px 14px; background: #fff; color: #2b3a67; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .tpl-ans[aria-disabled="true"] { cursor: default; }
+  .tpl-ans.right { background: #d3f9d8; border-color: #2b8a3e; }
+  .tpl-ans.wrong { background: #ffe3e3; border-color: #c92a2a; }
+  .tpl-key { font-size: 13px; opacity: 0.7; }
+  .tpl-sea { position: relative; width: 100%; height: 300px; border-radius: 16px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
+  .tpl-bubble { position: absolute; min-width: 88px; min-height: 88px; max-width: 60%; border-radius: 48px; flex: none; flex-direction: column; gap: 2px; background: rgba(255, 255, 255, 0.92); }
+  .tpl-sea.calm { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 10px; }
+  .tpl-sea.calm .tpl-bubble { position: static; }
+  .tpl-timer { margin: 0; font-size: 16px; font-weight: bold; }
+  .tpl-results h2 { font-size: 28px; margin: 4px 0; }
+  .tpl-stars { font-size: 36px; margin: 4px 0; }
+  .tpl-note { font-size: 14px; opacity: 0.8; }
+  .tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
+  @media (max-width: 480px) { .tpl-grid { grid-template-columns: repeat(3, 1fr); } }
+  .tpl-flip, .tpl-tile, .tpl-bin {
+    font-family: inherit; font-weight: bold; cursor: pointer; color: #2b3a67; background: #fff;
+    border: 3px solid transparent; border-radius: 14px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+  }
+  .tpl-flip { min-height: 84px; padding: 6px; font-size: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; word-break: break-word; }
+  .tpl-flip[aria-pressed="false"] { background: repeating-linear-gradient(45deg, #b197fc, #b197fc 8px, #d0bfff 8px, #d0bfff 16px); color: #fff; font-size: 28px; }
+  .tpl-flip.done { background: #d3f9d8; border-color: #2b8a3e; cursor: default; }
+  .tpl-flip svg { max-width: 100%; height: auto; }
+  .tpl-flip .tpl-emoji, .tpl-tile .tpl-emoji, .tpl-bin .tpl-emoji { font-size: 28px; line-height: 1.1; }
+  .tpl-tile { min-height: 48px; padding: 8px 14px; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .tpl-tile.ok { background: #d3f9d8; border-color: #2b8a3e; cursor: default; }
+  .tpl-tile svg { max-width: 64px; height: auto; }
+  .tpl-tray { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; min-height: 56px; }
+  .tpl-slots { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .tpl-slot { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 4px 8px; border: 3px dashed #12b886; border-radius: 14px; background: rgba(255, 255, 255, 0.6); }
+  .tpl-slot .tpl-tile { flex: 1; }
+  .tpl-num { font-size: 20px; font-weight: bold; min-width: 28px; }
+  .tpl-empty { opacity: 0.7; }
+  .tpl-progress { width: 100%; height: 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.7); overflow: hidden; }
+  .tpl-fill { height: 100%; width: 0; background: #f76707; }
+  .tpl-item { text-align: center; }
+  .tpl-bins { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
+  .tpl-bin { flex: 1 1 140px; min-height: 84px; padding: 8px; font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #ffe8cc; }
+  .tpl-bin[aria-disabled="true"] { cursor: default; opacity: 0.7; }
+  .tpl-flip:focus-visible, .tpl-tile:focus-visible, .tpl-bin:focus-visible { outline: 4px solid #ffd43b; outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tpl-mascot { animation: tplBob 2.4s ease-in-out infinite; }
+    @keyframes tplBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    .tpl-ans { transition: transform 120ms ease-out; }
+    .tpl-ans:not([aria-disabled="true"]):hover { transform: translateY(-2px); }
+  }
 
   /* Battle box */
   #battle .question {
@@ -252,6 +346,13 @@
     max-height: 30vh;
     height: auto;
     object-fit: contain;
+  }
+  /* Pictures from Create a Game (Phase 3) */
+  #battleVisual { display: none; background: #fff; border-radius: 14px; margin: 0 auto 8px; padding: 6px; max-width: 85%; }
+  #battleVisual svg { display: block; margin: 0 auto; max-height: 30vh; }
+  @media (prefers-reduced-motion: no-preference) {
+    .mqv-bar { transform-box: fill-box; transform-origin: bottom; animation: mqvGrow 200ms ease-out; }
+    @keyframes mqvGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
   }
   #battle .answers {
     display: grid;
@@ -495,13 +596,16 @@
           <button class="cg-chip" type="button">How bridges stay up</button>
           <button class="cg-chip" type="button">Fractions with pizza</button>
         </div>
+        <div id="cgTemplates" role="radiogroup" aria-label="Game style"></div>
         <label for="cgGrade">Grade:</label><select id="cgGrade"></select>
         <div><button class="btn big" id="cgCreateBtn">Build my game</button></div>
       </div>
       <div id="cgMsg" role="status" aria-live="polite"></div>
       <div id="cgPreview" class="cg-preview" hidden>
+        <span id="cgPreviewTpl" class="state"></span>
         <b id="cgPreviewTitle"></b>
         <span id="cgPreviewMeta" class="state"></span>
+        <div id="cgPreviewVisual"></div>
         <div>
           <button class="btn big" id="cgPlayBtn">Play</button>
           <button class="btn small" id="cgAnotherBtn">Make another</button>
@@ -520,6 +624,9 @@
       <div id="gameMsg" role="status" aria-live="polite" style="min-height:22px; color:#ffd43b; margin:6px 0;"></div>
       <button class="btn big" id="myGamesCloseBtn">Back to game</button>
     </div>
+
+    <!-- Template games (Phase 3) -->
+    <div id="tpl" class="overlay" data-tpl=""><div id="tplBody"></div></div>
 
     <!-- Start -->
     <div id="start" class="overlay">
@@ -578,6 +685,7 @@
         <div id="timerBar"><div id="timerFill"></div></div>
       </div>
       <canvas id="graphCanvas" width="380" height="220" style="display:none;"></canvas>
+      <div id="battleVisual"></div>
       <div class="question" id="question">2 + 2 = ?</div>
       <div class="answers" id="answers"></div>
       <div id="typeAnswer">
@@ -1187,12 +1295,12 @@
     },
 
     // ---- STEAM game builder (Cloud Function) ----
-    async generateGame({ prompt, grade }) {
+    async generateGame({ prompt, grade, template }) {
       if (!functionsClient || !auth || !auth.currentUser) return { ok: false, kind: "offline" };
       try {
         const call = httpsCallable(functionsClient, "generateGame", { timeout: 100000 });
-        const d = (await call({ prompt, grade })).data || {};
-        if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining };
+        const d = (await call({ prompt, grade, template })).data || {};
+        if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining, templateNote: d.templateNote || null };
         if (d.status === "refused") return { ok: false, kind: "refused", reason: d.reason, message: String(d.message || "") };
         return { ok: false, kind: "error", code: "unavailable" };
       } catch (e) {
@@ -1283,6 +1391,8 @@
     approvalDesk: document.getElementById("approvalDesk"),
     createGame: document.getElementById("createGame"),
     myGames: document.getElementById("myGames"),
+    tpl: document.getElementById("tpl"),
+    tplBody: document.getElementById("tplBody"),
     cgPrompt: document.getElementById("cgPrompt"),
     cgGrade: document.getElementById("cgGrade"),
     cgMsg: document.getElementById("cgMsg"),
@@ -1290,6 +1400,9 @@
     cgPreview: document.getElementById("cgPreview"),
     cgPreviewTitle: document.getElementById("cgPreviewTitle"),
     cgPreviewMeta: document.getElementById("cgPreviewMeta"),
+    cgPreviewTpl: document.getElementById("cgPreviewTpl"),
+    cgPreviewVisual: document.getElementById("cgPreviewVisual"),
+    cgTemplates: document.getElementById("cgTemplates"),
     cgPlayBtn: document.getElementById("cgPlayBtn"),
     gameList: document.getElementById("gameList"),
     gameMsg: document.getElementById("gameMsg"),
@@ -1325,6 +1438,7 @@
     crayonColors: document.getElementById("crayonColors"),
     monsterFace: document.getElementById("monsterFace"),
     graphCanvas: document.getElementById("graphCanvas"),
+    battleVisual: document.getElementById("battleVisual"),
     levelClearText: document.getElementById("levelClearText"),
     gameOverText: document.getElementById("gameOverText"),
     timerSecs: document.getElementById("timerSecs"),
@@ -2033,6 +2147,516 @@
   }
 
   // =====================================================================
+  //  PICTURES (Phase 3). Declarative visual JSON -> inline SVG drawn by this trusted code.
+  //  The model never supplies markup. Model strings only reach textContent.
+  //  sanitizeVisual rebuilds a fresh object (null on any failure); renderVisual never throws.
+  //  VIS_LIMITS and EMOJI_DENY mirror functions/lib/visuals.js (a test fails if they differ).
+  // =====================================================================
+  /* MQ-VISUALS:BEGIN */
+  const VIS_LIMITS = {
+    bars: [2, 8], barValue: [0, 100], label: [1, 14], title: 40, yLabel: 20,
+    pieParts: [2, 12], pieThemes: ["pizza", "pie", "chocolate", "plain"],
+    lineRange: [-100, 1000], lineSteps: [1, 2, 5, 10, 20, 25, 50, 100], lineTicks: [1, 20], lineMarks: 3,
+    hour: [1, 12], minute: [0, 59],
+    shapes: ["triangle", "square", "rectangle", "circle", "pentagon", "hexagon"], sideLabel: [1, 99],
+    lengthUnits: ["cm", "m", "in", "none"], splitParts: [2, 3, 4, 6, 8],
+    emojiCount: [1, 30], groupSize: [1, 10],
+    pictoRows: [2, 6], pictoCount: [0, 10], pictoKeyEach: [1, 10], pictoTotal: 40,
+    thermo: [-30, 120], thermoSpan: 150, tempUnits: ["C", "F"],
+    maxBytes: 2048, maxPerGame: 15, emojiLen: 8,
+  };
+  const EMOJI_DENY = [
+    "🔫", "🗡", "🔪", "💣", "🧨", "🪓", "⚔", "🩸", "💉", "💊", "🚬", "🍺", "🍻", "🍷", "🥃", "🍸", "🍹", "🍾", "🥂",
+    "☠", "💀", "💩", "🍆", "🔞", "🖕", "👙", "🩲", "🏴‍☠",
+  ];
+  const VIS_KINDS = ["barChart", "pie", "numberLine", "clock", "shape", "emojiGroup", "pictograph", "thermometer"];
+  const VIS_COMPACT = ["pie", "emojiGroup", "clock", "shape", "thermometer"];
+  const VIS_HOSTS = { question: VIS_KINDS, memory: VIS_COMPACT, sequence: VIS_COMPACT, sort: VIS_COMPACT };
+  const VIS_EDGES = { triangle: 3, square: 4, rectangle: 4, pentagon: 5, hexagon: 6, circle: 0 };
+  const VIS_KEYS = {
+    barChart: ["title", "yLabel", "showValues", "bars"],
+    pie: ["parts", "shaded", "theme"],
+    numberLine: ["min", "max", "step", "marks"],
+    clock: ["hour", "minute", "showDigital"],
+    shape: ["shape", "sideLabels", "lengthUnit", "splitParts", "splitShaded"],
+    emojiGroup: ["emoji", "count", "groupSize", "crossed"],
+    pictograph: ["title", "keyEmoji", "keyEach", "rows"],
+    thermometer: ["min", "max", "value", "tempUnit"],
+  };
+  const VIS_FORBIDDEN = ["__proto__", "constructor", "prototype"];
+  const VIS_EMOJI_RE = /^\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*$/u;
+  const VIS_LABEL_RE = /^[\p{L}\p{N} .,'’%/:+°-]+$/u;
+  const VIS_URL_RE = /:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|edu|gov|co|me|ly)\b|data:|javascript:/i;
+
+  const visInt = (n, r) => Number.isInteger(n) && n >= r[0] && n <= r[1];
+  const visNone = (x) => x === undefined || x === null;
+  const visObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+  const visHas = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const visNorm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") || s.trim().toLowerCase();
+  function visEmoji(s) {
+    if (typeof s !== "string" || s.length === 0 || s.length > VIS_LIMITS.emojiLen || !VIS_EMOJI_RE.test(s)) return false;
+    const bare = s.replace(/\uFE0F/g, "");
+    return !EMOJI_DENY.some((d) => bare.includes(d.replace(/\uFE0F/g, "")));
+  }
+  function visLabel(v, min, max) {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    const n = Array.from(t).length;
+    if (n < min || n > max || !VIS_LABEL_RE.test(t) || VIS_URL_RE.test(t)) return null;
+    return t;
+  }
+
+  // Returns a fresh, validated object or null. host: question | memory | sequence | sort.
+  function sanitizeVisual(v, host) {
+    try {
+      if (!visObj(v)) return null;
+      const own = Object.keys(v);
+      if (own.some((k) => VIS_FORBIDDEN.includes(k))) return null;
+      const kind = v.kind;
+      if (typeof kind !== "string" || !VIS_KINDS.includes(kind)) return null;
+      if (!(VIS_HOSTS[host || "question"] || []).includes(kind)) return null;
+      const mine = ["kind"].concat(VIS_KEYS[kind]);
+      const all = ["kind"].concat(...Object.values(VIS_KEYS));
+      for (const k of own) {
+        if (mine.includes(k)) continue;
+        if (!all.includes(k) || !visNone(v[k])) return null; // other kinds' keys are tolerated only as null
+      }
+      const g = (k) => (visHas(v, k) && !visNone(v[k]) ? v[k] : undefined);
+      let out = null;
+      switch (kind) {
+        case "barChart": out = visCleanBar(g); break;
+        case "pie": out = visCleanPie(g); break;
+        case "numberLine": out = visCleanLine(g); break;
+        case "clock": out = visCleanClock(g); break;
+        case "shape": out = visCleanShape(g); break;
+        case "emojiGroup": out = visCleanEmoji(g); break;
+        case "pictograph": out = visCleanPicto(g); break;
+        case "thermometer": out = visCleanThermo(g); break;
+      }
+      if (!out || JSON.stringify(out).length > VIS_LIMITS.maxBytes) return null;
+      return out;
+    } catch (e) { return null; }
+  }
+  function visCleanRows(rows, rng, valueKey, extraEmoji) {
+    if (!Array.isArray(rows) || !visInt(rows.length, rng)) return null;
+    const seen = new Set();
+    const out = [];
+    for (const r of rows) {
+      if (!visObj(r) || Object.keys(r).some((k) => VIS_FORBIDDEN.includes(k))) return null;
+      const label = visLabel(r.label, VIS_LIMITS.label[0], VIS_LIMITS.label[1]);
+      if (label === null || !visInt(r[valueKey], valueKey === "value" ? VIS_LIMITS.barValue : VIS_LIMITS.pictoCount)) return null;
+      const key = visNorm(label);
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const row = { label };
+      row[valueKey] = r[valueKey];
+      if (extraEmoji && !visNone(r.emoji)) { if (!visEmoji(r.emoji)) return null; row.emoji = r.emoji; }
+      out.push(row);
+    }
+    return out;
+  }
+  function visCleanBar(g) {
+    const bars = visCleanRows(g("bars"), VIS_LIMITS.bars, "value", true);
+    if (!bars) return null;
+    const out = { kind: "barChart" };
+    if (g("title") !== undefined) { const t = visLabel(g("title"), 1, VIS_LIMITS.title); if (t === null) return null; out.title = t; }
+    if (g("yLabel") !== undefined) { const t = visLabel(g("yLabel"), 1, VIS_LIMITS.yLabel); if (t === null) return null; out.yLabel = t; }
+    if (g("showValues") !== undefined) { if (typeof g("showValues") !== "boolean") return null; out.showValues = g("showValues"); }
+    out.bars = bars;
+    return out;
+  }
+  function visCleanPie(g) {
+    const parts = g("parts"), shaded = g("shaded"), theme = g("theme");
+    if (!visInt(parts, VIS_LIMITS.pieParts) || !visInt(shaded, [0, parts])) return null;
+    if (!VIS_LIMITS.pieThemes.includes(theme)) return null;
+    return { kind: "pie", parts, shaded, theme };
+  }
+  function visCleanLine(g) {
+    const min = g("min"), max = g("max"), step = g("step"), marks = g("marks");
+    if (!visInt(min, VIS_LIMITS.lineRange) || !visInt(max, VIS_LIMITS.lineRange) || min >= max) return null;
+    if (!VIS_LIMITS.lineSteps.includes(step) || (max - min) % step !== 0 || !visInt((max - min) / step, VIS_LIMITS.lineTicks)) return null;
+    const out = { kind: "numberLine", min, max, step };
+    if (marks !== undefined) {
+      if (!Array.isArray(marks) || marks.length > VIS_LIMITS.lineMarks) return null;
+      for (const m of marks) if (!Number.isInteger(m) || m < min || m > max || (m - min) % step !== 0) return null;
+      if (new Set(marks).size !== marks.length) return null;
+      if (marks.length) out.marks = marks.slice();
+    }
+    return out;
+  }
+  function visCleanClock(g) {
+    if (!visInt(g("hour"), VIS_LIMITS.hour) || !visInt(g("minute"), VIS_LIMITS.minute)) return null;
+    const out = { kind: "clock", hour: g("hour"), minute: g("minute") };
+    if (g("showDigital") !== undefined) { if (typeof g("showDigital") !== "boolean") return null; out.showDigital = g("showDigital"); }
+    return out;
+  }
+  function visCleanShape(g) {
+    const sh = g("shape");
+    if (!VIS_LIMITS.shapes.includes(sh)) return null;
+    const out = { kind: "shape", shape: sh };
+    const labels = g("sideLabels");
+    if (labels !== undefined) {
+      if (!Array.isArray(labels) || labels.length !== VIS_EDGES[sh] || labels.length === 0) return null;
+      if (!labels.every((n) => visInt(n, VIS_LIMITS.sideLabel))) return null;
+      if (sh === "square" && new Set(labels).size !== 1) return null;
+      if (sh === "rectangle" && !(labels[0] === labels[2] && labels[1] === labels[3])) return null;
+      if (!VIS_LIMITS.lengthUnits.includes(g("lengthUnit"))) return null;
+      out.sideLabels = labels.slice();
+      out.lengthUnit = g("lengthUnit");
+    }
+    const sp = g("splitParts"), ss = g("splitShaded");
+    if ((sp === undefined) !== (ss === undefined)) return null;
+    if (sp !== undefined) {
+      if (!["circle", "square", "rectangle"].includes(sh)) return null;
+      if (!VIS_LIMITS.splitParts.includes(sp) || !visInt(ss, [0, sp])) return null;
+      out.splitParts = sp;
+      out.splitShaded = ss;
+    }
+    return out;
+  }
+  function visCleanEmoji(g) {
+    if (!visEmoji(g("emoji")) || !visInt(g("count"), VIS_LIMITS.emojiCount)) return null;
+    const out = { kind: "emojiGroup", emoji: g("emoji"), count: g("count") };
+    if (g("groupSize") !== undefined) { if (!visInt(g("groupSize"), VIS_LIMITS.groupSize)) return null; out.groupSize = g("groupSize"); }
+    if (g("crossed") !== undefined) { if (!visInt(g("crossed"), [0, g("count")])) return null; out.crossed = g("crossed"); }
+    return out;
+  }
+  function visCleanPicto(g) {
+    if (!visEmoji(g("keyEmoji")) || !visInt(g("keyEach"), VIS_LIMITS.pictoKeyEach)) return null;
+    const rows = visCleanRows(g("rows"), VIS_LIMITS.pictoRows, "count", false);
+    if (!rows || rows.reduce((a, r) => a + r.count, 0) > VIS_LIMITS.pictoTotal) return null;
+    const out = { kind: "pictograph" };
+    if (g("title") !== undefined) { const t = visLabel(g("title"), 1, VIS_LIMITS.title); if (t === null) return null; out.title = t; }
+    out.keyEmoji = g("keyEmoji"); out.keyEach = g("keyEach"); out.rows = rows;
+    return out;
+  }
+  function visCleanThermo(g) {
+    const min = g("min"), max = g("max"), value = g("value");
+    if (!visInt(min, VIS_LIMITS.thermo) || !visInt(max, VIS_LIMITS.thermo) || min >= max || max - min > VIS_LIMITS.thermoSpan) return null;
+    if (!Number.isInteger(value) || value < min || value > max || !VIS_LIMITS.tempUnits.includes(g("tempUnit"))) return null;
+    return { kind: "thermometer", min, max, value, tempUnit: g("tempUnit") };
+  }
+
+  // Text alternative built from validated numbers and labels (always lists the values).
+  function describeVisual(d) {
+    const s = sanitizeVisual(d, "question") || sanitizeVisual(d, "memory");
+    if (!s) return "";
+    const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+    switch (s.kind) {
+      case "barChart":
+        return "Bar chart" + (s.title ? " (" + s.title + ")" : "") + ": " + s.bars.map((b) => b.label + " " + b.value).join(", ");
+      case "pie": {
+        const what = { pizza: "Pizza cut into " + s.parts + " equal slices", pie: "Pie cut into " + s.parts + " equal slices",
+          chocolate: "Chocolate cookie cut into " + s.parts + " equal pieces", plain: "Circle cut into " + s.parts + " equal parts" };
+        return what[s.theme] + ", " + s.shaded + " shaded";
+      }
+      case "numberLine":
+        return "Number line from " + s.min + " to " + s.max + ", counting by " + s.step +
+          (s.marks ? ", marked at " + s.marks.join(", ") : "");
+      case "clock":
+        return "Clock showing " + s.hour + ":" + (s.minute < 10 ? "0" : "") + s.minute;
+      case "shape": {
+        let t = s.shape.charAt(0).toUpperCase() + s.shape.slice(1);
+        if (s.sideLabels) t += " with sides " + s.sideLabels.map((n) => n + (s.lengthUnit === "none" ? "" : " " + s.lengthUnit)).join(", ");
+        if (s.splitParts) t += ", cut into " + s.splitParts + " equal parts, " + s.splitShaded + " shaded";
+        return t;
+      }
+      case "emojiGroup":
+        return s.count + " " + s.emoji + (s.groupSize ? " in groups of " + s.groupSize : "") +
+          (s.crossed ? ", " + s.crossed + " crossed out" : "");
+      case "pictograph":
+        return "Pictograph" + (s.title ? " (" + s.title + ")" : "") + ", each " + s.keyEmoji + " stands for " + s.keyEach + ": " +
+          s.rows.map((r) => r.label + " " + plural(r.count, "symbol")).join(", ");
+      case "thermometer":
+        return "Thermometer reading " + s.value + " degrees " + s.tempUnit + ", scale " + s.min + " to " + s.max;
+    }
+    return "";
+  }
+
+  // ---- drawing helpers: only createElementNS, numbers via visFmt, constants, textContent ----
+  const VIS_NS = "http://www.w3.org/2000/svg";
+  const VIS_FONT = "Comic Sans MS, Trebuchet MS, sans-serif";
+  const VIS_INK = "#2b3a67";
+  const VIS_PALETTE = ["#ff8787", "#74c0fc", "#8ce99a", "#ffd43b", "#b197fc"];
+  function visFmt(n) { n = Number(n); return Number.isFinite(n) ? String(Number(n.toFixed(2))) : "0"; }
+  function vs(tag, attrs, text) {
+    const e = document.createElementNS(VIS_NS, tag);
+    for (const k of Object.keys(attrs || {})) { const a = attrs[k]; e.setAttribute(k, typeof a === "number" ? visFmt(a) : a); }
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function vt(x, y, str, size, extra) {
+    return vs("text", Object.assign({ x, y, "font-size": size, "font-family": VIS_FONT, "text-anchor": "middle", fill: VIS_INK }, extra || {}), str);
+  }
+  const vline = (x1, y1, x2, y2, stroke, w, extra) => vs("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, extra || {}));
+  // Angles are degrees clockwise from 12 o'clock.
+  const vpt = (cx, cy, r, a) => [cx + r * Math.sin(a * Math.PI / 180), cy - r * Math.cos(a * Math.PI / 180)];
+  function vwedge(cx, cy, r, a0, a1) {
+    const p0 = vpt(cx, cy, r, a0), p1 = vpt(cx, cy, r, a1);
+    return "M " + visFmt(cx) + " " + visFmt(cy) + " L " + visFmt(p0[0]) + " " + visFmt(p0[1]) +
+      " A " + visFmt(r) + " " + visFmt(r) + " 0 " + (a1 - a0 > 180 ? "1" : "0") + " 1 " + visFmt(p1[0]) + " " + visFmt(p1[1]) + " Z";
+  }
+  const vpoints = (pts) => pts.map((p) => visFmt(p[0]) + "," + visFmt(p[1])).join(" ");
+
+  function visRoot(w, h, desc, maxWidth) {
+    const svg = vs("svg", { viewBox: "0 0 " + visFmt(w) + " " + visFmt(h), role: "img", "aria-label": desc, focusable: "false" });
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.maxWidth = visFmt(Number.isFinite(maxWidth) && maxWidth > 0 ? Math.min(maxWidth, 600) : w) + "px";
+    svg.appendChild(vs("title", {}, desc));
+    return svg;
+  }
+
+  function visBar(v, desc, mw) {
+    const W = 360, H = 250, pl = 46, pr = 352, pb = 172, pt = v.title ? 40 : 20, n = v.bars.length;
+    const svg = visRoot(W, H, desc, mw);
+    const mx = Math.max.apply(null, v.bars.map((b) => b.value));
+    let step = 50;
+    for (const s of [1, 2, 5, 10, 20, 25, 50]) { if (Math.ceil(mx / s) <= 8) { step = s; break; } }
+    const lines = Math.max(1, Math.ceil(mx / step)), top = lines * step;
+    const y = (val) => pb - (val / top) * (pb - pt);
+    if (v.title) svg.appendChild(vt(W / 2, 22, v.title, 15, { "font-weight": "bold" }));
+    if (v.yLabel) svg.appendChild(vt(12, (pt + pb) / 2, v.yLabel, 11, { transform: "rotate(-90 12 " + visFmt((pt + pb) / 2) + ")" }));
+    for (let k = 0; k <= lines; k++) {
+      const yy = y(k * step);
+      svg.appendChild(vline(pl, yy, pr, yy, k === 0 ? VIS_INK : "#d0d7e8", k === 0 ? 2 : 1, { class: "mqv-grid" }));
+      svg.appendChild(vt(pl - 6, yy + 4, String(k * step), 11, { "text-anchor": "end" }));
+    }
+    const slot = (pr - pl) / n, bw = Math.min(48, slot * 0.62);
+    const fs = n > 5 ? 10 : 12;
+    const hasEmoji = v.bars.some((b) => b.emoji);
+    v.bars.forEach((b, i) => {
+      const cx = pl + slot * i + slot / 2, yy = y(b.value);
+      svg.appendChild(vs("rect", { x: cx - bw / 2, y: yy, width: bw, height: pb - yy, rx: 4, fill: VIS_PALETTE[i % VIS_PALETTE.length],
+        stroke: VIS_INK, "stroke-width": 2, class: "mqv-bar" }));
+      if (v.showValues !== false) svg.appendChild(vt(cx, yy - 5, String(b.value), 13, { "font-weight": "bold", class: "mqv-value" }));
+      if (b.emoji) svg.appendChild(vt(cx, pb + 19, b.emoji, 16));
+      const ly = hasEmoji ? pb + 38 : pb + 20;
+      const rotate = Array.from(b.label).length * fs * 0.56 > slot - 4;
+      svg.appendChild(vt(cx, ly, b.label, fs, rotate
+        ? { "text-anchor": "end", transform: "rotate(-30 " + visFmt(cx) + " " + visFmt(ly - 4) + ")", class: "mqv-label" } : { class: "mqv-label" }));
+    });
+    return svg;
+  }
+
+  function visPie(v, desc, mw) {
+    const svg = visRoot(240, 240, desc, mw);
+    const cx = 120, cy = 120, R = 100, th = v.theme, step = 360 / v.parts;
+    const rIn = th === "plain" ? R : 88;
+    if (th !== "plain") {
+      svg.appendChild(vs("circle", { cx, cy, r: R, fill: th === "chocolate" ? "#a9713f" : "#e0a458", stroke: "#8a5a2b", "stroke-width": 3 }));
+    }
+    const fillOn = { pizza: "#ffc247", pie: "#d94f4f", chocolate: "#c68642", plain: "#4dabf7" }[th];
+    const fillOff = { pizza: "#f6e7c8", pie: "#f9e0d9", chocolate: "#f3e1c7", plain: "#e7f5ff" }[th];
+    const edgeOff = th === "plain" ? "#4dabf7" : "#b08968";
+    const wedge = (i, on) => vs("path", on
+      ? { d: vwedge(cx, cy, rIn, i * step, (i + 1) * step), fill: fillOn, stroke: "#ffffff", "stroke-width": 3, "stroke-linejoin": "round", class: "mqv-slice mqv-on" }
+      : { d: vwedge(cx, cy, rIn, i * step, (i + 1) * step), fill: fillOff, stroke: edgeOff, "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-slice mqv-off" });
+    for (let i = v.shaded; i < v.parts; i++) svg.appendChild(wedge(i, false));
+    for (let i = 0; i < v.shaded; i++) svg.appendChild(wedge(i, true));
+    // Toppings sit on shaded slices only, at fixed positions.
+    const pep = Math.max(4, Math.min(10, Math.PI * rIn * 0.5 / v.parts));
+    for (let i = 0; i < v.shaded; i++) {
+      const mid = (i + 0.5) * step, off = Math.min(12, step * 0.25);
+      if (th === "pizza") {
+        const p = vpt(cx, cy, rIn * 0.6, mid);
+        svg.appendChild(vs("circle", { cx: p[0], cy: p[1], r: pep, fill: "#d62828", stroke: "#9d0208", "stroke-width": 1, class: "mqv-topping" }));
+        svg.appendChild(vs("circle", { cx: p[0], cy: p[1], r: pep * 0.3, fill: "#9d0208", class: "mqv-topping" }));
+        const g1 = vpt(cx, cy, rIn * 0.33, mid + off), g2 = vpt(cx, cy, rIn * 0.84, mid - off);
+        svg.appendChild(vs("circle", { cx: g1[0], cy: g1[1], r: Math.max(2.5, pep * 0.4), fill: "#2d9d3a", class: "mqv-topping" }));
+        svg.appendChild(vs("circle", { cx: g2[0], cy: g2[1], r: Math.max(2.5, pep * 0.4), fill: "#2d9d3a", class: "mqv-topping" }));
+      } else if (th === "pie") {
+        for (const f of [0.5, 0.78]) {
+          const a = vpt(cx, cy, rIn * f, i * step + step * 0.2), b = vpt(cx, cy, rIn * f, (i + 1) * step - step * 0.2);
+          svg.appendChild(vline(a[0], a[1], b[0], b[1], "#f1c27d", 2, { class: "mqv-topping" }));
+        }
+      } else if (th === "chocolate") {
+        for (const f of [0.45, 0.78]) {
+          const p = vpt(cx, cy, rIn * f, mid + (f < 0.6 ? off : -off));
+          svg.appendChild(vs("ellipse", { cx: p[0], cy: p[1], rx: Math.max(3, pep * 0.6), ry: Math.max(2.5, pep * 0.45), fill: "#4a2c17", class: "mqv-topping" }));
+        }
+      }
+    }
+    return svg;
+  }
+
+  function visLine(v, desc, mw) {
+    const svg = visRoot(360, 110, desc, mw);
+    const x0 = 30, x1 = 330, y = 60, n = (v.max - v.min) / v.step;
+    const xs = (val) => x0 + ((val - v.min) / (v.max - v.min)) * (x1 - x0);
+    svg.appendChild(vline(14, y, 346, y, VIS_INK, 3));
+    svg.appendChild(vs("polygon", { points: vpoints([[10, y], [20, y - 6], [20, y + 6]]), fill: VIS_INK }));
+    svg.appendChild(vs("polygon", { points: vpoints([[350, y], [340, y - 6], [340, y + 6]]), fill: VIS_INK }));
+    const k = Math.ceil((n + 1) / 11);
+    for (let i = 0; i <= n; i++) {
+      const x = xs(v.min + i * v.step);
+      svg.appendChild(vline(x, y - 7, x, y + 7, VIS_INK, 2, { class: "mqv-tick" }));
+      if (i % k === 0) svg.appendChild(vt(x, y + 26, String(v.min + i * v.step), 12, { class: "mqv-tick-label" }));
+    }
+    (v.marks || []).forEach((m) => {
+      const x = xs(m);
+      svg.appendChild(vline(x, y - 8, x, y - 34, VIS_INK, 2));
+      svg.appendChild(vs("polygon", { points: vpoints([[x, y - 34], [x + 14, y - 28], [x, y - 22]]), fill: "#ff6b6b", stroke: VIS_INK, "stroke-width": 1 }));
+      svg.appendChild(vs("circle", { cx: x, cy: y, r: 7, fill: "#ff6b6b", stroke: VIS_INK, "stroke-width": 2, class: "mqv-mark" }));
+    });
+    return svg;
+  }
+
+  function visClock(v, desc, mw) {
+    const svg = visRoot(220, v.showDigital ? 252 : 220, desc, mw);
+    const cx = 110, cy = 110;
+    svg.appendChild(vs("circle", { cx, cy, r: 100, fill: "#ffffff", stroke: VIS_INK, "stroke-width": 6 }));
+    for (let i = 0; i < 60; i++) {
+      const big = i % 5 === 0, a = vpt(cx, cy, big ? 86 : 91, i * 6), b = vpt(cx, cy, 95, i * 6);
+      svg.appendChild(vline(a[0], a[1], b[0], b[1], VIS_INK, big ? 2.5 : 1, { class: "mqv-tick" }));
+    }
+    for (let n = 1; n <= 12; n++) { const p = vpt(cx, cy, 70, n * 30); svg.appendChild(vt(p[0], p[1] + 6, String(n), 18, { "font-weight": "bold" })); }
+    const ha = (v.hour % 12) * 30 + v.minute * 0.5, ma = v.minute * 6;
+    const hp = vpt(cx, cy, 48, ha), mp = vpt(cx, cy, 74, ma);
+    svg.appendChild(vline(cx, cy, hp[0], hp[1], VIS_INK, 7, { class: "mqv-hour", "data-angle": ha }));
+    svg.appendChild(vline(cx, cy, mp[0], mp[1], "#e8590c", 5, { class: "mqv-minute", "data-angle": ma }));
+    svg.appendChild(vs("circle", { cx, cy, r: 6, fill: VIS_INK }));
+    if (v.showDigital) svg.appendChild(vt(cx, 244, v.hour + ":" + (v.minute < 10 ? "0" : "") + v.minute, 22, { "font-weight": "bold", class: "mqv-digital" }));
+    return svg;
+  }
+
+  function visShape(v, desc, mw) {
+    const svg = visRoot(260, 220, desc, mw);
+    const cx = 130, cy = 105, fill = "#a5d8ff", sw = 4;
+    let verts = null;
+    if (v.shape === "square") verts = [[70, 45], [190, 45], [190, 165], [70, 165]];
+    else if (v.shape === "rectangle") verts = [[45, 55], [215, 55], [215, 155], [45, 155]];
+    else if (v.shape !== "circle") {
+      const n = VIS_EDGES[v.shape];
+      verts = [];
+      for (let i = 0; i < n; i++) verts.push(vpt(cx, cy + (n === 3 ? 10 : 0), 78, (360 / n) * i));
+    }
+    const outline = () => (verts
+      ? vs("polygon", { points: vpoints(verts), fill: "none", stroke: VIS_INK, "stroke-width": sw, "stroke-linejoin": "round", class: "mqv-outline" })
+      : vs("circle", { cx, cy, r: 70, fill: "none", stroke: VIS_INK, "stroke-width": sw, class: "mqv-outline" }));
+    if (verts) svg.appendChild(vs("polygon", { points: vpoints(verts), fill, class: "mqv-body" }));
+    else svg.appendChild(vs("circle", { cx, cy, r: 70, fill, class: "mqv-body" }));
+    if (v.splitParts) {
+      const sp = v.splitParts;
+      for (let i = 0; i < sp; i++) {
+        const on = i < v.splitShaded;
+        const common = on ? { fill: "#ffa94d", stroke: "#ffffff", "stroke-width": 2, class: "mqv-part mqv-on" }
+          : { fill: "#fff3bf", stroke: "#b08968", "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-part mqv-off" };
+        if (v.shape === "circle") svg.appendChild(vs("path", Object.assign({ d: vwedge(cx, cy, 70, i * (360 / sp), (i + 1) * (360 / sp)) }, common)));
+        else {
+          const xa = verts[0][0], w = verts[1][0] - verts[0][0], ya = verts[0][1], h = verts[2][1] - verts[0][1];
+          svg.appendChild(vs("rect", Object.assign({ x: xa + (w / sp) * i, y: ya, width: w / sp, height: h }, common)));
+        }
+      }
+    }
+    svg.appendChild(outline());
+    if (v.sideLabels && verts) {
+      const unit = v.lengthUnit === "none" ? "" : " " + v.lengthUnit;
+      const mid = verts.reduce((a, p) => [a[0] + p[0] / verts.length, a[1] + p[1] / verts.length], [0, 0]);
+      verts.forEach((p, i) => {
+        const q = verts[(i + 1) % verts.length];
+        const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+        let dx = mx - mid[0], dy = my - mid[1];
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= len; dy /= len;
+        svg.appendChild(vt(mx + dx * 22, my + dy * 18 + 5, v.sideLabels[i] + unit, 14, { "font-weight": "bold", class: "mqv-side" }));
+      });
+    }
+    return svg;
+  }
+
+  function visEmojiGroup(v, desc, mw) {
+    const W = 320, cell = 30;
+    const syms = [];
+    const rings = [];
+    let H;
+    if (v.groupSize) {
+      const cols = Math.min(v.groupSize, 5), bw = cols * 28 + 16, perRow = Math.max(1, Math.floor(W / (bw + 8)));
+      let i = 0, gi = 0, rowH = 0;
+      while (i < v.count) {
+        const size = Math.min(v.groupSize, v.count - i), rows = Math.ceil(size / cols), bh = rows * 28 + 16;
+        const gx = 4 + (gi % perRow) * (bw + 8), gy = 4 + Math.floor(gi / perRow) * (Math.ceil(v.groupSize / cols) * 28 + 24);
+        rings.push([gx, gy, bw, bh]);
+        for (let j = 0; j < size; j++) syms.push([gx + 8 + (j % cols) * 28 + 14, gy + 8 + Math.floor(j / cols) * 28 + 14]);
+        i += size; gi++; rowH = Math.ceil(v.groupSize / cols) * 28 + 24;
+      }
+      H = 8 + Math.ceil(gi / perRow) * rowH;
+    } else {
+      const cols = Math.min(v.count, 10), left = (W - cols * cell) / 2;
+      for (let i = 0; i < v.count; i++) syms.push([left + (i % cols) * cell + cell / 2, 10 + Math.floor(i / cols) * 34 + 17]);
+      H = 20 + Math.ceil(v.count / cols) * 34;
+    }
+    const svg = visRoot(W, H, desc, mw);
+    rings.forEach((r) => svg.appendChild(vs("rect", { x: r[0], y: r[1], width: r[2], height: r[3], rx: 12, fill: "none", stroke: "#4dabf7", "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-ring" })));
+    syms.forEach((p, i) => {
+      svg.appendChild(vt(p[0], p[1] + 8, v.emoji, 22, { class: "mqv-sym" }));
+      if (v.crossed && i >= v.count - v.crossed) {
+        svg.appendChild(vline(p[0] - 12, p[1] - 12, p[0] + 12, p[1] + 12, "#d00000", 3, { class: "mqv-cross" }));
+        svg.appendChild(vline(p[0] + 12, p[1] - 12, p[0] - 12, p[1] + 12, "#d00000", 3, { class: "mqv-cross" }));
+      }
+    });
+    return svg;
+  }
+
+  function visPicto(v, desc, mw) {
+    const W = 360, top = 40, H = top + v.rows.length * 34 + 40;
+    const svg = visRoot(W, H, desc, mw);
+    if (v.title) svg.appendChild(vt(W / 2, 22, v.title, 15, { "font-weight": "bold" }));
+    v.rows.forEach((r, i) => {
+      const y = top + i * 34;
+      svg.appendChild(vs("rect", { x: 4, y: y - 2, width: W - 8, height: 32, rx: 8, fill: i % 2 ? "#ffffff" : "#f1f6ff" }));
+      svg.appendChild(vt(10, y + 21, r.label, 13, { "text-anchor": "start", "font-weight": "bold", class: "mqv-label" }));
+      for (let j = 0; j < r.count; j++) svg.appendChild(vt(112 + j * 24 + 12, y + 23, v.keyEmoji, 20, { class: "mqv-sym" }));
+    });
+    const ky = top + v.rows.length * 34 + 6;
+    svg.appendChild(vs("rect", { x: 100, y: ky, width: 160, height: 28, rx: 10, fill: "#fff9db", stroke: VIS_INK, "stroke-width": 2 }));
+    svg.appendChild(vt(180, ky + 20, v.keyEmoji + " = " + v.keyEach, 15, { "font-weight": "bold", class: "mqv-key" }));
+    return svg;
+  }
+
+  function visThermo(v, desc, mw) {
+    const svg = visRoot(140, 260, desc, mw);
+    const ty0 = 40, ty1 = 200, y = (val) => ty1 - ((val - v.min) / (v.max - v.min)) * (ty1 - ty0);
+    svg.appendChild(vt(70, 14, "°" + v.tempUnit, 13, { "font-weight": "bold" }));
+    svg.appendChild(vs("rect", { x: 58, y: 24, width: 24, height: 186, rx: 12, fill: "#e7f5ff", stroke: VIS_INK, "stroke-width": 3 }));
+    svg.appendChild(vs("circle", { cx: 70, cy: 226, r: 22, fill: "#e7f5ff", stroke: VIS_INK, "stroke-width": 3 }));
+    svg.appendChild(vs("circle", { cx: 70, cy: 226, r: 16, fill: "#ff6b6b", class: "mqv-mercury" }));
+    svg.appendChild(vs("rect", { x: 64, y: y(v.value), width: 12, height: 226 - y(v.value), fill: "#ff6b6b", class: "mqv-mercury" }));
+    const tick = v.max - v.min <= 50 ? 5 : 10;
+    for (let t = Math.ceil(v.min / tick) * tick; t <= v.max; t += tick) {
+      svg.appendChild(vline(86, y(t), 96, y(t), VIS_INK, 2, { class: "mqv-tick" }));
+      svg.appendChild(vt(100, y(t) + 4, String(t), 11, { "text-anchor": "start", class: "mqv-tick-label" }));
+    }
+    return svg;
+  }
+
+  // Never throws and never uses innerHTML. Returns an <svg> element or null (caller skips the picture).
+  function renderVisual(def, opts) {
+    try {
+      const host = (opts && opts.host) || "question";
+      const v = sanitizeVisual(def, host);
+      if (!v) return null;
+      const desc = describeVisual(v);
+      const mw = opts && opts.maxWidth;
+      switch (v.kind) {
+        case "barChart": return visBar(v, desc, mw);
+        case "pie": return visPie(v, desc, mw);
+        case "numberLine": return visLine(v, desc, mw);
+        case "clock": return visClock(v, desc, mw);
+        case "shape": return visShape(v, desc, mw);
+        case "emojiGroup": return visEmojiGroup(v, desc, mw);
+        case "pictograph": return visPicto(v, desc, mw);
+        case "thermometer": return visThermo(v, desc, mw);
+      }
+      return null;
+    } catch (e) {
+      console.warn("visual render failed");
+      return null;
+    }
+  }
+  /* MQ-VISUALS:END */
+
+  // =====================================================================
   //  CREATE A GAME / MY GAMES  (AI-built STEAM quizzes, Phase 2)
   //  A custom run never changes saved level/best/gems/leaderboard:
   //  persistProgress writes the pre-run snapshot (customRun.base) while it is active.
@@ -2050,6 +2674,37 @@
     genFailed: "I couldn't build a good quiz about that one. Try asking in a different way, or pick a simpler topic.",
     refused: "Hmm, I can't make that one. Try a science, tech, engineering, art or math idea!",
     defaultHint: "Think about what you know and pick the best answer.",
+    templateFallback: "That idea works better in a different style, so I picked one for you!",
+    tplInstr: {
+      picturequiz: "Look at the picture, then pick the answer.",
+      catch: "Pop the bubble with the right answer!",
+      memory: "Flip two cards. Find the pairs that go together.",
+      sequence: "Tap the steps in the right order, then press Check.",
+      sort: "Tap the group where each thing belongs.",
+    },
+    tplWin: "You did it!",
+    tplLose: "Good try! Want to play again?",
+    tplAgain: "Play again",
+    tplHome: "Back to home",
+    tplMyGames: "My games",
+    tplHint: "💡 Hint",
+    tplCheck: "Check",
+    tplNext: "Next",
+    tplSeeResults: "See results",
+    tplRight: "Right!",
+    tplWrong: "Not quite.",
+    tplTimeUp: "Time is up!",
+    tplAnswerIs: "The answer is",
+    tplCalmOn: "🐢 Calm: On",
+    tplCalmOff: "🐢 Calm: Off",
+    tplCalmNote: "Take your time. No timer here.",
+    tplSoundOn: "🔊 Sound: On",
+    tplSoundOff: "🔇 Sound: Off",
+    tplPairFound: "A match!",
+    tplNotPair: "Not a pair. Try again!",
+    tplRoundDone: "Great, that is the right order!",
+    tplAllSorted: "Everything is sorted!",
+    tplStarsNote: "Stars are just for fun. They do not change your saved score.",
   };
   // Keyed by the callable's error code (e.details.code or e.code without "functions/").
   const CG_ERRORS = {
@@ -2078,7 +2733,12 @@
   // Stored/returned game definition -> { id, title, topic, subject, questions } or null (fewer than 3 playable questions).
   // Malformed questions are skipped, never thrown on. The stored option order is never mutated.
   function adaptGame(def) {
+    if (def && typeof def === "object" && (def.type === "memory" || def.type === "sequence" || def.type === "sort")) return adaptTemplateGame(def);
     if (!def || typeof def !== "object" || !Array.isArray(def.questions)) return null;
+    // v1 docs have no type (they are runner quizzes). Unknown types and newer schemas are not playable here.
+    const type = def.type === undefined ? "quiz" : def.type;
+    if (type !== "quiz" && type !== "picturequiz" && type !== "catch") return null;
+    if (typeof def.schemaVersion === "number" && def.schemaVersion > 2) return null;
     const topic = (typeof def.topic === "string" && def.topic.trim()) ? def.topic.trim().slice(0, 60) : "science";
     const questions = [];
     for (const q of def.questions) {
@@ -2089,6 +2749,12 @@
       if (!options.every(o => typeof o === "string" && o.trim() !== "" && o.length <= 80)) continue;
       if (new Set(options.map(o => o.trim().toLowerCase())).size !== options.length) continue;
       if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex >= options.length) continue;
+      // A question that carries a picture key is dropped when the picture fails validation (its text refers to the picture).
+      let visual = null;
+      if (Object.prototype.hasOwnProperty.call(q, "visual")) {
+        visual = sanitizeVisual(q.visual, "question");
+        if (!visual) continue;
+      }
       const emoji = (typeof q.emoji === "string" && q.emoji.length > 0 && q.emoji.length <= 8) ? q.emoji : "";
       questions.push({
         text: (emoji ? emoji + " " : "") + q.text,
@@ -2099,11 +2765,15 @@
         hint: (typeof q.hint === "string" && q.hint.trim()) ? q.hint : COPY.defaultHint,
         explanation: (typeof q.explanation === "string") ? q.explanation : "",
         videoWord: topic,
+        visual,
+        plain: q.text,
+        emoji,
       });
     }
     if (questions.length < 3) return null;
     return {
       id: typeof def.id === "string" ? def.id : "",
+      type,
       title: typeof def.title === "string" ? def.title : "My game",
       topic,
       subject: typeof def.subject === "string" ? def.subject : "",
@@ -2114,6 +2784,18 @@
   function startCustomGame(raw) {
     const g = adaptGame(raw);
     if (!g) { setCgMsg(COPY.cantPlay); el.gameMsg.textContent = COPY.cantPlay; return; }
+    if (g.type !== "quiz") { // other templates run in their own overlay and never touch the runner or saved progress
+      if (!tplReady(g)) { setCgMsg(COPY.cantPlay); el.gameMsg.textContent = COPY.cantPlay; return; }
+      stopTimer();
+      hideAllOverlays();
+      state = "template";
+      mountTemplate(g, {
+        home: playSolo,
+        myGames: () => { showMyGames(); state = "start"; },
+        sound: (k) => { if (typeof sfx[k] === "function") sfx[k](); },
+      });
+      return;
+    }
     if (!customRun) { // snapshot ONCE; replays keep the same base
       customRun = { base: { level, best: bestScore, mega: megaGemsCollected, ultra: ultraGemsCollected } };
     }
@@ -2127,6 +2809,7 @@
   }
 
   function endCustomRun() {
+    tplTeardown();
     if (!customRun) return;
     level = customRun.base.level; bestScore = customRun.base.best;
     megaGemsCollected = customRun.base.mega; ultraGemsCollected = customRun.base.ultra;
@@ -2167,12 +2850,836 @@
   function setCgMsg(t) { el.cgMsg.textContent = t || ""; }
   /* MQ-CUSTOM:END */
 
+  /* MQ-TEMPLATES:BEGIN */
+  // =====================================================================
+  //  GAME TEMPLATES (Phase 3): picture quiz and bubble pop (more templates are added later).
+  //  Everything here is isolated from the main game: it only talks to the page through
+  //  api = { home, myGames, sound } and never reads or writes saved progress.
+  //  Game text comes from a model, so it is only ever set via textContent.
+  // =====================================================================
+  const TEMPLATE_META = Object.freeze({
+    quiz:        Object.freeze({ icon: "🏃", name: "Monster Run",    blurb: "Run and answer",    unit: "questions" }),
+    picturequiz: Object.freeze({ icon: "🖼️", name: "Picture Pick",   blurb: "Look, then choose", unit: "questions" }),
+    catch:       Object.freeze({ icon: "🫧", name: "Bubble Pop",     blurb: "Pop the answer",    unit: "questions" }),
+    memory:      Object.freeze({ icon: "🃏", name: "Memory Match",   blurb: "Flip and pair",     unit: "pairs" }),
+    sequence:    Object.freeze({ icon: "🔢", name: "Order It",       blurb: "Put in order",      unit: "rounds" }),
+    sort:        Object.freeze({ icon: "🧺", name: "Sort It",        blurb: "Sort into groups",  unit: "items" }),
+  });
+  const TPL_MASCOT = { picturequiz: "🦉", catch: "🐠", memory: "🦄", sequence: "🐢", sort: "🐿️" };
+
+  let tplTimers = [], tplFrames = [], tplOffs = [], tplSoundOn = false, tplLiveEl = null;
+
+  // Cancels every timer / animation frame / listener registered through tplLater, tplFrame and tplOn, and empties the screen.
+  function tplTeardown() {
+    tplTimers.forEach(id => window.clearTimeout(id)); tplTimers = [];
+    if (window.cancelAnimationFrame) tplFrames.forEach(id => window.cancelAnimationFrame(id));
+    tplFrames = [];
+    const offs = tplOffs; tplOffs = [];
+    offs.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
+    tplLiveEl = null; tplSoundOn = false;
+    const root = document.getElementById("tpl"), body = document.getElementById("tplBody");
+    if (body) body.textContent = "";
+    if (root) root.setAttribute("data-tpl", "");
+  }
+  function tplLater(fn, ms) {
+    const id = window.setTimeout(() => { tplTimers = tplTimers.filter(x => x !== id); fn(); }, ms);
+    tplTimers.push(id);
+    return id;
+  }
+  function tplFrame(fn) {
+    if (!window.requestAnimationFrame) return tplLater(() => fn(Date.now()), 16);
+    const id = window.requestAnimationFrame((t) => { tplFrames = tplFrames.filter(x => x !== id); fn(t); });
+    tplFrames.push(id);
+    return id;
+  }
+  function tplOn(target, type, fn) {
+    target.addEventListener(type, fn);
+    tplOffs.push(() => target.removeEventListener(type, fn));
+  }
+
+  function h(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+  function btn(label, aria, onClick, cls) {
+    const b = h("button", cls || "tpl-btn", label);
+    b.type = "button";
+    if (aria) b.setAttribute("aria-label", aria);
+    b.addEventListener("click", () => onClick());
+    return b;
+  }
+  function setLive(text) { if (tplLiveEl) tplLiveEl.textContent = text || ""; }
+  function hearts(n) { return "❤️".repeat(Math.max(0, n)) + "🤍".repeat(Math.max(0, 3 - n)); }
+  function stars(n) { return "⭐".repeat(Math.max(0, n)) + "☆".repeat(Math.max(0, 3 - n)); }
+  // 3 stars: at least 90% right and no hint; 2 stars: at least 60%; otherwise 1.
+  function tplStarsFor(right, total, hintsUsed) {
+    const p = total > 0 ? right / total : 0;
+    if (p >= 0.9 && hintsUsed === 0) return 3;
+    return p >= 0.6 ? 2 : 1;
+  }
+  function reduceMotion() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (e) { return false; }
+  }
+  function tplFocus(node) { if (node && typeof node.focus === "function") node.focus(); }
+
+  // Arrow keys move focus between the buttons of a tile container.
+  function rovingGrid(container) {
+    container.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k !== "ArrowRight" && k !== "ArrowLeft" && k !== "ArrowDown" && k !== "ArrowUp") return;
+      const items = Array.from(container.querySelectorAll("button"));
+      const at = items.indexOf(document.activeElement);
+      if (at < 0 || items.length < 2) return;
+      e.preventDefault();
+      const step = (k === "ArrowRight" || k === "ArrowDown") ? 1 : -1;
+      tplFocus(items[(at + step + items.length) % items.length]);
+    });
+  }
+
+  // Draws a validated picture into host. Returns false (and draws nothing) if it cannot be drawn.
+  function showVisual(host, v, hostKind, maxWidth) {
+    const svg = renderVisual(v, { host: hostKind || "question", maxWidth: maxWidth || 320 });
+    if (!svg) return false;
+    host.appendChild(svg);
+    return true;
+  }
+
+  // Shared screen: header (home, title, status, sound), instruction line, stage, controls, live line.
+  function tplShell(body, g, api) {
+    body.textContent = "";
+    const head = h("div", "tpl-head");
+    head.appendChild(btn("🏠", COPY.tplHome, () => api.home(), "tpl-btn tpl-icon"));
+    const title = h("div", "tpl-title");
+    title.appendChild(h("span", "tpl-mascot", TPL_MASCOT[g.type] || TEMPLATE_META[g.type].icon));
+    title.appendChild(document.createTextNode(" " + g.title));
+    head.appendChild(title);
+    const status = h("div", "tpl-status");
+    head.appendChild(status);
+    const sound = btn(COPY.tplSoundOff, null, () => {
+      tplSoundOn = !tplSoundOn;
+      sound.textContent = tplSoundOn ? COPY.tplSoundOn : COPY.tplSoundOff;
+      sound.setAttribute("aria-pressed", tplSoundOn ? "true" : "false");
+    }, "tpl-btn");
+    sound.setAttribute("aria-pressed", "false");
+    head.appendChild(sound);
+    const instr = h("p", "tpl-instr", COPY.tplInstr[g.type]);
+    const stage = h("div", "tpl-stage");
+    const controls = h("div", "tpl-controls");
+    const live = h("div", "tpl-live");
+    live.setAttribute("role", "status");
+    live.setAttribute("aria-live", "polite");
+    tplLiveEl = live;
+    body.append(head, instr, stage, controls, live);
+    const snd = (k) => { if (tplSoundOn && api.sound) api.sound(k); };
+    return { head, status, stage, controls, live, snd };
+  }
+
+  // Results card: stars, short lines, Play again / My games / Back to home.
+  function tplResults(body, api, o) {
+    body.textContent = "";
+    tplLiveEl = null;
+    const card = h("div", "tpl-card tpl-results");
+    const title = h("h2", "tpl-rtitle", o.title);
+    title.tabIndex = -1;
+    const st = h("div", "tpl-stars", stars(o.stars));
+    st.setAttribute("role", "img");
+    st.setAttribute("aria-label", o.stars + " of 3 stars");
+    card.append(title, st);
+    (o.lines || []).forEach(l => card.appendChild(h("p", null, l)));
+    card.appendChild(h("p", "tpl-note", COPY.tplStarsNote));
+    const row = h("div", "tpl-controls");
+    row.append(
+      btn("🔁 " + COPY.tplAgain, null, o.onAgain),
+      btn("🎮 " + COPY.tplMyGames, null, () => api.myGames()),
+      btn("🏠 " + COPY.tplHome, null, () => api.home()));
+    body.append(card, row);
+    tplFocus(title);
+  }
+
+  // Questions of a choice-family game whose picture can really be drawn.
+  function tplPlayable(g) {
+    if (!g || !Array.isArray(g.questions)) return [];
+    return g.questions.filter(q => !q.visual || !!renderVisual(q.visual, { host: "question", maxWidth: 320 }));
+  }
+
+  // picturequiz (mode "picture") and catch (mode "catch") share one question payload and one state machine.
+  function tplChoice(body, g, api, mode) {
+    const qs = shuffledCopy(tplPlayable(g));
+    if (qs.length < 3) return false;
+    const root = document.getElementById("tpl");
+    const bubbleMode = mode === "catch";
+    const total = qs.length;
+    let i = 0, heartsLeft = 3, right = 0, hintsUsed = 0, combo = 0;
+    let answered = false, hinted = false, calmOn = false, remaining = 12, shownSecs = 12, loopId = 0;
+    const missed = [];
+    let q = null, opts = [], answerBtns = [], bubbles = [], timerEl = null, area = null;
+    const ui = tplShell(body, g, api);
+    const calm = () => reduceMotion() || calmOn;
+
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (answered || !q) return;
+      if (!hinted) { hinted = true; hintsUsed++; }
+      setLive("💡 " + q.hint);
+      ui.snd("jump");
+    });
+    const nextBtn = btn(COPY.tplNext, null, () => {
+      if (heartsLeft <= 0 || i >= total - 1) return finishRun();
+      i++;
+      showQuestion(false);
+    });
+    nextBtn.hidden = true;
+    ui.controls.append(hintBtn, nextBtn);
+    let calmBtn = null;
+    if (bubbleMode) {
+      calmBtn = btn(COPY.tplCalmOff, null, () => {
+        calmOn = !calmOn;
+        showQuestion(true);
+      });
+      calmBtn.setAttribute("aria-pressed", "false");
+      ui.controls.appendChild(calmBtn);
+    }
+
+    function status() {
+      ui.status.textContent = "";
+      ui.status.appendChild(h("span", null, `${i + 1}/${total} `));
+      const hs = h("span", null, hearts(heartsLeft));
+      hs.setAttribute("role", "img");
+      hs.setAttribute("aria-label", heartsLeft + " hearts left");
+      ui.status.appendChild(hs);
+      if (bubbleMode && combo > 1) ui.status.appendChild(h("span", null, " 🔥" + combo));
+    }
+
+    function mark(k, kind) {
+      const b = answerBtns[k];
+      b.classList.add(kind);
+      b.firstChild.textContent = (kind === "right" ? "✓ " : "✗ ") + opts[k];
+    }
+
+    function answer(k) {
+      if (answered || !q) return;
+      answered = true;
+      loopId++;
+      const ok = k >= 0 && opts[k] === q.answer;
+      opts.forEach((o, n) => { if (o === q.answer) mark(n, "right"); else if (n === k) mark(n, "wrong"); });
+      answerBtns.forEach(b => b.setAttribute("aria-disabled", "true"));
+      hintBtn.disabled = true;
+      if (ok) { right++; combo++; ui.snd("correct"); }
+      else { heartsLeft--; combo = 0; missed.push(q); ui.snd("wrong"); }
+      const lead = ok ? COPY.tplRight : (k < 0 ? COPY.tplTimeUp : COPY.tplWrong);
+      setLive(lead + (ok ? "" : " " + COPY.tplAnswerIs + " " + q.answer + ".") + (q.explanation ? " 💡 " + q.explanation : ""));
+      status();
+      nextBtn.textContent = (heartsLeft <= 0 || i >= total - 1) ? COPY.tplSeeResults : COPY.tplNext;
+      nextBtn.hidden = false;
+      tplFocus(nextBtn);
+    }
+
+    function answerButton(k) {
+      const b = h("button", bubbleMode ? "tpl-ans tpl-bubble" : "tpl-ans");
+      b.type = "button";
+      b.appendChild(h("span", "tpl-ans-text", opts[k]));
+      b.appendChild(h("span", "tpl-key", String(k + 1)));
+      b.setAttribute("aria-label", "Answer " + (k + 1) + ": " + opts[k]);
+      b.addEventListener("click", () => answer(k));
+      return b;
+    }
+
+    function layoutBubbles() {
+      const w = (area && area.clientWidth) || 320;
+      bubbles = answerBtns.map((b, k) => ({
+        b, x: 4 + (k * 76) / Math.max(1, answerBtns.length), y: 2 + (k % 3) * 32,
+        vx: ((k % 2 ? -1 : 1) * (24 + ((k * 7) % 16)) / w) * 100,
+      }));
+      bubbles.forEach(p => { p.b.style.left = p.x.toFixed(2) + "%"; p.b.style.top = p.y + "%"; });
+    }
+
+    function startLoop() {
+      if (!bubbleMode || calm()) return;
+      const token = ++loopId;
+      let last = null;
+      const step = (t) => {
+        if (token !== loopId || answered) return;
+        if (document.hidden) { last = null; tplFrame(step); return; }
+        const now = (typeof t === "number") ? t : (last === null ? 0 : last + 16);
+        const dt = last === null ? 0 : Math.min(50, Math.max(0, now - last));
+        last = now;
+        remaining -= dt / 1000;
+        const w = (area && area.clientWidth) || 320;
+        const maxX = Math.max(0, 100 - (100 * 104) / w);
+        bubbles.forEach(p => {
+          p.x += p.vx * dt / 1000;
+          if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx); }
+          if (p.x > maxX) { p.x = maxX; p.vx = -Math.abs(p.vx); }
+          p.b.style.left = p.x.toFixed(2) + "%";
+        });
+        const secs = Math.max(0, Math.ceil(remaining));
+        if (timerEl && secs !== shownSecs) { shownSecs = secs; timerEl.textContent = "⏱ " + secs; }
+        if (remaining <= 0) { answer(-1); return; }
+        tplFrame(step);
+      };
+      tplFrame(step);
+    }
+
+    function showQuestion(keepHint) {
+      q = qs[i];
+      answered = false; loopId++;
+      if (!keepHint) hinted = false;
+      remaining = 12; shownSecs = 12;
+      opts = shuffledCopy(q.opts);
+      ui.stage.textContent = "";
+      setLive("");
+      hintBtn.disabled = false;
+      nextBtn.hidden = true;
+      status();
+      if (calmBtn) {
+        calmBtn.textContent = calmOn ? COPY.tplCalmOn : COPY.tplCalmOff;
+        calmBtn.setAttribute("aria-pressed", calmOn ? "true" : "false");
+        calmBtn.disabled = reduceMotion();
+      }
+      const card = h("div", "tpl-card");
+      if (!bubbleMode) {
+        const pic = h("div", "tpl-pic");
+        if (!(q.visual && showVisual(pic, q.visual, "question", 320)) && q.emoji) {
+          const em = h("div", "tpl-emoji", q.emoji);
+          em.setAttribute("aria-hidden", "true");
+          pic.appendChild(em);
+        }
+        if (pic.firstChild) card.appendChild(pic);
+      } else if (q.visual) {
+        const pic = h("div", "tpl-pic");
+        if (showVisual(pic, q.visual, "question", 240)) card.appendChild(pic);
+      }
+      card.appendChild(h("p", "tpl-q", q.plain));
+      ui.stage.appendChild(card);
+      const list = h("div", bubbleMode ? "tpl-sea" : "tpl-answers");
+      answerBtns = opts.map((o, k) => answerButton(k));
+      answerBtns.forEach(b => list.appendChild(b));
+      rovingGrid(list);
+      ui.stage.appendChild(list);
+      area = list; timerEl = null;
+      if (bubbleMode) {
+        if (calm()) {
+          list.classList.add("calm");
+          ui.stage.appendChild(h("p", "tpl-timer", "🐢 " + COPY.tplCalmNote));
+        } else {
+          timerEl = h("p", "tpl-timer", "⏱ 12");
+          ui.stage.appendChild(timerEl);
+          layoutBubbles();
+          startLoop();
+        }
+      }
+      tplFocus(answerBtns[0]);
+    }
+
+    function finishRun() {
+      loopId++;
+      const won = heartsLeft > 0;
+      const lines = [`${right} of ${total} right`];
+      if (!won) missed.slice(0, 5).forEach(m => lines.push(m.plain + " → " + m.answer));
+      tplResults(body, api, {
+        title: won ? COPY.tplWin : COPY.tplLose, stars: tplStarsFor(right, total, hintsUsed), lines,
+        onAgain: () => mountTemplate(g, api),
+      });
+      ui.snd(won ? "levelClear" : "gameOver");
+    }
+
+    // Keys 1-9 pick an answer (ignored while typing in a field).
+    tplOn(root, "keydown", (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!/^[1-9]$/.test(e.key || "")) return;
+      const k = Number(e.key) - 1;
+      if (k < answerBtns.length) answer(k);
+    });
+    showQuestion(false);
+    return true;
+  }
+
+  // ---- memory / sequence / sort: stored payload -> fresh, validated objects (or null) ----
+  function tplText(s, max) {
+    return (typeof s === "string" && s.trim() !== "" && s.trim().length <= max) ? s.trim() : null;
+  }
+  // One side / step / item: { label, emoji, visual }. null when malformed or its picture cannot be drawn.
+  function tplSide(s, host) {
+    if (!s || typeof s !== "object") return null;
+    const label = tplText(s.label, 60);
+    if (label === null) return null;
+    const out = { label, emoji: (typeof s.emoji === "string" && s.emoji.length > 0 && s.emoji.length <= 8) ? s.emoji : "", visual: null };
+    if (Object.prototype.hasOwnProperty.call(s, "visual")) {
+      out.visual = sanitizeVisual(s.visual, host);
+      if (!out.visual || !renderVisual(out.visual, { host, maxWidth: 80 })) return null;
+    }
+    return out;
+  }
+  function adaptTemplateGame(def) {
+    if (!def || typeof def !== "object") return null;
+    const type = def.type;
+    if (type !== "memory" && type !== "sequence" && type !== "sort") return null;
+    if (typeof def.schemaVersion === "number" && def.schemaVersion > 2) return null;
+    const head = {
+      id: typeof def.id === "string" ? def.id : "",
+      type,
+      title: typeof def.title === "string" ? def.title : "My game",
+      topic: (typeof def.topic === "string" && def.topic.trim()) ? def.topic.trim().slice(0, 60) : "science",
+      subject: typeof def.subject === "string" ? def.subject : "",
+    };
+    const hint = (r) => (typeof r.hint === "string" && r.hint.trim()) ? r.hint : COPY.defaultHint;
+    const expl = (r) => (typeof r.explanation === "string") ? r.explanation : "";
+    if (type === "memory") {
+      if (!Array.isArray(def.pairs)) return null;
+      const pairs = [];
+      for (const p of def.pairs.slice(0, 8)) {
+        if (!p || typeof p !== "object") continue;
+        const a = tplSide(p.a, "memory"), b = tplSide(p.b, "memory");
+        if (a && b) pairs.push({ a, b, hint: hint(p), explanation: expl(p) });
+      }
+      return pairs.length >= 3 ? Object.assign(head, { pairs }) : null;
+    }
+    if (type === "sequence") {
+      if (!Array.isArray(def.rounds)) return null;
+      const rounds = [];
+      for (const r of def.rounds.slice(0, 8)) {
+        if (!r || typeof r !== "object" || !Array.isArray(r.steps)) continue;
+        const prompt = tplText(r.prompt, 160);
+        if (prompt === null || r.steps.length < 2 || r.steps.length > 6) continue;
+        const steps = r.steps.map(s => tplSide(s, "sequence"));
+        if (steps.every(Boolean)) rounds.push({ prompt, steps, hint: hint(r), explanation: expl(r) });
+      }
+      return rounds.length >= 2 ? Object.assign(head, { rounds }) : null;
+    }
+    if (!Array.isArray(def.bins) || def.bins.length < 2 || def.bins.length > 3 || !Array.isArray(def.items)) return null;
+    const bins = [];
+    for (const b of def.bins) {
+      const label = b && typeof b === "object" ? tplText(b.label, 30) : null;
+      const rule = b && typeof b === "object" ? tplText(b.rule, 90) : null;
+      if (label === null || rule === null) return null;
+      bins.push({ label, rule, emoji: (typeof b.emoji === "string" && b.emoji.length > 0 && b.emoji.length <= 8) ? b.emoji : "" });
+    }
+    const items = [];
+    for (const it of def.items.slice(0, 20)) {
+      if (!it || typeof it !== "object" || !Number.isInteger(it.bin) || it.bin < 0 || it.bin >= bins.length) continue;
+      const side = tplSide(it, "sort");
+      if (side) items.push(Object.assign(side, { bin: it.bin, explanation: expl(it) }));
+    }
+    return items.length >= 6 ? Object.assign(head, { bins, items }) : null;
+  }
+
+  // Face of a memory card / step tile: optional picture, optional emoji, label.
+  function tplFace(node, side, imgWidth) {
+    if (side.visual) showVisual(node, side.visual, "sort", imgWidth);
+    if (side.emoji) { const em = h("span", "tpl-emoji", side.emoji); em.setAttribute("aria-hidden", "true"); node.appendChild(em); }
+    node.appendChild(h("span", null, side.label));
+  }
+
+  // memory: flip two cards at a time, matches stay face up.
+  function tplMemory(body, g, api) {
+    const n = g.pairs.length;
+    if (n < 3) return false;
+    const cards = shuffledCopy(g.pairs.flatMap((p, pi) => [{ pi, side: p.a }, { pi, side: p.b }]));
+    const st = cards.map(() => "down"); // "down" | "up" | "done"
+    let first = null, locked = false, moves = 0, matched = 0, hintsUsed = 0;
+    const ui = tplShell(body, g, api);
+    const grid = h("div", "tpl-grid");
+    const btns = cards.map((c, k) => {
+      const b = h("button", "tpl-flip");
+      b.type = "button";
+      b.addEventListener("click", () => flip(k));
+      return b;
+    });
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (matched >= n) return;
+      const ci = first !== null ? first : cards.findIndex((c, k) => st[k] !== "done");
+      if (ci < 0) return;
+      const pair = g.pairs[cards[ci].pi];
+      hintsUsed++;
+      setLive("💡 " + pair.hint);
+      ui.snd("jump");
+    });
+    const doneBtn = btn(COPY.tplSeeResults, null, () => finish());
+    doneBtn.hidden = true;
+    ui.controls.append(hintBtn, doneBtn);
+
+    function paint(k) {
+      const b = btns[k];
+      b.textContent = "";
+      b.classList.toggle("done", st[k] === "done");
+      if (st[k] === "down") {
+        b.setAttribute("aria-pressed", "false");
+        b.setAttribute("aria-label", "Card " + (k + 1) + ", face down");
+        const q = h("span", null, "?");
+        q.setAttribute("aria-hidden", "true");
+        b.appendChild(q);
+      } else {
+        b.setAttribute("aria-pressed", "true");
+        b.setAttribute("aria-label", "Card " + (k + 1) + ": " + cards[k].side.label + (st[k] === "done" ? ", matched" : ""));
+        tplFace(b, cards[k].side, 72);
+      }
+    }
+    function status() { ui.status.textContent = `Moves ${moves} · Pairs ${matched}/${n}`; }
+
+    function flip(k) {
+      if (locked || st[k] !== "down") return;
+      st[k] = "up"; paint(k); ui.snd("jump");
+      if (first === null) { first = k; setLive(""); return; }
+      const a = first; first = null; moves++;
+      if (cards[a].pi === cards[k].pi) {
+        st[a] = st[k] = "done"; paint(a); paint(k);
+        matched++; ui.snd("correct");
+        setLive("✅ " + COPY.tplPairFound + " " + g.pairs[cards[k].pi].explanation);
+        if (matched === n) { hintBtn.disabled = true; doneBtn.hidden = false; tplFocus(doneBtn); }
+      } else {
+        locked = true; ui.snd("wrong");
+        setLive("✗ " + COPY.tplNotPair);
+        tplLater(() => { st[a] = st[k] = "down"; paint(a); paint(k); locked = false; tplFocus(btns[k]); }, 1200);
+      }
+      status();
+    }
+
+    function finish() {
+      let s = moves <= n + 2 ? 3 : (moves <= 2 * n ? 2 : 1);
+      if (hintsUsed >= 2) s = Math.max(1, s - 1);
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${n} pairs found in ${moves} moves`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+
+    btns.forEach((b, k) => { paint(k); grid.appendChild(b); });
+    rovingGrid(grid);
+    ui.stage.appendChild(grid);
+    status();
+    tplFocus(btns[0]);
+    return true;
+  }
+
+  // sequence: place shuffled step tiles into numbered slots, then Check.
+  function tplSequence(body, g, api) {
+    const rounds = g.rounds;
+    if (rounds.length < 2) return false;
+    let ri = 0, attempts = 0, done = false, firstTry = 0, hintsUsed = 0;
+    let tray = [], slots = [], locked = [];
+    const roundStars = [];
+    const ui = tplShell(body, g, api);
+    const hintBtn = btn(COPY.tplHint, null, () => { hintsUsed++; setLive("💡 " + rounds[ri].hint); ui.snd("jump"); });
+    const checkBtn = btn(COPY.tplCheck, null, () => check());
+    const nextBtn = btn(COPY.tplNext, null, () => {
+      if (ri >= rounds.length - 1) return finish();
+      ri++;
+      startRound();
+    });
+    ui.controls.append(hintBtn, checkBtn, nextBtn);
+
+    // A tray order that is never the correct order.
+    function scrambled(m) {
+      const ids = Array.from({ length: m }, (_, i) => i);
+      for (let t = 0; t < 20; t++) {
+        const s = shuffledCopy(ids);
+        if (s.some((v, i) => v !== i)) return s;
+      }
+      return ids.slice(1).concat(ids[0]);
+    }
+    function startRound() {
+      const m = rounds[ri].steps.length;
+      slots = new Array(m).fill(null); locked = new Array(m).fill(false);
+      tray = scrambled(m); attempts = 0; done = false;
+      setLive("");
+      render(null);
+    }
+    function tile(side, cls, aria, onClick) {
+      const b = h("button", cls);
+      b.type = "button";
+      b.setAttribute("aria-label", aria);
+      tplFace(b, side, 64);
+      b.addEventListener("click", onClick);
+      return b;
+    }
+    function render(focusWhat) {
+      const r = rounds[ri], m = r.steps.length;
+      ui.status.textContent = `Round ${ri + 1} of ${rounds.length}`;
+      ui.stage.textContent = "";
+      const card = h("div", "tpl-card");
+      card.appendChild(h("p", "tpl-q", r.prompt));
+      ui.stage.appendChild(card);
+      const trayEl = h("div", "tpl-tray");
+      trayEl.setAttribute("role", "group");
+      trayEl.setAttribute("aria-label", "Step tiles");
+      tray.forEach(s => trayEl.appendChild(tile(r.steps[s], "tpl-tile", r.steps[s].label + ". Press to place it in the next empty slot.", () => place(s))));
+      rovingGrid(trayEl);
+      ui.stage.appendChild(trayEl);
+      const slotsEl = h("div", "tpl-slots");
+      slotsEl.setAttribute("role", "group");
+      slotsEl.setAttribute("aria-label", "Slots in order");
+      for (let k = 0; k < m; k++) {
+        const row = h("div", "tpl-slot");
+        row.appendChild(h("span", "tpl-num", String(k + 1)));
+        if (slots[k] === null) {
+          row.appendChild(h("span", "tpl-empty", "Slot " + (k + 1) + " is empty"));
+        } else {
+          const side = r.steps[slots[k]];
+          const b = tile(side, locked[k] ? "tpl-tile ok" : "tpl-tile",
+            "Slot " + (k + 1) + ": " + side.label + (locked[k] ? ". Correct." : ". Press to return it to the tiles."), () => unplace(k));
+          if (locked[k]) b.setAttribute("aria-disabled", "true");
+          row.appendChild(b);
+        }
+        slotsEl.appendChild(row);
+      }
+      ui.stage.appendChild(slotsEl);
+      checkBtn.disabled = done || slots.some(s => s === null);
+      checkBtn.hidden = done;
+      hintBtn.disabled = done;
+      nextBtn.hidden = !done;
+      nextBtn.textContent = ri >= rounds.length - 1 ? COPY.tplSeeResults : COPY.tplNext;
+      if (focusWhat === "tray") tplFocus(trayEl.querySelector("button") || (checkBtn.disabled ? null : checkBtn));
+      else if (focusWhat === "check") tplFocus(checkBtn.disabled ? trayEl.querySelector("button") : checkBtn);
+      else if (focusWhat === "next") tplFocus(nextBtn);
+      else tplFocus(trayEl.querySelector("button"));
+    }
+    function place(s) {
+      if (done) return;
+      const k = slots.indexOf(null);
+      if (k < 0) return;
+      slots[k] = s; tray = tray.filter(x => x !== s);
+      ui.snd("jump");
+      render(tray.length ? "tray" : "check");
+    }
+    function unplace(k) {
+      if (done || locked[k] || slots[k] === null) return;
+      tray.push(slots[k]); slots[k] = null;
+      ui.snd("jump");
+      render("tray");
+    }
+    function check() {
+      if (done || slots.some(s => s === null)) return;
+      attempts++;
+      const m = slots.length;
+      let wrong = 0;
+      for (let k = 0; k < m; k++) {
+        if (locked[k]) continue;
+        if (slots[k] === k) locked[k] = true;
+        else { tray.push(slots[k]); slots[k] = null; wrong++; }
+      }
+      if (wrong === 0) {
+        done = true;
+        roundStars.push(attempts === 1 ? 3 : (attempts === 2 ? 2 : 1));
+        if (attempts === 1) firstTry++;
+        ui.snd("correct");
+        setLive("✅ " + COPY.tplRoundDone + (rounds[ri].explanation ? " 💡 " + rounds[ri].explanation : ""));
+        render("next");
+      } else {
+        ui.snd("wrong");
+        setLive(`✗ ${m - wrong} in the right place. The others went back to the tiles. Try again!`);
+        render("tray");
+      }
+    }
+    function finish() {
+      const sum = roundStars.reduce((a, b) => a + b, 0);
+      const s = Math.max(1, Math.floor(sum / rounds.length));
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${firstTry} of ${rounds.length} rounds right on the first try`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+    startRound();
+    return true;
+  }
+
+  // sort: tap the bin an item belongs to. A wrong pick sends the item to the back of the queue.
+  function tplSort(body, g, api) {
+    const items = g.items, bins = g.bins, total = items.length;
+    if (total < 6 || bins.length < 2) return false;
+    const root = document.getElementById("tpl");
+    let queue = shuffledCopy(items.map((_, i) => i)), sorted = 0, mistakes = 0, finished = false;
+    const ui = tplShell(body, g, api);
+    const bar = h("div", "tpl-progress");
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", "Items sorted");
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", String(total));
+    const fill = h("div", "tpl-fill");
+    bar.appendChild(fill);
+    const itemCard = h("div", "tpl-card tpl-item");
+    const binRow = h("div", "tpl-bins");
+    const binBtns = bins.map((b, k) => {
+      const x = h("button", "tpl-bin");
+      x.type = "button";
+      x.setAttribute("aria-label", "Group " + (k + 1) + ": " + b.label);
+      if (b.emoji) { const em = h("span", "tpl-emoji", b.emoji); em.setAttribute("aria-hidden", "true"); x.appendChild(em); }
+      x.appendChild(h("span", null, b.label));
+      x.appendChild(h("span", "tpl-key", String(k + 1)));
+      x.addEventListener("click", () => pick(k));
+      return x;
+    });
+    binBtns.forEach(x => binRow.appendChild(x));
+    rovingGrid(binRow);
+    ui.stage.append(bar, itemCard, binRow);
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (finished) return;
+      setLive("💡 " + bins.map(b => b.label + ": " + b.rule).join(" · "));
+      ui.snd("jump");
+    });
+    const doneBtn = btn(COPY.tplSeeResults, null, () => finish());
+    doneBtn.hidden = true;
+    ui.controls.append(hintBtn, doneBtn);
+
+    function progress() {
+      bar.setAttribute("aria-valuenow", String(sorted));
+      fill.style.width = Math.round((sorted / total) * 100) + "%";
+      ui.status.textContent = `${sorted}/${total} · Mistakes ${mistakes}`;
+    }
+    function showItem() {
+      itemCard.textContent = "";
+      if (finished) { itemCard.appendChild(h("p", "tpl-q", COPY.tplAllSorted)); return; }
+      const it = items[queue[0]];
+      if (it.visual) showVisual(itemCard, it.visual, "sort", 120);
+      if (it.emoji) { const em = h("div", "tpl-emoji", it.emoji); em.setAttribute("aria-hidden", "true"); itemCard.appendChild(em); }
+      itemCard.appendChild(h("p", "tpl-q", it.label));
+    }
+    function pick(k) {
+      if (finished || k < 0 || k >= bins.length) return;
+      const it = items[queue[0]];
+      if (it.bin === k) {
+        sorted++; queue.shift(); ui.snd("correct");
+        setLive("✅ " + (it.explanation || it.label));
+        if (queue.length === 0) {
+          finished = true;
+          binBtns.forEach(x => x.setAttribute("aria-disabled", "true"));
+          hintBtn.disabled = true; doneBtn.hidden = false;
+          showItem(); progress(); tplFocus(doneBtn);
+          return;
+        }
+      } else {
+        mistakes++; queue.push(queue.shift()); ui.snd("wrong");
+        setLive(`✗ ${COPY.tplWrong} ${bins[k].label}: ${bins[k].rule}`);
+      }
+      showItem(); progress();
+    }
+    function finish() {
+      const s = mistakes <= 1 ? 3 : (mistakes <= 3 ? 2 : 1);
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${total} items sorted with ${mistakes} ${mistakes === 1 ? "mistake" : "mistakes"}`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+    // Keys 1-3 pick a group (ignored while typing in a field).
+    tplOn(root, "keydown", (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!/^[1-3]$/.test(e.key || "")) return;
+      pick(Number(e.key) - 1);
+    });
+    showItem(); progress();
+    tplFocus(binBtns[0]);
+    return true;
+  }
+
+  const TPL_MODULES = {
+    picturequiz: (body, g, api) => tplChoice(body, g, api, "picture"),
+    catch:       (body, g, api) => tplChoice(body, g, api, "catch"),
+    memory:      (body, g, api) => tplMemory(body, g, api),
+    sequence:    (body, g, api) => tplSequence(body, g, api),
+    sort:        (body, g, api) => tplSort(body, g, api),
+  };
+
+  // True when this game type has a screen and enough playable items.
+  function tplReady(g) {
+    if (!g || !Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type)) return false;
+    if (g.type === "memory") return Array.isArray(g.pairs) && g.pairs.length >= 3;
+    if (g.type === "sequence") return Array.isArray(g.rounds) && g.rounds.length >= 2;
+    if (g.type === "sort") return Array.isArray(g.items) && g.items.length >= 6 && Array.isArray(g.bins) && g.bins.length >= 2;
+    return tplPlayable(g).length >= 3;
+  }
+
+  // Replaces whatever template is showing with a fresh run of g. Returns false (and shows nothing) if it cannot start.
+  function mountTemplate(g, api) {
+    tplTeardown();
+    const root = document.getElementById("tpl"), body = document.getElementById("tplBody");
+    if (!root || !body || !g || !Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type)) return false;
+    if (!TPL_MODULES[g.type](body, g, api)) { tplTeardown(); return false; }
+    root.setAttribute("data-tpl", g.type);
+    root.classList.add("show");
+    return true;
+  }
+  /* MQ-TEMPLATES:END */
+
+  // ---- Create a Game: style chips, preview picture, My games icons ----
+  const CG_STYLE_ORDER = ["auto", "quiz", "picturequiz", "memory", "sequence", "sort", "catch"];
+  const CG_AUTO_META = Object.freeze({ icon: "🎲", name: "Surprise me", blurb: "I'll pick the best" });
+  let cgTemplate = "auto";
+
+  function tplMetaFor(type) {
+    return (typeof type === "string" && Object.prototype.hasOwnProperty.call(TEMPLATE_META, type)) ? TEMPLATE_META[type] : TEMPLATE_META.quiz;
+  }
+  function gameCount(g) {
+    const n = Number(g && g.questionCount);
+    if (n > 0) return n;
+    if (!g) return 0;
+    const a = g.questions || g.pairs || g.rounds || g.items;
+    return Array.isArray(a) ? a.length : 0;
+  }
+
+  function setCgTemplate(id) {
+    cgTemplate = CG_STYLE_ORDER.includes(id) ? id : "auto";
+    el.cgTemplates.querySelectorAll(".tpl-chip").forEach(c => {
+      const on = c.getAttribute("data-tpl") === cgTemplate;
+      c.setAttribute("aria-checked", on ? "true" : "false");
+      c.tabIndex = on ? 0 : -1;
+    });
+  }
+
+  function buildTemplateChips() {
+    el.cgTemplates.textContent = "";
+    CG_STYLE_ORDER.forEach(id => {
+      const m = id === "auto" ? CG_AUTO_META : TEMPLATE_META[id];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tpl-chip";
+      b.setAttribute("role", "radio");
+      b.setAttribute("data-tpl", id);
+      b.setAttribute("aria-label", `${m.name}: ${m.blurb}`);
+      [["tc-icon", m.icon], ["tc-name", m.name], ["tc-blurb", m.blurb]].forEach(([cls, text]) => {
+        const s = document.createElement("span");
+        s.className = cls;
+        s.textContent = text;
+        if (cls === "tc-icon") s.setAttribute("aria-hidden", "true");
+        b.appendChild(s);
+      });
+      b.onclick = () => { if (!creatingGame) setCgTemplate(id); };
+      el.cgTemplates.appendChild(b);
+    });
+    // Arrow keys move the choice; every key is kept away from the page-level Space/ArrowUp jump handler.
+    el.cgTemplates.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      const dir = (e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : (e.key === "ArrowLeft" || e.key === "ArrowUp") ? -1 : 0;
+      if (!dir || creatingGame) return;
+      e.preventDefault();
+      const i = CG_STYLE_ORDER.indexOf(cgTemplate);
+      const next = CG_STYLE_ORDER[(i + dir + CG_STYLE_ORDER.length) % CG_STYLE_ORDER.length];
+      setCgTemplate(next);
+      const chip = el.cgTemplates.querySelector(`.tpl-chip[data-tpl="${next}"]`);
+      if (chip) chip.focus();
+    });
+    setCgTemplate("auto");
+  }
+
+  // First picture the game has (question, memory card, step or sort item), drawn small into host.
+  function showFirstVisual(host, g) {
+    host.textContent = "";
+    if (!g || typeof g !== "object") return false;
+    const tries = [];
+    const add = (v, kind) => { if (v) tries.push([v, kind]); };
+    if (Array.isArray(g.questions)) g.questions.forEach(q => add(q && q.visual, "question"));
+    if (Array.isArray(g.pairs)) g.pairs.forEach(p => { add(p && p.a && p.a.visual, "memory"); add(p && p.b && p.b.visual, "memory"); });
+    if (Array.isArray(g.rounds)) g.rounds.forEach(r => { if (r && Array.isArray(r.steps)) r.steps.forEach(s => add(s && s.visual, "sequence")); });
+    if (Array.isArray(g.items)) g.items.forEach(it => add(it && it.visual, "sort"));
+    for (const [v, kind] of tries.slice(0, 12)) if (showVisual(host, v, kind, 160)) return true;
+    return false;
+  }
+
   function setCgBusy(b) {
     creatingGame = b;
     el.cgCreateBtn.disabled = b;
     el.cgPrompt.disabled = b;
     el.cgGrade.disabled = b;
     document.querySelectorAll("#cgChips .cg-chip").forEach(c => { c.disabled = b; });
+    document.querySelectorAll("#cgTemplates .tpl-chip").forEach(c => { c.disabled = b; });
   }
 
   function showCreateGame() {
@@ -2185,6 +3692,7 @@
       if (g === grade) opt.selected = true;
       el.cgGrade.appendChild(opt);
     }
+    setCgTemplate("auto");
     if (!creatingGame) { el.cgPreview.hidden = true; setCgMsg(""); }
     el.createGame.classList.add("show");
   }
@@ -2196,17 +3704,20 @@
     if (!cloud() || !cloud().available || !cloud().generateGame) { setCgMsg(COPY.closed); return; }
     setCgBusy(true);
     el.cgPreview.hidden = true;
+    el.cgPreviewVisual.textContent = "";
     setCgMsg(COPY.building);
     let res;
-    try { res = await cloud().generateGame({ prompt, grade: Number(el.cgGrade.value) }); }
+    try { res = await cloud().generateGame({ prompt, grade: Number(el.cgGrade.value), template: cgTemplate }); }
     catch (e) { res = { ok: false, kind: "error", code: "unavailable" }; }
     setCgBusy(false);
     if (res && res.ok && res.game) {
       lastCreatedGame = res.game;
-      const n = Number(res.game.questionCount) || (Array.isArray(res.game.questions) ? res.game.questions.length : 0);
+      const tm = tplMetaFor(res.game.type);
+      el.cgPreviewTpl.textContent = `${tm.icon} ${tm.name}`;
       el.cgPreviewTitle.textContent = String(res.game.title || "My game");
-      el.cgPreviewMeta.textContent = `${res.game.subject || "STEAM"} · ${res.game.topic || ""} · ${n} questions`;
-      setCgMsg("");
+      el.cgPreviewMeta.textContent = `${res.game.subject || "STEAM"} · ${res.game.topic || ""} · ${gameCount(res.game)} ${tm.unit}`;
+      showFirstVisual(el.cgPreviewVisual, res.game);
+      setCgMsg(res.templateNote === "fallback" ? COPY.templateFallback : "");
       el.cgPreview.hidden = false;
     } else if (res && res.kind === "refused") {
       setCgMsg(res.message || COPY.refused);
@@ -2255,12 +3766,17 @@
       d.className = "game-row";
       const who = document.createElement("span");
       who.className = "who";
-      who.textContent = String(r.title || "My game");
+      const tm = tplMetaFor(r.type);
+      const ic = document.createElement("span");
+      ic.className = "row-icon";
+      ic.setAttribute("aria-hidden", "true");
+      ic.textContent = tm.icon;
+      who.appendChild(ic);
+      who.appendChild(document.createTextNode(String(r.title || "My game")));
       const meta = document.createElement("span");
       meta.className = "state";
-      const n = Number(r.questionCount) || (Array.isArray(r.questions) ? r.questions.length : 0);
       const when = (r.createdAt && typeof r.createdAt.toDate === "function") ? r.createdAt.toDate().toLocaleDateString() : "";
-      meta.textContent = [r.subject, r.topic, `${n} questions`, when].filter(Boolean).join(" · ");
+      meta.textContent = [r.subject, r.topic, `${gameCount(r)} ${tm.unit}`, when].filter(Boolean).join(" · ");
       who.appendChild(meta);
       d.appendChild(who);
       const b = document.createElement("button");
@@ -2893,11 +4409,27 @@
     el.battle.classList.add("show");
   }
 
+  // Draws q.visual into #battleVisual (cleared when there is none). Returns false if a picture exists but could not be drawn.
+  function showBattleVisual(q) {
+    const box = el.battleVisual;
+    box.textContent = "";
+    box.style.display = "none";
+    if (!q || !q.visual) return true;
+    const svg = renderVisual(q.visual, { host: "question", maxWidth: 360 });
+    if (!svg) return false;
+    box.appendChild(svg);
+    box.style.display = "block";
+    return true;
+  }
+
   function loadQuestion() {
     // For multi-question battles (Grade 3+), pick a different variety than last.
-    const q = battleQuestionsNeeded > 1
+    const pick = () => (battleQuestionsNeeded > 1
       ? makeDistinctQuestion(level, lastQuestionKind)
-      : makeQuestion(level);
+      : makeQuestion(level));
+    let q = pick();
+    // Custom questions may carry a picture; if it cannot be drawn, take another question (it would refer to the picture).
+    for (let i = 0; i < 6 && !showBattleVisual(q); i++) q = pick();
     currentQuestion = q;
     lastQuestionKind = questionKind(q);
     questionAnswered = false;
@@ -3424,6 +4956,7 @@
     }
   }
   document.addEventListener("keydown", (e) => {
+    if (state === "template") return;
     if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); jump(); }
     // T focuses the type-answer box during a battle, so you can just type.
     if (e.code === "KeyT" && state === "battle" && !questionAnswered) {
@@ -3525,6 +5058,7 @@
   document.querySelectorAll("#cgChips .cg-chip").forEach(c => {
     c.onclick = () => { if (!creatingGame) el.cgPrompt.value = c.textContent; };
   });
+  buildTemplateChips();
   el.cgCreateBtn.onclick = onBuildGame;
   el.cgPlayBtn.onclick = () => { if (lastCreatedGame) startCustomGame(lastCreatedGame); };
   document.getElementById("cgAnotherBtn").onclick = () => { el.cgPreview.hidden = true; setCgMsg(""); el.cgPrompt.focus(); };
@@ -3630,8 +5164,9 @@
   };
 
   function hideAllOverlays() {
+    tplTeardown();
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk, el.createGame, el.myGames]
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk, el.tpl, el.createGame, el.myGames]
       .forEach(o => o.classList.remove("show"));
   }
 

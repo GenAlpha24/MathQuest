@@ -1,0 +1,7 @@
+{
+  "task_id": "task-game-templates",
+  "task_description": "Phase 3: six game templates (quiz, picturequiz, catch, memory, sequence, sort) and declarative SVG visuals for MathQuest, per .agents/design/phase3-templates-and-visuals.md",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005", "FEAT-006"],
+  "blocked_reason": null
+}

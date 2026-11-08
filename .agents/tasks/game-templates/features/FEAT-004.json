@@ -1,0 +1,27 @@
+{
+    "id":  "FEAT-004",
+    "type":  "feat",
+    "description":  "Remaining three templates in the MQ-TEMPLATES region: memory (flip pairs), sequence (order tiles), sort (bins). Depends on FEAT-003 framework; the three templates are independent of each other.",
+    "status":  "completed",
+    "steps":  [
+                  "Read design sections 2, 3.1 (memory/sequence/sort payloads), 6.3 adaptGame, 6.5.",
+                  "Add adaptTemplateGame(def) for memory (pairs, 3 pair minimum, sides with optional compact visual), sequence (rounds, 2 round minimum, steps stored in correct order, client shuffle guaranteed different), sort (bins 2-3, items min 6, bin index in range); rebuild fresh objects; drop items with malformed visual.",
+                  "Implement memory module: 2n shuffled cards as toggle buttons with aria-pressed and labels, two-flip state machine with lock, 1200 ms mismatch back-flip via tplLater, moves counter, stars rule, roving arrow keys, 3 columns at phone width.",
+                  "Implement sequence module: tray and numbered slots, tap to place or return, Check locks correct slots and returns wrong ones, per-round attempts stars, averaged result.",
+                  "Implement sort module: item queue, 2-3 bin buttons (keys 1-3 and arrows), wrong item re-queued with rule shown, role=progressbar, mistakes stars, no lose state.",
+                  "Add themes in the Phase 3 CSS block and COPY lines; extend templates.test.js and client.test.js for each template (win, stars, hint, replay, keyboard, teardown, minimum-items null).",
+                  "Commit: feat(client): Memory Match; feat(client): Order It and Sort It."
+              ],
+    "acceptance_criteria":  [
+                                "Each template completes to a results screen with Play again, My games, Back to home",
+                                "Each interactive tile is a real button with an aria-label",
+                                "Game below the item minimum shows the cantPlay copy",
+                                "No model text reaches innerHTML"
+                            ],
+    "verification":  [
+                         "node --test functions/test/templates.test.js",
+                         "$env:MQ_MOCK_MODEL=\u00271\u0027; firebase emulators:exec --only auth,firestore,functions --project demo-mathquest \"node --test functions/test/e2e.test.js functions/test/client.test.js\"; Remove-Item Env:MQ_MOCK_MODEL"
+                     ],
+    "blocked_reason":  null,
+    "findings":  "EXECUTED: node --test templates.test.js visuals.test.js unit.test.js = 451 pass/0 fail (templates.test.js 31, was 16: +6 memory, +4 sequence, +4 sort, +1 hostile text). Emulator run (auth,firestore,functions, MQ_MOCK_MODEL=1) e2e.test.js + client.test.js = 31 pass/0 fail (was 30; +1 client test: memory/sequence/sort play from My games in the tpl overlay, saves untouched, Space/ArrowUp/Enter not swallowed, Short game shows cantPlay). Emulators stopped, all 6 ports free. NOT run: handler and rules suites (files untouched), real browser/visual check (later FEAT). TRACED only: CSS look (themes, 3 columns at \u003c=480px is only source-asserted), sound mapping onto real sfx. Commits: 06f54e7 feat(client) index.html, 7a7cef8 test. Not split into two feature commits (single file hunks). Notes for later steps: adaptGame dispatches memory/sequence/sort to adaptTemplateGame (defined in MQ-TEMPLATES, hoisted). Adapted shapes: memory {pairs:[{a,b,hint,explanation}]} sides {label,emoji,visual}; sequence {rounds:[{prompt,steps[],hint,explanation}]}; sort {bins:[{label,rule,emoji}],items:[{label,emoji,visual,bin,explanation}]}. tplReady is per type. Memory ends with a See results button (no auto finish); sort wrong pick shows chosen bin rule, hint lists all rules. Picture drawing in these modules goes through renderVisual host sort/compact. Region scan forbids words level/lives/score/gems in TEMPLATES strings. New COPY: tplPairFound, tplNotPair, tplRoundDone, tplAllSorted. CSS classes: tpl-grid/tpl-flip, tpl-tray/tpl-slot/tpl-tile, tpl-progress/tpl-bin. Gotcha: PowerShell Add-Content/Set-Content mangled emoji and added a BOM; use node or fs_write for UTF-8 files (fixed, no BOM in index.html now)."
+}

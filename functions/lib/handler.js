@@ -8,6 +8,7 @@ const cfg = require("./config");
 const { sanitizePrompt, prefilter } = require("./prefilter");
 const { validateClassification, validateGame } = require("./validate");
 const { buildClassifyRequest, buildGenerateRequest, REFUSALS, PROMPT_VERSION } = require("./prompts");
+const { TEMPLATE_IDS, hostKindsFor, itemCountFor, chooseTemplate } = require("./templates");
 
 const fail = (code, detail, msg) => new HttpsError(code, msg, { code: detail });
 const isInt = (v) => typeof v === "number" && Number.isInteger(v);
@@ -27,7 +28,29 @@ function parseArgs(data) {
     if (!isInt(d.count) || d.count < cfg.MIN_QUESTIONS || d.count > cfg.MAX_QUESTIONS) throw fail("invalid-argument", "count", "Invalid request.");
     count = d.count;
   }
-  return { prompt: d.prompt, grade, count };
+  // absent/null = legacy client (server forces the classic quiz); "auto" or one of the template ids otherwise.
+  let template;
+  if (d.template !== undefined && d.template !== null) {
+    if (typeof d.template !== "string" || d.template.length > 20 || (d.template !== "auto" && !TEMPLATE_IDS.includes(d.template))) {
+      throw fail("invalid-argument", "template", "Invalid request.");
+    }
+    template = d.template;
+  }
+  return { prompt: d.prompt, grade, count, template };
+}
+
+// Types of the user's latest games, newest first (v1 docs count as quiz). Best effort: [] when unavailable.
+async function loadRecentTypes(db, uid, log) {
+  try {
+    const snap = await db.collection("games").where("createdBy", "==", uid).orderBy("createdAt", "desc").limit(cfg.VARIETY_WINDOW).get();
+    return snap.docs.map((d) => {
+      const t = d.data().type;
+      return typeof t === "string" ? t : "quiz";
+    });
+  } catch (e) {
+    log("warn", { outcome: "variety_unavailable", errName: e && e.name ? String(e.name) : "Error" });
+    return [];
+  }
 }
 
 async function handleGenerate(request, deps) {
@@ -123,6 +146,12 @@ async function handleGenerate(request, deps) {
       return { status: "refused", reason, message: REFUSALS[reason], remaining: s ? s.remaining : ctx.remaining };
     }
 
+    // 6b. choose the template (legacy client = classic quiz, no pictures) and the picture kinds on offer
+    const recent = args.template === "auto" ? await loadRecentTypes(db, uid, log) : [];
+    const choice = chooseTemplate({ requested: args.template, cls, fits: cls.fits, recent });
+    let allowedKinds = args.template === undefined ? [] : cls.visualKinds.filter((k) => hostKindsFor(choice.template).includes(k));
+    const itemCount = itemCountFor(choice.template, args.count);
+
     // 7. generate (<= 2 attempts); only validated classifier fields go to the model
     let game = null;
     let fixes;
@@ -135,17 +164,22 @@ async function handleGenerate(request, deps) {
       try {
         res = await model.generate(buildGenerateRequest({
           subject: cls.subject, topic: cls.topic, theme: cls.theme, grade: cls.grade,
-          difficulty: cls.difficulty, questionCount: args.count, fixes,
+          difficulty: cls.difficulty, questionCount: args.count, fixes, template: choice.template, visualKinds: allowedKinds,
         }));
       } catch (e) {
         log("warn", { outcome: "gen_error", attempt, ...errFields(e) });
+        // A 400 means the schema was rejected: the retry asks for a text-only game.
+        if (attempt === 1 && allowedKinds.length && e && (e.status === 400 || e.code === 400)) {
+          allowedKinds = [];
+          log("info", { outcome: "gen_degraded", attempt });
+        }
       }
       fixes = undefined;
       if (res && res.blocked) {
         blocks++;
         log("info", { outcome: "gen_blocked", attempt });
       } else if (res) {
-        const v = res.finishReason === "MAX_TOKENS" ? { ok: false, errors: ["json"] } : validateGame(res.text, { count: args.count, grade: cls.grade });
+        const v = res.finishReason === "MAX_TOKENS" ? { ok: false, errors: ["json"] } : validateGame(res.text, { template: choice.template, count: args.count, grade: cls.grade, allowedKinds });
         if (v.ok) game = v.value;
         else {
           invalid++;
@@ -165,11 +199,12 @@ async function handleGenerate(request, deps) {
     }
 
     // 8. save game + counters in one transaction
+    const { title, ...payload } = game;
     const doc = {
-      schemaVersion: 1, type: "quiz", status: "ok",
-      title: game.title, subject: cls.subject, topic: cls.topic, grade: cls.grade, difficulty: cls.difficulty,
-      prompt, questions: game.questions, questionCount: game.questions.length,
-      createdBy: uid, creatorRole: ctx.role, model: cfg.MODEL_ID, promptVersion: PROMPT_VERSION,
+      schemaVersion: 2, type: choice.template, status: "ok",
+      title, subject: cls.subject, topic: cls.topic, grade: cls.grade, difficulty: cls.difficulty,
+      prompt, ...payload, questionCount: payload.questions ? payload.questions.length : (payload.pairs || payload.rounds || payload.items).length,
+      createdBy: uid, creatorRole: ctx.role, model: cfg.MODEL_ID, promptVersion: PROMPT_VERSION, templateSource: choice.source,
     };
     let saved;
     try {
@@ -181,9 +216,9 @@ async function handleGenerate(request, deps) {
     }
 
     // 9. respond
-    log("info", { outcome: "ok", gameId: saved.gameId });
+    log("info", { outcome: "ok", gameId: saved.gameId, template: choice.template, templateSource: choice.source, itemCount });
     const { createdBy, creatorRole, ...publicGame } = doc;
-    return { status: "ok", gameId: saved.gameId, game: publicGame, remaining: saved.remaining };
+    return { status: "ok", gameId: saved.gameId, game: publicGame, remaining: saved.remaining, templateNote: choice.note };
   } catch (e) {
     if (e instanceof HttpsError) throw e;
     log("error", { outcome: "internal", ...errFields(e) });
