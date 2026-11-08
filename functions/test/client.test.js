@@ -710,4 +710,53 @@ if (!MOCK_ON) {
     assert.equal(env.mq.adaptGame(mk({ schemaVersion: 3 })), null);
     assert.equal(env.mq.adaptGame(mk({ questions: [goodQ(0, { visual: { kind: "pie", parts: 3, shaded: 9 } }), goodQ(1), goodQ(2)] })), null);
   });
+
+  test("memory, sequence and sort games play from My games in the template overlay, leave saves untouched, and short games show the can't-be-played copy", async () => {
+    const uid = "mso" + tag;
+    const base = { level: 3, best: 7, megaGemsCollected: 1, ultraGemsCollected: 2 };
+    const env = await boot(uid, base);
+    await env.enter();
+    const t = Date.now();
+    const pairs = (n) => Array.from({ length: n }, (_, i) => ({ id: "p" + i, a: { label: "Aa" + i }, b: { label: "Bb" + i }, hint: "Hint " + i, explanation: "Explained " + i }));
+    const rounds = [0, 1].map((r) => ({ id: "r" + r, prompt: "Put round " + r + " in order", steps: [{ label: "First" + r }, { label: "Second" + r }, { label: "Third" + r }], hint: "Hint " + r, explanation: "Explained " + r }));
+    const bins = [{ id: "b1", label: "Hot", rule: "Feels warm" }, { id: "b2", label: "Cold", rule: "Feels cool" }];
+    const items = Array.from({ length: 6 }, (_, i) => ({ id: "i" + i, label: "Thing" + i, bin: i % 2, explanation: "Explained " + i }));
+    await seedGame(uid, "mem" + tag, { schemaVersion: 2, type: "memory", title: "Mem game", pairs: pairs(4), questionCount: 4, createdAt: new Date(t - 1000) });
+    await seedGame(uid, "seq" + tag, { schemaVersion: 2, type: "sequence", title: "Seq game", rounds, questionCount: 2, createdAt: new Date(t - 2000) });
+    await seedGame(uid, "srt" + tag, { schemaVersion: 2, type: "sort", title: "Sort game", bins, items, questionCount: 6, createdAt: new Date(t - 3000) });
+    await seedGame(uid, "sho" + tag, { schemaVersion: 2, type: "memory", title: "Short game", pairs: pairs(2), questionCount: 2, createdAt: new Date(t - 4000) });
+    const open = async () => {
+      env.$("myGamesBtn").click();
+      await waitFor(() => env.doc.querySelectorAll("#gameList .game-row").length === 4 && !/Loading/.test(env.$("gameList").textContent), "four rows");
+      return [...env.doc.querySelectorAll("#gameList .game-row")];
+    };
+    const rowFor = (rows, name) => rows.find((r) => r.textContent.includes(name)).querySelector("button");
+    const key = (code) => new env.win.KeyboardEvent("keydown", { code, key: code === "Space" ? " " : code, bubbles: true, cancelable: true });
+    const savesBefore = env.saves.length;
+    for (const [name, tpl, sel] of [["Mem game", "memory", ".tpl-flip"], ["Seq game", "sequence", ".tpl-tray button"], ["Sort game", "sort", ".tpl-bin"]]) {
+      const rows = await open();
+      rowFor(rows, name).click();
+      assert.equal(env.mq.state, "template", name);
+      assert.deepEqual(env.shown(), ["tpl"], name);
+      assert.equal(env.$("tpl").getAttribute("data-tpl"), tpl);
+      const tile = env.doc.querySelector("#tpl " + sel);
+      assert.ok(tile && tile.tagName === "BUTTON" && tile.getAttribute("aria-label"), name + ": tiles are labelled buttons");
+      for (const code of ["Space", "ArrowUp", "Enter"]) {
+        const ev = key(code);
+        tile.dispatchEvent(ev);
+        assert.equal(ev.defaultPrevented, false, name + " " + code);
+      }
+      tile.click();
+      assert.equal(env.saves.length, savesBefore, name + " wrote nothing");
+      assert.deepEqual([env.mq.level, env.mq.best, env.mq.mega, env.mq.ultra], [3, 7, 1, 2]);
+      env.doc.querySelector("#tpl .tpl-head .tpl-icon").click();
+      assert.deepEqual(env.shown(), ["start"]);
+      assert.equal(env.$("tplBody").childNodes.length, 0);
+    }
+    const rows = await open();
+    rowFor(rows, "Short game").click();
+    assert.equal(env.$("gameMsg").textContent, "This game can't be played. Try making another one!");
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    assert.equal(env.saves.length, savesBefore);
+  });
 }
