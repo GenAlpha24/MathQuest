@@ -229,6 +229,9 @@
   #tplBody { width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 10px; }
   #tpl[data-tpl="picturequiz"] { background: linear-gradient(160deg, #74c0fc 0%, #a5d8ff 55%, #e7f5ff 100%); color: #12325c; }
   #tpl[data-tpl="catch"] { background: linear-gradient(180deg, #0b7285 0%, #083d4f 100%); color: #fff; }
+  #tpl[data-tpl="memory"] { background: linear-gradient(160deg, #e5dbff 0%, #fcc2d7 100%); color: #3b1f6b; }
+  #tpl[data-tpl="sequence"] { background: linear-gradient(160deg, #c3fae8 0%, #e6fcf5 100%); color: #0b4f3f; }
+  #tpl[data-tpl="sort"] { background: linear-gradient(160deg, #ffd8a8 0%, #fff4e6 100%); color: #5c2e00; }
   .tpl-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
   .tpl-title { flex: 1 1 140px; font-size: 20px; font-weight: bold; text-align: left; }
   .tpl-mascot { font-size: 28px; display: inline-block; }
@@ -266,6 +269,33 @@
   .tpl-results h2 { font-size: 28px; margin: 4px 0; }
   .tpl-stars { font-size: 36px; margin: 4px 0; }
   .tpl-note { font-size: 14px; opacity: 0.8; }
+  .tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
+  @media (max-width: 480px) { .tpl-grid { grid-template-columns: repeat(3, 1fr); } }
+  .tpl-flip, .tpl-tile, .tpl-bin {
+    font-family: inherit; font-weight: bold; cursor: pointer; color: #2b3a67; background: #fff;
+    border: 3px solid transparent; border-radius: 14px; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+  }
+  .tpl-flip { min-height: 84px; padding: 6px; font-size: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; word-break: break-word; }
+  .tpl-flip[aria-pressed="false"] { background: repeating-linear-gradient(45deg, #b197fc, #b197fc 8px, #d0bfff 8px, #d0bfff 16px); color: #fff; font-size: 28px; }
+  .tpl-flip.done { background: #d3f9d8; border-color: #2b8a3e; cursor: default; }
+  .tpl-flip svg { max-width: 100%; height: auto; }
+  .tpl-flip .tpl-emoji, .tpl-tile .tpl-emoji, .tpl-bin .tpl-emoji { font-size: 28px; line-height: 1.1; }
+  .tpl-tile { min-height: 48px; padding: 8px 14px; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .tpl-tile.ok { background: #d3f9d8; border-color: #2b8a3e; cursor: default; }
+  .tpl-tile svg { max-width: 64px; height: auto; }
+  .tpl-tray { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; min-height: 56px; }
+  .tpl-slots { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .tpl-slot { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 4px 8px; border: 3px dashed #12b886; border-radius: 14px; background: rgba(255, 255, 255, 0.6); }
+  .tpl-slot .tpl-tile { flex: 1; }
+  .tpl-num { font-size: 20px; font-weight: bold; min-width: 28px; }
+  .tpl-empty { opacity: 0.7; }
+  .tpl-progress { width: 100%; height: 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.7); overflow: hidden; }
+  .tpl-fill { height: 100%; width: 0; background: #f76707; }
+  .tpl-item { text-align: center; }
+  .tpl-bins { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
+  .tpl-bin { flex: 1 1 140px; min-height: 84px; padding: 8px; font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #ffe8cc; }
+  .tpl-bin[aria-disabled="true"] { cursor: default; opacity: 0.7; }
+  .tpl-flip:focus-visible, .tpl-tile:focus-visible, .tpl-bin:focus-visible { outline: 4px solid #ffd43b; outline-offset: 2px; }
   @media (prefers-reduced-motion: no-preference) {
     .tpl-mascot { animation: tplBob 2.4s ease-in-out infinite; }
     @keyframes tplBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
@@ -2649,6 +2679,10 @@
     tplCalmNote: "Take your time. No timer here.",
     tplSoundOn: "🔊 Sound: On",
     tplSoundOff: "🔇 Sound: Off",
+    tplPairFound: "A match!",
+    tplNotPair: "Not a pair. Try again!",
+    tplRoundDone: "Great, that is the right order!",
+    tplAllSorted: "Everything is sorted!",
     tplStarsNote: "Stars are just for fun. They do not change your saved score.",
   };
   // Keyed by the callable's error code (e.details.code or e.code without "functions/").
@@ -2678,6 +2712,7 @@
   // Stored/returned game definition -> { id, title, topic, subject, questions } or null (fewer than 3 playable questions).
   // Malformed questions are skipped, never thrown on. The stored option order is never mutated.
   function adaptGame(def) {
+    if (def && typeof def === "object" && (def.type === "memory" || def.type === "sequence" || def.type === "sort")) return adaptTemplateGame(def);
     if (!def || typeof def !== "object" || !Array.isArray(def.questions)) return null;
     // v1 docs have no type (they are runner quizzes). Unknown types and newer schemas are not playable here.
     const type = def.type === undefined ? "quiz" : def.type;
@@ -2809,7 +2844,7 @@
     sequence:    Object.freeze({ icon: "🔢", name: "Order It",       blurb: "Put in order",      unit: "rounds" }),
     sort:        Object.freeze({ icon: "🧺", name: "Sort It",        blurb: "Sort into groups",  unit: "items" }),
   });
-  const TPL_MASCOT = { picturequiz: "🦉", catch: "🐠" };
+  const TPL_MASCOT = { picturequiz: "🦉", catch: "🐠", memory: "🦄", sequence: "🐢", sort: "🐿️" };
 
   let tplTimers = [], tplFrames = [], tplOffs = [], tplSoundOn = false, tplLiveEl = null;
 
@@ -3142,14 +3177,393 @@
     return true;
   }
 
+  // ---- memory / sequence / sort: stored payload -> fresh, validated objects (or null) ----
+  function tplText(s, max) {
+    return (typeof s === "string" && s.trim() !== "" && s.trim().length <= max) ? s.trim() : null;
+  }
+  // One side / step / item: { label, emoji, visual }. null when malformed or its picture cannot be drawn.
+  function tplSide(s, host) {
+    if (!s || typeof s !== "object") return null;
+    const label = tplText(s.label, 60);
+    if (label === null) return null;
+    const out = { label, emoji: (typeof s.emoji === "string" && s.emoji.length > 0 && s.emoji.length <= 8) ? s.emoji : "", visual: null };
+    if (Object.prototype.hasOwnProperty.call(s, "visual")) {
+      out.visual = sanitizeVisual(s.visual, host);
+      if (!out.visual || !renderVisual(out.visual, { host, maxWidth: 80 })) return null;
+    }
+    return out;
+  }
+  function adaptTemplateGame(def) {
+    if (!def || typeof def !== "object") return null;
+    const type = def.type;
+    if (type !== "memory" && type !== "sequence" && type !== "sort") return null;
+    if (typeof def.schemaVersion === "number" && def.schemaVersion > 2) return null;
+    const head = {
+      id: typeof def.id === "string" ? def.id : "",
+      type,
+      title: typeof def.title === "string" ? def.title : "My game",
+      topic: (typeof def.topic === "string" && def.topic.trim()) ? def.topic.trim().slice(0, 60) : "science",
+      subject: typeof def.subject === "string" ? def.subject : "",
+    };
+    const hint = (r) => (typeof r.hint === "string" && r.hint.trim()) ? r.hint : COPY.defaultHint;
+    const expl = (r) => (typeof r.explanation === "string") ? r.explanation : "";
+    if (type === "memory") {
+      if (!Array.isArray(def.pairs)) return null;
+      const pairs = [];
+      for (const p of def.pairs.slice(0, 8)) {
+        if (!p || typeof p !== "object") continue;
+        const a = tplSide(p.a, "memory"), b = tplSide(p.b, "memory");
+        if (a && b) pairs.push({ a, b, hint: hint(p), explanation: expl(p) });
+      }
+      return pairs.length >= 3 ? Object.assign(head, { pairs }) : null;
+    }
+    if (type === "sequence") {
+      if (!Array.isArray(def.rounds)) return null;
+      const rounds = [];
+      for (const r of def.rounds.slice(0, 8)) {
+        if (!r || typeof r !== "object" || !Array.isArray(r.steps)) continue;
+        const prompt = tplText(r.prompt, 160);
+        if (prompt === null || r.steps.length < 2 || r.steps.length > 6) continue;
+        const steps = r.steps.map(s => tplSide(s, "sequence"));
+        if (steps.every(Boolean)) rounds.push({ prompt, steps, hint: hint(r), explanation: expl(r) });
+      }
+      return rounds.length >= 2 ? Object.assign(head, { rounds }) : null;
+    }
+    if (!Array.isArray(def.bins) || def.bins.length < 2 || def.bins.length > 3 || !Array.isArray(def.items)) return null;
+    const bins = [];
+    for (const b of def.bins) {
+      const label = b && typeof b === "object" ? tplText(b.label, 30) : null;
+      const rule = b && typeof b === "object" ? tplText(b.rule, 90) : null;
+      if (label === null || rule === null) return null;
+      bins.push({ label, rule, emoji: (typeof b.emoji === "string" && b.emoji.length > 0 && b.emoji.length <= 8) ? b.emoji : "" });
+    }
+    const items = [];
+    for (const it of def.items.slice(0, 20)) {
+      if (!it || typeof it !== "object" || !Number.isInteger(it.bin) || it.bin < 0 || it.bin >= bins.length) continue;
+      const side = tplSide(it, "sort");
+      if (side) items.push(Object.assign(side, { bin: it.bin, explanation: expl(it) }));
+    }
+    return items.length >= 6 ? Object.assign(head, { bins, items }) : null;
+  }
+
+  // Face of a memory card / step tile: optional picture, optional emoji, label.
+  function tplFace(node, side, imgWidth) {
+    if (side.visual) showVisual(node, side.visual, "sort", imgWidth);
+    if (side.emoji) { const em = h("span", "tpl-emoji", side.emoji); em.setAttribute("aria-hidden", "true"); node.appendChild(em); }
+    node.appendChild(h("span", null, side.label));
+  }
+
+  // memory: flip two cards at a time, matches stay face up.
+  function tplMemory(body, g, api) {
+    const n = g.pairs.length;
+    if (n < 3) return false;
+    const cards = shuffledCopy(g.pairs.flatMap((p, pi) => [{ pi, side: p.a }, { pi, side: p.b }]));
+    const st = cards.map(() => "down"); // "down" | "up" | "done"
+    let first = null, locked = false, moves = 0, matched = 0, hintsUsed = 0;
+    const ui = tplShell(body, g, api);
+    const grid = h("div", "tpl-grid");
+    const btns = cards.map((c, k) => {
+      const b = h("button", "tpl-flip");
+      b.type = "button";
+      b.addEventListener("click", () => flip(k));
+      return b;
+    });
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (matched >= n) return;
+      const ci = first !== null ? first : cards.findIndex((c, k) => st[k] !== "done");
+      if (ci < 0) return;
+      const pair = g.pairs[cards[ci].pi];
+      hintsUsed++;
+      setLive("💡 " + pair.hint);
+      ui.snd("jump");
+    });
+    const doneBtn = btn(COPY.tplSeeResults, null, () => finish());
+    doneBtn.hidden = true;
+    ui.controls.append(hintBtn, doneBtn);
+
+    function paint(k) {
+      const b = btns[k];
+      b.textContent = "";
+      b.classList.toggle("done", st[k] === "done");
+      if (st[k] === "down") {
+        b.setAttribute("aria-pressed", "false");
+        b.setAttribute("aria-label", "Card " + (k + 1) + ", face down");
+        const q = h("span", null, "?");
+        q.setAttribute("aria-hidden", "true");
+        b.appendChild(q);
+      } else {
+        b.setAttribute("aria-pressed", "true");
+        b.setAttribute("aria-label", "Card " + (k + 1) + ": " + cards[k].side.label + (st[k] === "done" ? ", matched" : ""));
+        tplFace(b, cards[k].side, 72);
+      }
+    }
+    function status() { ui.status.textContent = `Moves ${moves} · Pairs ${matched}/${n}`; }
+
+    function flip(k) {
+      if (locked || st[k] !== "down") return;
+      st[k] = "up"; paint(k); ui.snd("jump");
+      if (first === null) { first = k; setLive(""); return; }
+      const a = first; first = null; moves++;
+      if (cards[a].pi === cards[k].pi) {
+        st[a] = st[k] = "done"; paint(a); paint(k);
+        matched++; ui.snd("correct");
+        setLive("✅ " + COPY.tplPairFound + " " + g.pairs[cards[k].pi].explanation);
+        if (matched === n) { hintBtn.disabled = true; doneBtn.hidden = false; tplFocus(doneBtn); }
+      } else {
+        locked = true; ui.snd("wrong");
+        setLive("✗ " + COPY.tplNotPair);
+        tplLater(() => { st[a] = st[k] = "down"; paint(a); paint(k); locked = false; tplFocus(btns[k]); }, 1200);
+      }
+      status();
+    }
+
+    function finish() {
+      let s = moves <= n + 2 ? 3 : (moves <= 2 * n ? 2 : 1);
+      if (hintsUsed >= 2) s = Math.max(1, s - 1);
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${n} pairs found in ${moves} moves`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+
+    btns.forEach((b, k) => { paint(k); grid.appendChild(b); });
+    rovingGrid(grid);
+    ui.stage.appendChild(grid);
+    status();
+    tplFocus(btns[0]);
+    return true;
+  }
+
+  // sequence: place shuffled step tiles into numbered slots, then Check.
+  function tplSequence(body, g, api) {
+    const rounds = g.rounds;
+    if (rounds.length < 2) return false;
+    let ri = 0, attempts = 0, done = false, firstTry = 0, hintsUsed = 0;
+    let tray = [], slots = [], locked = [];
+    const roundStars = [];
+    const ui = tplShell(body, g, api);
+    const hintBtn = btn(COPY.tplHint, null, () => { hintsUsed++; setLive("💡 " + rounds[ri].hint); ui.snd("jump"); });
+    const checkBtn = btn(COPY.tplCheck, null, () => check());
+    const nextBtn = btn(COPY.tplNext, null, () => {
+      if (ri >= rounds.length - 1) return finish();
+      ri++;
+      startRound();
+    });
+    ui.controls.append(hintBtn, checkBtn, nextBtn);
+
+    // A tray order that is never the correct order.
+    function scrambled(m) {
+      const ids = Array.from({ length: m }, (_, i) => i);
+      for (let t = 0; t < 20; t++) {
+        const s = shuffledCopy(ids);
+        if (s.some((v, i) => v !== i)) return s;
+      }
+      return ids.slice(1).concat(ids[0]);
+    }
+    function startRound() {
+      const m = rounds[ri].steps.length;
+      slots = new Array(m).fill(null); locked = new Array(m).fill(false);
+      tray = scrambled(m); attempts = 0; done = false;
+      setLive("");
+      render(null);
+    }
+    function tile(side, cls, aria, onClick) {
+      const b = h("button", cls);
+      b.type = "button";
+      b.setAttribute("aria-label", aria);
+      tplFace(b, side, 64);
+      b.addEventListener("click", onClick);
+      return b;
+    }
+    function render(focusWhat) {
+      const r = rounds[ri], m = r.steps.length;
+      ui.status.textContent = `Round ${ri + 1} of ${rounds.length}`;
+      ui.stage.textContent = "";
+      const card = h("div", "tpl-card");
+      card.appendChild(h("p", "tpl-q", r.prompt));
+      ui.stage.appendChild(card);
+      const trayEl = h("div", "tpl-tray");
+      trayEl.setAttribute("role", "group");
+      trayEl.setAttribute("aria-label", "Step tiles");
+      tray.forEach(s => trayEl.appendChild(tile(r.steps[s], "tpl-tile", r.steps[s].label + ". Press to place it in the next empty slot.", () => place(s))));
+      rovingGrid(trayEl);
+      ui.stage.appendChild(trayEl);
+      const slotsEl = h("div", "tpl-slots");
+      slotsEl.setAttribute("role", "group");
+      slotsEl.setAttribute("aria-label", "Slots in order");
+      for (let k = 0; k < m; k++) {
+        const row = h("div", "tpl-slot");
+        row.appendChild(h("span", "tpl-num", String(k + 1)));
+        if (slots[k] === null) {
+          row.appendChild(h("span", "tpl-empty", "Slot " + (k + 1) + " is empty"));
+        } else {
+          const side = r.steps[slots[k]];
+          const b = tile(side, locked[k] ? "tpl-tile ok" : "tpl-tile",
+            "Slot " + (k + 1) + ": " + side.label + (locked[k] ? ". Correct." : ". Press to return it to the tiles."), () => unplace(k));
+          if (locked[k]) b.setAttribute("aria-disabled", "true");
+          row.appendChild(b);
+        }
+        slotsEl.appendChild(row);
+      }
+      ui.stage.appendChild(slotsEl);
+      checkBtn.disabled = done || slots.some(s => s === null);
+      checkBtn.hidden = done;
+      hintBtn.disabled = done;
+      nextBtn.hidden = !done;
+      nextBtn.textContent = ri >= rounds.length - 1 ? COPY.tplSeeResults : COPY.tplNext;
+      if (focusWhat === "tray") tplFocus(trayEl.querySelector("button") || (checkBtn.disabled ? null : checkBtn));
+      else if (focusWhat === "check") tplFocus(checkBtn.disabled ? trayEl.querySelector("button") : checkBtn);
+      else if (focusWhat === "next") tplFocus(nextBtn);
+      else tplFocus(trayEl.querySelector("button"));
+    }
+    function place(s) {
+      if (done) return;
+      const k = slots.indexOf(null);
+      if (k < 0) return;
+      slots[k] = s; tray = tray.filter(x => x !== s);
+      ui.snd("jump");
+      render(tray.length ? "tray" : "check");
+    }
+    function unplace(k) {
+      if (done || locked[k] || slots[k] === null) return;
+      tray.push(slots[k]); slots[k] = null;
+      ui.snd("jump");
+      render("tray");
+    }
+    function check() {
+      if (done || slots.some(s => s === null)) return;
+      attempts++;
+      const m = slots.length;
+      let wrong = 0;
+      for (let k = 0; k < m; k++) {
+        if (locked[k]) continue;
+        if (slots[k] === k) locked[k] = true;
+        else { tray.push(slots[k]); slots[k] = null; wrong++; }
+      }
+      if (wrong === 0) {
+        done = true;
+        roundStars.push(attempts === 1 ? 3 : (attempts === 2 ? 2 : 1));
+        if (attempts === 1) firstTry++;
+        ui.snd("correct");
+        setLive("✅ " + COPY.tplRoundDone + (rounds[ri].explanation ? " 💡 " + rounds[ri].explanation : ""));
+        render("next");
+      } else {
+        ui.snd("wrong");
+        setLive(`✗ ${m - wrong} in the right place. The others went back to the tiles. Try again!`);
+        render("tray");
+      }
+    }
+    function finish() {
+      const sum = roundStars.reduce((a, b) => a + b, 0);
+      const s = Math.max(1, Math.floor(sum / rounds.length));
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${firstTry} of ${rounds.length} rounds right on the first try`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+    startRound();
+    return true;
+  }
+
+  // sort: tap the bin an item belongs to. A wrong pick sends the item to the back of the queue.
+  function tplSort(body, g, api) {
+    const items = g.items, bins = g.bins, total = items.length;
+    if (total < 6 || bins.length < 2) return false;
+    const root = document.getElementById("tpl");
+    let queue = shuffledCopy(items.map((_, i) => i)), sorted = 0, mistakes = 0, finished = false;
+    const ui = tplShell(body, g, api);
+    const bar = h("div", "tpl-progress");
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", "Items sorted");
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", String(total));
+    const fill = h("div", "tpl-fill");
+    bar.appendChild(fill);
+    const itemCard = h("div", "tpl-card tpl-item");
+    const binRow = h("div", "tpl-bins");
+    const binBtns = bins.map((b, k) => {
+      const x = h("button", "tpl-bin");
+      x.type = "button";
+      x.setAttribute("aria-label", "Group " + (k + 1) + ": " + b.label);
+      if (b.emoji) { const em = h("span", "tpl-emoji", b.emoji); em.setAttribute("aria-hidden", "true"); x.appendChild(em); }
+      x.appendChild(h("span", null, b.label));
+      x.appendChild(h("span", "tpl-key", String(k + 1)));
+      x.addEventListener("click", () => pick(k));
+      return x;
+    });
+    binBtns.forEach(x => binRow.appendChild(x));
+    rovingGrid(binRow);
+    ui.stage.append(bar, itemCard, binRow);
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (finished) return;
+      setLive("💡 " + bins.map(b => b.label + ": " + b.rule).join(" · "));
+      ui.snd("jump");
+    });
+    const doneBtn = btn(COPY.tplSeeResults, null, () => finish());
+    doneBtn.hidden = true;
+    ui.controls.append(hintBtn, doneBtn);
+
+    function progress() {
+      bar.setAttribute("aria-valuenow", String(sorted));
+      fill.style.width = Math.round((sorted / total) * 100) + "%";
+      ui.status.textContent = `${sorted}/${total} · Mistakes ${mistakes}`;
+    }
+    function showItem() {
+      itemCard.textContent = "";
+      if (finished) { itemCard.appendChild(h("p", "tpl-q", COPY.tplAllSorted)); return; }
+      const it = items[queue[0]];
+      if (it.visual) showVisual(itemCard, it.visual, "sort", 120);
+      if (it.emoji) { const em = h("div", "tpl-emoji", it.emoji); em.setAttribute("aria-hidden", "true"); itemCard.appendChild(em); }
+      itemCard.appendChild(h("p", "tpl-q", it.label));
+    }
+    function pick(k) {
+      if (finished || k < 0 || k >= bins.length) return;
+      const it = items[queue[0]];
+      if (it.bin === k) {
+        sorted++; queue.shift(); ui.snd("correct");
+        setLive("✅ " + (it.explanation || it.label));
+        if (queue.length === 0) {
+          finished = true;
+          binBtns.forEach(x => x.setAttribute("aria-disabled", "true"));
+          hintBtn.disabled = true; doneBtn.hidden = false;
+          showItem(); progress(); tplFocus(doneBtn);
+          return;
+        }
+      } else {
+        mistakes++; queue.push(queue.shift()); ui.snd("wrong");
+        setLive(`✗ ${COPY.tplWrong} ${bins[k].label}: ${bins[k].rule}`);
+      }
+      showItem(); progress();
+    }
+    function finish() {
+      const s = mistakes <= 1 ? 3 : (mistakes <= 3 ? 2 : 1);
+      tplResults(body, api, { title: COPY.tplWin, stars: s, lines: [`${total} items sorted with ${mistakes} ${mistakes === 1 ? "mistake" : "mistakes"}`], onAgain: () => mountTemplate(g, api) });
+      ui.snd("levelClear");
+    }
+    // Keys 1-3 pick a group (ignored while typing in a field).
+    tplOn(root, "keydown", (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!/^[1-3]$/.test(e.key || "")) return;
+      pick(Number(e.key) - 1);
+    });
+    showItem(); progress();
+    tplFocus(binBtns[0]);
+    return true;
+  }
+
   const TPL_MODULES = {
     picturequiz: (body, g, api) => tplChoice(body, g, api, "picture"),
     catch:       (body, g, api) => tplChoice(body, g, api, "catch"),
+    memory:      (body, g, api) => tplMemory(body, g, api),
+    sequence:    (body, g, api) => tplSequence(body, g, api),
+    sort:        (body, g, api) => tplSort(body, g, api),
   };
 
   // True when this game type has a screen and enough playable items.
   function tplReady(g) {
-    return !!g && Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type) && tplPlayable(g).length >= 3;
+    if (!g || !Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type)) return false;
+    if (g.type === "memory") return Array.isArray(g.pairs) && g.pairs.length >= 3;
+    if (g.type === "sequence") return Array.isArray(g.rounds) && g.rounds.length >= 2;
+    if (g.type === "sort") return Array.isArray(g.items) && g.items.length >= 6 && Array.isArray(g.bins) && g.bins.length >= 2;
+    return tplPlayable(g).length >= 3;
   }
 
   // Replaces whatever template is showing with a fresh run of g. Returns false (and shows nothing) if it cannot start.
