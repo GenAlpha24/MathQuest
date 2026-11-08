@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -223,6 +223,55 @@
   .game-row .who { font-weight: bold; text-align: left; }
   .game-row .state { font-size: 13px; opacity: 0.85; display: block; }
   #gameList { width: 100%; max-width: 440px; }
+
+  /* Templates (Phase 3) */
+  #tpl { justify-content: flex-start; padding: 12px; }
+  #tplBody { width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #tpl[data-tpl="picturequiz"] { background: linear-gradient(160deg, #74c0fc 0%, #a5d8ff 55%, #e7f5ff 100%); color: #12325c; }
+  #tpl[data-tpl="catch"] { background: linear-gradient(180deg, #0b7285 0%, #083d4f 100%); color: #fff; }
+  .tpl-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+  .tpl-title { flex: 1 1 140px; font-size: 20px; font-weight: bold; text-align: left; }
+  .tpl-mascot { font-size: 28px; display: inline-block; }
+  .tpl-status { font-size: 18px; font-weight: bold; }
+  .tpl-instr { font-size: 16px; margin: 0; }
+  .tpl-stage { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tpl-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
+  .tpl-live { min-height: 44px; width: 100%; font-size: 17px; font-weight: bold; }
+  #tpl[data-tpl="catch"] .tpl-live { color: #ffe066; }
+  .tpl-btn {
+    min-width: 48px; min-height: 48px; font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer;
+    border: none; border-radius: 14px; padding: 8px 16px; background: #fff; color: #2b3a67; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+  }
+  .tpl-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .tpl-btn:focus-visible, .tpl-ans:focus-visible { outline: 4px solid #ffd43b; outline-offset: 2px; }
+  .tpl-card { background: #fff; color: #2b3a67; border-radius: 16px; padding: 12px; width: 100%; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15); }
+  .tpl-pic svg { display: block; margin: 0 auto; max-width: 100%; max-height: 34vh; height: auto; }
+  .tpl-emoji { font-size: 96px; line-height: 1.1; }
+  .tpl-q { font-size: 20px; font-weight: bold; margin: 8px 0 0; }
+  .tpl-answers { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
+  .tpl-ans {
+    flex: 1 1 200px; min-height: 56px; font-family: inherit; font-size: 20px; font-weight: bold; cursor: pointer;
+    border: 3px solid transparent; border-radius: 14px; padding: 8px 14px; background: #fff; color: #2b3a67; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .tpl-ans[aria-disabled="true"] { cursor: default; }
+  .tpl-ans.right { background: #d3f9d8; border-color: #2b8a3e; }
+  .tpl-ans.wrong { background: #ffe3e3; border-color: #c92a2a; }
+  .tpl-key { font-size: 13px; opacity: 0.7; }
+  .tpl-sea { position: relative; width: 100%; height: 300px; border-radius: 16px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
+  .tpl-bubble { position: absolute; min-width: 88px; min-height: 88px; max-width: 60%; border-radius: 48px; flex: none; flex-direction: column; gap: 2px; background: rgba(255, 255, 255, 0.92); }
+  .tpl-sea.calm { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 10px; }
+  .tpl-sea.calm .tpl-bubble { position: static; }
+  .tpl-timer { margin: 0; font-size: 16px; font-weight: bold; }
+  .tpl-results h2 { font-size: 28px; margin: 4px 0; }
+  .tpl-stars { font-size: 36px; margin: 4px 0; }
+  .tpl-note { font-size: 14px; opacity: 0.8; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tpl-mascot { animation: tplBob 2.4s ease-in-out infinite; }
+    @keyframes tplBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    .tpl-ans { transition: transform 120ms ease-out; }
+    .tpl-ans:not([aria-disabled="true"]):hover { transform: translateY(-2px); }
+  }
 
   /* Battle box */
   #battle .question {
@@ -527,6 +576,9 @@
       <div id="gameMsg" role="status" aria-live="polite" style="min-height:22px; color:#ffd43b; margin:6px 0;"></div>
       <button class="btn big" id="myGamesCloseBtn">Back to game</button>
     </div>
+
+    <!-- Template games (Phase 3) -->
+    <div id="tpl" class="overlay" data-tpl=""><div id="tplBody"></div></div>
 
     <!-- Start -->
     <div id="start" class="overlay">
@@ -1291,6 +1343,8 @@
     approvalDesk: document.getElementById("approvalDesk"),
     createGame: document.getElementById("createGame"),
     myGames: document.getElementById("myGames"),
+    tpl: document.getElementById("tpl"),
+    tplBody: document.getElementById("tplBody"),
     cgPrompt: document.getElementById("cgPrompt"),
     cgGrade: document.getElementById("cgGrade"),
     cgMsg: document.getElementById("cgMsg"),
@@ -2569,6 +2623,33 @@
     genFailed: "I couldn't build a good quiz about that one. Try asking in a different way, or pick a simpler topic.",
     refused: "Hmm, I can't make that one. Try a science, tech, engineering, art or math idea!",
     defaultHint: "Think about what you know and pick the best answer.",
+    templateFallback: "That idea works better in a different style, so I picked one for you!",
+    tplInstr: {
+      picturequiz: "Look at the picture, then pick the answer.",
+      catch: "Pop the bubble with the right answer!",
+      memory: "Flip two cards. Find the pairs that go together.",
+      sequence: "Tap the steps in the right order, then press Check.",
+      sort: "Tap the group where each thing belongs.",
+    },
+    tplWin: "You did it!",
+    tplLose: "Good try! Want to play again?",
+    tplAgain: "Play again",
+    tplHome: "Back to home",
+    tplMyGames: "My games",
+    tplHint: "💡 Hint",
+    tplCheck: "Check",
+    tplNext: "Next",
+    tplSeeResults: "See results",
+    tplRight: "Right!",
+    tplWrong: "Not quite.",
+    tplTimeUp: "Time is up!",
+    tplAnswerIs: "The answer is",
+    tplCalmOn: "🐢 Calm: On",
+    tplCalmOff: "🐢 Calm: Off",
+    tplCalmNote: "Take your time. No timer here.",
+    tplSoundOn: "🔊 Sound: On",
+    tplSoundOff: "🔇 Sound: Off",
+    tplStarsNote: "Stars are just for fun. They do not change your saved score.",
   };
   // Keyed by the callable's error code (e.details.code or e.code without "functions/").
   const CG_ERRORS = {
@@ -2598,6 +2679,10 @@
   // Malformed questions are skipped, never thrown on. The stored option order is never mutated.
   function adaptGame(def) {
     if (!def || typeof def !== "object" || !Array.isArray(def.questions)) return null;
+    // v1 docs have no type (they are runner quizzes). Unknown types and newer schemas are not playable here.
+    const type = def.type === undefined ? "quiz" : def.type;
+    if (type !== "quiz" && type !== "picturequiz" && type !== "catch") return null;
+    if (typeof def.schemaVersion === "number" && def.schemaVersion > 2) return null;
     const topic = (typeof def.topic === "string" && def.topic.trim()) ? def.topic.trim().slice(0, 60) : "science";
     const questions = [];
     for (const q of def.questions) {
@@ -2625,11 +2710,14 @@
         explanation: (typeof q.explanation === "string") ? q.explanation : "",
         videoWord: topic,
         visual,
+        plain: q.text,
+        emoji,
       });
     }
     if (questions.length < 3) return null;
     return {
       id: typeof def.id === "string" ? def.id : "",
+      type,
       title: typeof def.title === "string" ? def.title : "My game",
       topic,
       subject: typeof def.subject === "string" ? def.subject : "",
@@ -2640,6 +2728,18 @@
   function startCustomGame(raw) {
     const g = adaptGame(raw);
     if (!g) { setCgMsg(COPY.cantPlay); el.gameMsg.textContent = COPY.cantPlay; return; }
+    if (g.type !== "quiz") { // other templates run in their own overlay and never touch the runner or saved progress
+      if (!tplReady(g)) { setCgMsg(COPY.cantPlay); el.gameMsg.textContent = COPY.cantPlay; return; }
+      stopTimer();
+      hideAllOverlays();
+      state = "template";
+      mountTemplate(g, {
+        home: playSolo,
+        myGames: () => { showMyGames(); state = "start"; },
+        sound: (k) => { if (typeof sfx[k] === "function") sfx[k](); },
+      });
+      return;
+    }
     if (!customRun) { // snapshot ONCE; replays keep the same base
       customRun = { base: { level, best: bestScore, mega: megaGemsCollected, ultra: ultraGemsCollected } };
     }
@@ -2653,6 +2753,7 @@
   }
 
   function endCustomRun() {
+    tplTeardown();
     if (!customRun) return;
     level = customRun.base.level; bestScore = customRun.base.best;
     megaGemsCollected = customRun.base.mega; ultraGemsCollected = customRun.base.ultra;
@@ -2692,6 +2793,376 @@
   }
   function setCgMsg(t) { el.cgMsg.textContent = t || ""; }
   /* MQ-CUSTOM:END */
+
+  /* MQ-TEMPLATES:BEGIN */
+  // =====================================================================
+  //  GAME TEMPLATES (Phase 3): picture quiz and bubble pop (more templates are added later).
+  //  Everything here is isolated from the main game: it only talks to the page through
+  //  api = { home, myGames, sound } and never reads or writes saved progress.
+  //  Game text comes from a model, so it is only ever set via textContent.
+  // =====================================================================
+  const TEMPLATE_META = Object.freeze({
+    quiz:        Object.freeze({ icon: "🏃", name: "Monster Run",    blurb: "Run and answer",    unit: "questions" }),
+    picturequiz: Object.freeze({ icon: "🖼️", name: "Picture Pick",   blurb: "Look, then choose", unit: "questions" }),
+    catch:       Object.freeze({ icon: "🫧", name: "Bubble Pop",     blurb: "Pop the answer",    unit: "questions" }),
+    memory:      Object.freeze({ icon: "🃏", name: "Memory Match",   blurb: "Flip and pair",     unit: "pairs" }),
+    sequence:    Object.freeze({ icon: "🔢", name: "Order It",       blurb: "Put in order",      unit: "rounds" }),
+    sort:        Object.freeze({ icon: "🧺", name: "Sort It",        blurb: "Sort into groups",  unit: "items" }),
+  });
+  const TPL_MASCOT = { picturequiz: "🦉", catch: "🐠" };
+
+  let tplTimers = [], tplFrames = [], tplOffs = [], tplSoundOn = false, tplLiveEl = null;
+
+  // Cancels every timer / animation frame / listener registered through tplLater, tplFrame and tplOn, and empties the screen.
+  function tplTeardown() {
+    tplTimers.forEach(id => window.clearTimeout(id)); tplTimers = [];
+    if (window.cancelAnimationFrame) tplFrames.forEach(id => window.cancelAnimationFrame(id));
+    tplFrames = [];
+    const offs = tplOffs; tplOffs = [];
+    offs.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
+    tplLiveEl = null; tplSoundOn = false;
+    const root = document.getElementById("tpl"), body = document.getElementById("tplBody");
+    if (body) body.textContent = "";
+    if (root) root.setAttribute("data-tpl", "");
+  }
+  function tplLater(fn, ms) {
+    const id = window.setTimeout(() => { tplTimers = tplTimers.filter(x => x !== id); fn(); }, ms);
+    tplTimers.push(id);
+    return id;
+  }
+  function tplFrame(fn) {
+    if (!window.requestAnimationFrame) return tplLater(() => fn(Date.now()), 16);
+    const id = window.requestAnimationFrame((t) => { tplFrames = tplFrames.filter(x => x !== id); fn(t); });
+    tplFrames.push(id);
+    return id;
+  }
+  function tplOn(target, type, fn) {
+    target.addEventListener(type, fn);
+    tplOffs.push(() => target.removeEventListener(type, fn));
+  }
+
+  function h(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+  function btn(label, aria, onClick, cls) {
+    const b = h("button", cls || "tpl-btn", label);
+    b.type = "button";
+    if (aria) b.setAttribute("aria-label", aria);
+    b.addEventListener("click", () => onClick());
+    return b;
+  }
+  function setLive(text) { if (tplLiveEl) tplLiveEl.textContent = text || ""; }
+  function hearts(n) { return "❤️".repeat(Math.max(0, n)) + "🤍".repeat(Math.max(0, 3 - n)); }
+  function stars(n) { return "⭐".repeat(Math.max(0, n)) + "☆".repeat(Math.max(0, 3 - n)); }
+  // 3 stars: at least 90% right and no hint; 2 stars: at least 60%; otherwise 1.
+  function tplStarsFor(right, total, hintsUsed) {
+    const p = total > 0 ? right / total : 0;
+    if (p >= 0.9 && hintsUsed === 0) return 3;
+    return p >= 0.6 ? 2 : 1;
+  }
+  function reduceMotion() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (e) { return false; }
+  }
+  function tplFocus(node) { if (node && typeof node.focus === "function") node.focus(); }
+
+  // Arrow keys move focus between the buttons of a tile container.
+  function rovingGrid(container) {
+    container.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k !== "ArrowRight" && k !== "ArrowLeft" && k !== "ArrowDown" && k !== "ArrowUp") return;
+      const items = Array.from(container.querySelectorAll("button"));
+      const at = items.indexOf(document.activeElement);
+      if (at < 0 || items.length < 2) return;
+      e.preventDefault();
+      const step = (k === "ArrowRight" || k === "ArrowDown") ? 1 : -1;
+      tplFocus(items[(at + step + items.length) % items.length]);
+    });
+  }
+
+  // Draws a validated picture into host. Returns false (and draws nothing) if it cannot be drawn.
+  function showVisual(host, v, hostKind, maxWidth) {
+    const svg = renderVisual(v, { host: hostKind || "question", maxWidth: maxWidth || 320 });
+    if (!svg) return false;
+    host.appendChild(svg);
+    return true;
+  }
+
+  // Shared screen: header (home, title, status, sound), instruction line, stage, controls, live line.
+  function tplShell(body, g, api) {
+    body.textContent = "";
+    const head = h("div", "tpl-head");
+    head.appendChild(btn("🏠", COPY.tplHome, () => api.home(), "tpl-btn tpl-icon"));
+    const title = h("div", "tpl-title");
+    title.appendChild(h("span", "tpl-mascot", TPL_MASCOT[g.type] || TEMPLATE_META[g.type].icon));
+    title.appendChild(document.createTextNode(" " + g.title));
+    head.appendChild(title);
+    const status = h("div", "tpl-status");
+    head.appendChild(status);
+    const sound = btn(COPY.tplSoundOff, null, () => {
+      tplSoundOn = !tplSoundOn;
+      sound.textContent = tplSoundOn ? COPY.tplSoundOn : COPY.tplSoundOff;
+      sound.setAttribute("aria-pressed", tplSoundOn ? "true" : "false");
+    }, "tpl-btn");
+    sound.setAttribute("aria-pressed", "false");
+    head.appendChild(sound);
+    const instr = h("p", "tpl-instr", COPY.tplInstr[g.type]);
+    const stage = h("div", "tpl-stage");
+    const controls = h("div", "tpl-controls");
+    const live = h("div", "tpl-live");
+    live.setAttribute("role", "status");
+    live.setAttribute("aria-live", "polite");
+    tplLiveEl = live;
+    body.append(head, instr, stage, controls, live);
+    const snd = (k) => { if (tplSoundOn && api.sound) api.sound(k); };
+    return { head, status, stage, controls, live, snd };
+  }
+
+  // Results card: stars, short lines, Play again / My games / Back to home.
+  function tplResults(body, api, o) {
+    body.textContent = "";
+    tplLiveEl = null;
+    const card = h("div", "tpl-card tpl-results");
+    const title = h("h2", "tpl-rtitle", o.title);
+    title.tabIndex = -1;
+    const st = h("div", "tpl-stars", stars(o.stars));
+    st.setAttribute("role", "img");
+    st.setAttribute("aria-label", o.stars + " of 3 stars");
+    card.append(title, st);
+    (o.lines || []).forEach(l => card.appendChild(h("p", null, l)));
+    card.appendChild(h("p", "tpl-note", COPY.tplStarsNote));
+    const row = h("div", "tpl-controls");
+    row.append(
+      btn("🔁 " + COPY.tplAgain, null, o.onAgain),
+      btn("🎮 " + COPY.tplMyGames, null, () => api.myGames()),
+      btn("🏠 " + COPY.tplHome, null, () => api.home()));
+    body.append(card, row);
+    tplFocus(title);
+  }
+
+  // Questions of a choice-family game whose picture can really be drawn.
+  function tplPlayable(g) {
+    if (!g || !Array.isArray(g.questions)) return [];
+    return g.questions.filter(q => !q.visual || !!renderVisual(q.visual, { host: "question", maxWidth: 320 }));
+  }
+
+  // picturequiz (mode "picture") and catch (mode "catch") share one question payload and one state machine.
+  function tplChoice(body, g, api, mode) {
+    const qs = shuffledCopy(tplPlayable(g));
+    if (qs.length < 3) return false;
+    const root = document.getElementById("tpl");
+    const bubbleMode = mode === "catch";
+    const total = qs.length;
+    let i = 0, heartsLeft = 3, right = 0, hintsUsed = 0, combo = 0;
+    let answered = false, hinted = false, calmOn = false, remaining = 12, shownSecs = 12, loopId = 0;
+    const missed = [];
+    let q = null, opts = [], answerBtns = [], bubbles = [], timerEl = null, area = null;
+    const ui = tplShell(body, g, api);
+    const calm = () => reduceMotion() || calmOn;
+
+    const hintBtn = btn(COPY.tplHint, null, () => {
+      if (answered || !q) return;
+      if (!hinted) { hinted = true; hintsUsed++; }
+      setLive("💡 " + q.hint);
+      ui.snd("jump");
+    });
+    const nextBtn = btn(COPY.tplNext, null, () => {
+      if (heartsLeft <= 0 || i >= total - 1) return finishRun();
+      i++;
+      showQuestion(false);
+    });
+    nextBtn.hidden = true;
+    ui.controls.append(hintBtn, nextBtn);
+    let calmBtn = null;
+    if (bubbleMode) {
+      calmBtn = btn(COPY.tplCalmOff, null, () => {
+        calmOn = !calmOn;
+        showQuestion(true);
+      });
+      calmBtn.setAttribute("aria-pressed", "false");
+      ui.controls.appendChild(calmBtn);
+    }
+
+    function status() {
+      ui.status.textContent = "";
+      ui.status.appendChild(h("span", null, `${i + 1}/${total} `));
+      const hs = h("span", null, hearts(heartsLeft));
+      hs.setAttribute("role", "img");
+      hs.setAttribute("aria-label", heartsLeft + " hearts left");
+      ui.status.appendChild(hs);
+      if (bubbleMode && combo > 1) ui.status.appendChild(h("span", null, " 🔥" + combo));
+    }
+
+    function mark(k, kind) {
+      const b = answerBtns[k];
+      b.classList.add(kind);
+      b.firstChild.textContent = (kind === "right" ? "✓ " : "✗ ") + opts[k];
+    }
+
+    function answer(k) {
+      if (answered || !q) return;
+      answered = true;
+      loopId++;
+      const ok = k >= 0 && opts[k] === q.answer;
+      opts.forEach((o, n) => { if (o === q.answer) mark(n, "right"); else if (n === k) mark(n, "wrong"); });
+      answerBtns.forEach(b => b.setAttribute("aria-disabled", "true"));
+      hintBtn.disabled = true;
+      if (ok) { right++; combo++; ui.snd("correct"); }
+      else { heartsLeft--; combo = 0; missed.push(q); ui.snd("wrong"); }
+      const lead = ok ? COPY.tplRight : (k < 0 ? COPY.tplTimeUp : COPY.tplWrong);
+      setLive(lead + (ok ? "" : " " + COPY.tplAnswerIs + " " + q.answer + ".") + (q.explanation ? " 💡 " + q.explanation : ""));
+      status();
+      nextBtn.textContent = (heartsLeft <= 0 || i >= total - 1) ? COPY.tplSeeResults : COPY.tplNext;
+      nextBtn.hidden = false;
+      tplFocus(nextBtn);
+    }
+
+    function answerButton(k) {
+      const b = h("button", bubbleMode ? "tpl-ans tpl-bubble" : "tpl-ans");
+      b.type = "button";
+      b.appendChild(h("span", "tpl-ans-text", opts[k]));
+      b.appendChild(h("span", "tpl-key", String(k + 1)));
+      b.setAttribute("aria-label", "Answer " + (k + 1) + ": " + opts[k]);
+      b.addEventListener("click", () => answer(k));
+      return b;
+    }
+
+    function layoutBubbles() {
+      const w = (area && area.clientWidth) || 320;
+      bubbles = answerBtns.map((b, k) => ({
+        b, x: 4 + (k * 76) / Math.max(1, answerBtns.length), y: 2 + (k % 3) * 32,
+        vx: ((k % 2 ? -1 : 1) * (24 + ((k * 7) % 16)) / w) * 100,
+      }));
+      bubbles.forEach(p => { p.b.style.left = p.x.toFixed(2) + "%"; p.b.style.top = p.y + "%"; });
+    }
+
+    function startLoop() {
+      if (!bubbleMode || calm()) return;
+      const token = ++loopId;
+      let last = null;
+      const step = (t) => {
+        if (token !== loopId || answered) return;
+        if (document.hidden) { last = null; tplFrame(step); return; }
+        const now = (typeof t === "number") ? t : (last === null ? 0 : last + 16);
+        const dt = last === null ? 0 : Math.min(50, Math.max(0, now - last));
+        last = now;
+        remaining -= dt / 1000;
+        const w = (area && area.clientWidth) || 320;
+        const maxX = Math.max(0, 100 - (100 * 104) / w);
+        bubbles.forEach(p => {
+          p.x += p.vx * dt / 1000;
+          if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx); }
+          if (p.x > maxX) { p.x = maxX; p.vx = -Math.abs(p.vx); }
+          p.b.style.left = p.x.toFixed(2) + "%";
+        });
+        const secs = Math.max(0, Math.ceil(remaining));
+        if (timerEl && secs !== shownSecs) { shownSecs = secs; timerEl.textContent = "⏱ " + secs; }
+        if (remaining <= 0) { answer(-1); return; }
+        tplFrame(step);
+      };
+      tplFrame(step);
+    }
+
+    function showQuestion(keepHint) {
+      q = qs[i];
+      answered = false; loopId++;
+      if (!keepHint) hinted = false;
+      remaining = 12; shownSecs = 12;
+      opts = shuffledCopy(q.opts);
+      ui.stage.textContent = "";
+      setLive("");
+      hintBtn.disabled = false;
+      nextBtn.hidden = true;
+      status();
+      if (calmBtn) {
+        calmBtn.textContent = calmOn ? COPY.tplCalmOn : COPY.tplCalmOff;
+        calmBtn.setAttribute("aria-pressed", calmOn ? "true" : "false");
+        calmBtn.disabled = reduceMotion();
+      }
+      const card = h("div", "tpl-card");
+      if (!bubbleMode) {
+        const pic = h("div", "tpl-pic");
+        if (!(q.visual && showVisual(pic, q.visual, "question", 320)) && q.emoji) {
+          const em = h("div", "tpl-emoji", q.emoji);
+          em.setAttribute("aria-hidden", "true");
+          pic.appendChild(em);
+        }
+        if (pic.firstChild) card.appendChild(pic);
+      } else if (q.visual) {
+        const pic = h("div", "tpl-pic");
+        if (showVisual(pic, q.visual, "question", 240)) card.appendChild(pic);
+      }
+      card.appendChild(h("p", "tpl-q", q.plain));
+      ui.stage.appendChild(card);
+      const list = h("div", bubbleMode ? "tpl-sea" : "tpl-answers");
+      answerBtns = opts.map((o, k) => answerButton(k));
+      answerBtns.forEach(b => list.appendChild(b));
+      rovingGrid(list);
+      ui.stage.appendChild(list);
+      area = list; timerEl = null;
+      if (bubbleMode) {
+        if (calm()) {
+          list.classList.add("calm");
+          ui.stage.appendChild(h("p", "tpl-timer", "🐢 " + COPY.tplCalmNote));
+        } else {
+          timerEl = h("p", "tpl-timer", "⏱ 12");
+          ui.stage.appendChild(timerEl);
+          layoutBubbles();
+          startLoop();
+        }
+      }
+      tplFocus(answerBtns[0]);
+    }
+
+    function finishRun() {
+      loopId++;
+      const won = heartsLeft > 0;
+      const lines = [`${right} of ${total} right`];
+      if (!won) missed.slice(0, 5).forEach(m => lines.push(m.plain + " → " + m.answer));
+      tplResults(body, api, {
+        title: won ? COPY.tplWin : COPY.tplLose, stars: tplStarsFor(right, total, hintsUsed), lines,
+        onAgain: () => mountTemplate(g, api),
+      });
+      ui.snd(won ? "levelClear" : "gameOver");
+    }
+
+    // Keys 1-9 pick an answer (ignored while typing in a field).
+    tplOn(root, "keydown", (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!/^[1-9]$/.test(e.key || "")) return;
+      const k = Number(e.key) - 1;
+      if (k < answerBtns.length) answer(k);
+    });
+    showQuestion(false);
+    return true;
+  }
+
+  const TPL_MODULES = {
+    picturequiz: (body, g, api) => tplChoice(body, g, api, "picture"),
+    catch:       (body, g, api) => tplChoice(body, g, api, "catch"),
+  };
+
+  // True when this game type has a screen and enough playable items.
+  function tplReady(g) {
+    return !!g && Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type) && tplPlayable(g).length >= 3;
+  }
+
+  // Replaces whatever template is showing with a fresh run of g. Returns false (and shows nothing) if it cannot start.
+  function mountTemplate(g, api) {
+    tplTeardown();
+    const root = document.getElementById("tpl"), body = document.getElementById("tplBody");
+    if (!root || !body || !g || !Object.prototype.hasOwnProperty.call(TPL_MODULES, g.type)) return false;
+    if (!TPL_MODULES[g.type](body, g, api)) { tplTeardown(); return false; }
+    root.setAttribute("data-tpl", g.type);
+    root.classList.add("show");
+    return true;
+  }
+  /* MQ-TEMPLATES:END */
 
   function setCgBusy(b) {
     creatingGame = b;
@@ -3966,6 +4437,7 @@
     }
   }
   document.addEventListener("keydown", (e) => {
+    if (state === "template") return;
     if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); jump(); }
     // T focuses the type-answer box during a battle, so you can just type.
     if (e.code === "KeyT" && state === "battle" && !questionAnswered) {
@@ -4172,8 +4644,9 @@
   };
 
   function hideAllOverlays() {
+    tplTeardown();
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk, el.createGame, el.myGames]
+    [el.auth, el.start, el.battle, el.levelClear, el.gameOver, el.pause, el.countdown, el.help, el.scratch, el.leaderboard, el.pendingApproval, el.studentInvites, el.approvalDesk, el.tpl, el.createGame, el.myGames]
       .forEach(o => o.classList.remove("show"));
   }
 
