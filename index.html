@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -252,6 +252,13 @@
     max-height: 30vh;
     height: auto;
     object-fit: contain;
+  }
+  /* Pictures from Create a Game (Phase 3) */
+  #battleVisual { display: none; background: #fff; border-radius: 14px; margin: 0 auto 8px; padding: 6px; max-width: 85%; }
+  #battleVisual svg { display: block; margin: 0 auto; max-height: 30vh; }
+  @media (prefers-reduced-motion: no-preference) {
+    .mqv-bar { transform-box: fill-box; transform-origin: bottom; animation: mqvGrow 200ms ease-out; }
+    @keyframes mqvGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
   }
   #battle .answers {
     display: grid;
@@ -578,6 +585,7 @@
         <div id="timerBar"><div id="timerFill"></div></div>
       </div>
       <canvas id="graphCanvas" width="380" height="220" style="display:none;"></canvas>
+      <div id="battleVisual"></div>
       <div class="question" id="question">2 + 2 = ?</div>
       <div class="answers" id="answers"></div>
       <div id="typeAnswer">
@@ -1325,6 +1333,7 @@
     crayonColors: document.getElementById("crayonColors"),
     monsterFace: document.getElementById("monsterFace"),
     graphCanvas: document.getElementById("graphCanvas"),
+    battleVisual: document.getElementById("battleVisual"),
     levelClearText: document.getElementById("levelClearText"),
     gameOverText: document.getElementById("gameOverText"),
     timerSecs: document.getElementById("timerSecs"),
@@ -2033,6 +2042,516 @@
   }
 
   // =====================================================================
+  //  PICTURES (Phase 3). Declarative visual JSON -> inline SVG drawn by this trusted code.
+  //  The model never supplies markup. Model strings only reach textContent.
+  //  sanitizeVisual rebuilds a fresh object (null on any failure); renderVisual never throws.
+  //  VIS_LIMITS and EMOJI_DENY mirror functions/lib/visuals.js (a test fails if they differ).
+  // =====================================================================
+  /* MQ-VISUALS:BEGIN */
+  const VIS_LIMITS = {
+    bars: [2, 8], barValue: [0, 100], label: [1, 14], title: 40, yLabel: 20,
+    pieParts: [2, 12], pieThemes: ["pizza", "pie", "chocolate", "plain"],
+    lineRange: [-100, 1000], lineSteps: [1, 2, 5, 10, 20, 25, 50, 100], lineTicks: [1, 20], lineMarks: 3,
+    hour: [1, 12], minute: [0, 59],
+    shapes: ["triangle", "square", "rectangle", "circle", "pentagon", "hexagon"], sideLabel: [1, 99],
+    lengthUnits: ["cm", "m", "in", "none"], splitParts: [2, 3, 4, 6, 8],
+    emojiCount: [1, 30], groupSize: [1, 10],
+    pictoRows: [2, 6], pictoCount: [0, 10], pictoKeyEach: [1, 10], pictoTotal: 40,
+    thermo: [-30, 120], thermoSpan: 150, tempUnits: ["C", "F"],
+    maxBytes: 2048, maxPerGame: 15, emojiLen: 8,
+  };
+  const EMOJI_DENY = [
+    "🔫", "🗡", "🔪", "💣", "🧨", "🪓", "⚔", "🩸", "💉", "💊", "🚬", "🍺", "🍻", "🍷", "🥃", "🍸", "🍹", "🍾", "🥂",
+    "☠", "💀", "💩", "🍆", "🔞", "🖕", "👙", "🩲", "🏴‍☠",
+  ];
+  const VIS_KINDS = ["barChart", "pie", "numberLine", "clock", "shape", "emojiGroup", "pictograph", "thermometer"];
+  const VIS_COMPACT = ["pie", "emojiGroup", "clock", "shape", "thermometer"];
+  const VIS_HOSTS = { question: VIS_KINDS, memory: VIS_COMPACT, sequence: VIS_COMPACT, sort: VIS_COMPACT };
+  const VIS_EDGES = { triangle: 3, square: 4, rectangle: 4, pentagon: 5, hexagon: 6, circle: 0 };
+  const VIS_KEYS = {
+    barChart: ["title", "yLabel", "showValues", "bars"],
+    pie: ["parts", "shaded", "theme"],
+    numberLine: ["min", "max", "step", "marks"],
+    clock: ["hour", "minute", "showDigital"],
+    shape: ["shape", "sideLabels", "lengthUnit", "splitParts", "splitShaded"],
+    emojiGroup: ["emoji", "count", "groupSize", "crossed"],
+    pictograph: ["title", "keyEmoji", "keyEach", "rows"],
+    thermometer: ["min", "max", "value", "tempUnit"],
+  };
+  const VIS_FORBIDDEN = ["__proto__", "constructor", "prototype"];
+  const VIS_EMOJI_RE = /^\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*$/u;
+  const VIS_LABEL_RE = /^[\p{L}\p{N} .,'’%/:+°-]+$/u;
+  const VIS_URL_RE = /:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|edu|gov|co|me|ly)\b|data:|javascript:/i;
+
+  const visInt = (n, r) => Number.isInteger(n) && n >= r[0] && n <= r[1];
+  const visNone = (x) => x === undefined || x === null;
+  const visObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+  const visHas = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const visNorm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") || s.trim().toLowerCase();
+  function visEmoji(s) {
+    if (typeof s !== "string" || s.length === 0 || s.length > VIS_LIMITS.emojiLen || !VIS_EMOJI_RE.test(s)) return false;
+    const bare = s.replace(/\uFE0F/g, "");
+    return !EMOJI_DENY.some((d) => bare.includes(d.replace(/\uFE0F/g, "")));
+  }
+  function visLabel(v, min, max) {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    const n = Array.from(t).length;
+    if (n < min || n > max || !VIS_LABEL_RE.test(t) || VIS_URL_RE.test(t)) return null;
+    return t;
+  }
+
+  // Returns a fresh, validated object or null. host: question | memory | sequence | sort.
+  function sanitizeVisual(v, host) {
+    try {
+      if (!visObj(v)) return null;
+      const own = Object.keys(v);
+      if (own.some((k) => VIS_FORBIDDEN.includes(k))) return null;
+      const kind = v.kind;
+      if (typeof kind !== "string" || !VIS_KINDS.includes(kind)) return null;
+      if (!(VIS_HOSTS[host || "question"] || []).includes(kind)) return null;
+      const mine = ["kind"].concat(VIS_KEYS[kind]);
+      const all = ["kind"].concat(...Object.values(VIS_KEYS));
+      for (const k of own) {
+        if (mine.includes(k)) continue;
+        if (!all.includes(k) || !visNone(v[k])) return null; // other kinds' keys are tolerated only as null
+      }
+      const g = (k) => (visHas(v, k) && !visNone(v[k]) ? v[k] : undefined);
+      let out = null;
+      switch (kind) {
+        case "barChart": out = visCleanBar(g); break;
+        case "pie": out = visCleanPie(g); break;
+        case "numberLine": out = visCleanLine(g); break;
+        case "clock": out = visCleanClock(g); break;
+        case "shape": out = visCleanShape(g); break;
+        case "emojiGroup": out = visCleanEmoji(g); break;
+        case "pictograph": out = visCleanPicto(g); break;
+        case "thermometer": out = visCleanThermo(g); break;
+      }
+      if (!out || JSON.stringify(out).length > VIS_LIMITS.maxBytes) return null;
+      return out;
+    } catch (e) { return null; }
+  }
+  function visCleanRows(rows, rng, valueKey, extraEmoji) {
+    if (!Array.isArray(rows) || !visInt(rows.length, rng)) return null;
+    const seen = new Set();
+    const out = [];
+    for (const r of rows) {
+      if (!visObj(r) || Object.keys(r).some((k) => VIS_FORBIDDEN.includes(k))) return null;
+      const label = visLabel(r.label, VIS_LIMITS.label[0], VIS_LIMITS.label[1]);
+      if (label === null || !visInt(r[valueKey], valueKey === "value" ? VIS_LIMITS.barValue : VIS_LIMITS.pictoCount)) return null;
+      const key = visNorm(label);
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const row = { label };
+      row[valueKey] = r[valueKey];
+      if (extraEmoji && !visNone(r.emoji)) { if (!visEmoji(r.emoji)) return null; row.emoji = r.emoji; }
+      out.push(row);
+    }
+    return out;
+  }
+  function visCleanBar(g) {
+    const bars = visCleanRows(g("bars"), VIS_LIMITS.bars, "value", true);
+    if (!bars) return null;
+    const out = { kind: "barChart" };
+    if (g("title") !== undefined) { const t = visLabel(g("title"), 1, VIS_LIMITS.title); if (t === null) return null; out.title = t; }
+    if (g("yLabel") !== undefined) { const t = visLabel(g("yLabel"), 1, VIS_LIMITS.yLabel); if (t === null) return null; out.yLabel = t; }
+    if (g("showValues") !== undefined) { if (typeof g("showValues") !== "boolean") return null; out.showValues = g("showValues"); }
+    out.bars = bars;
+    return out;
+  }
+  function visCleanPie(g) {
+    const parts = g("parts"), shaded = g("shaded"), theme = g("theme");
+    if (!visInt(parts, VIS_LIMITS.pieParts) || !visInt(shaded, [0, parts])) return null;
+    if (!VIS_LIMITS.pieThemes.includes(theme)) return null;
+    return { kind: "pie", parts, shaded, theme };
+  }
+  function visCleanLine(g) {
+    const min = g("min"), max = g("max"), step = g("step"), marks = g("marks");
+    if (!visInt(min, VIS_LIMITS.lineRange) || !visInt(max, VIS_LIMITS.lineRange) || min >= max) return null;
+    if (!VIS_LIMITS.lineSteps.includes(step) || (max - min) % step !== 0 || !visInt((max - min) / step, VIS_LIMITS.lineTicks)) return null;
+    const out = { kind: "numberLine", min, max, step };
+    if (marks !== undefined) {
+      if (!Array.isArray(marks) || marks.length > VIS_LIMITS.lineMarks) return null;
+      for (const m of marks) if (!Number.isInteger(m) || m < min || m > max || (m - min) % step !== 0) return null;
+      if (new Set(marks).size !== marks.length) return null;
+      if (marks.length) out.marks = marks.slice();
+    }
+    return out;
+  }
+  function visCleanClock(g) {
+    if (!visInt(g("hour"), VIS_LIMITS.hour) || !visInt(g("minute"), VIS_LIMITS.minute)) return null;
+    const out = { kind: "clock", hour: g("hour"), minute: g("minute") };
+    if (g("showDigital") !== undefined) { if (typeof g("showDigital") !== "boolean") return null; out.showDigital = g("showDigital"); }
+    return out;
+  }
+  function visCleanShape(g) {
+    const sh = g("shape");
+    if (!VIS_LIMITS.shapes.includes(sh)) return null;
+    const out = { kind: "shape", shape: sh };
+    const labels = g("sideLabels");
+    if (labels !== undefined) {
+      if (!Array.isArray(labels) || labels.length !== VIS_EDGES[sh] || labels.length === 0) return null;
+      if (!labels.every((n) => visInt(n, VIS_LIMITS.sideLabel))) return null;
+      if (sh === "square" && new Set(labels).size !== 1) return null;
+      if (sh === "rectangle" && !(labels[0] === labels[2] && labels[1] === labels[3])) return null;
+      if (!VIS_LIMITS.lengthUnits.includes(g("lengthUnit"))) return null;
+      out.sideLabels = labels.slice();
+      out.lengthUnit = g("lengthUnit");
+    }
+    const sp = g("splitParts"), ss = g("splitShaded");
+    if ((sp === undefined) !== (ss === undefined)) return null;
+    if (sp !== undefined) {
+      if (!["circle", "square", "rectangle"].includes(sh)) return null;
+      if (!VIS_LIMITS.splitParts.includes(sp) || !visInt(ss, [0, sp])) return null;
+      out.splitParts = sp;
+      out.splitShaded = ss;
+    }
+    return out;
+  }
+  function visCleanEmoji(g) {
+    if (!visEmoji(g("emoji")) || !visInt(g("count"), VIS_LIMITS.emojiCount)) return null;
+    const out = { kind: "emojiGroup", emoji: g("emoji"), count: g("count") };
+    if (g("groupSize") !== undefined) { if (!visInt(g("groupSize"), VIS_LIMITS.groupSize)) return null; out.groupSize = g("groupSize"); }
+    if (g("crossed") !== undefined) { if (!visInt(g("crossed"), [0, g("count")])) return null; out.crossed = g("crossed"); }
+    return out;
+  }
+  function visCleanPicto(g) {
+    if (!visEmoji(g("keyEmoji")) || !visInt(g("keyEach"), VIS_LIMITS.pictoKeyEach)) return null;
+    const rows = visCleanRows(g("rows"), VIS_LIMITS.pictoRows, "count", false);
+    if (!rows || rows.reduce((a, r) => a + r.count, 0) > VIS_LIMITS.pictoTotal) return null;
+    const out = { kind: "pictograph" };
+    if (g("title") !== undefined) { const t = visLabel(g("title"), 1, VIS_LIMITS.title); if (t === null) return null; out.title = t; }
+    out.keyEmoji = g("keyEmoji"); out.keyEach = g("keyEach"); out.rows = rows;
+    return out;
+  }
+  function visCleanThermo(g) {
+    const min = g("min"), max = g("max"), value = g("value");
+    if (!visInt(min, VIS_LIMITS.thermo) || !visInt(max, VIS_LIMITS.thermo) || min >= max || max - min > VIS_LIMITS.thermoSpan) return null;
+    if (!Number.isInteger(value) || value < min || value > max || !VIS_LIMITS.tempUnits.includes(g("tempUnit"))) return null;
+    return { kind: "thermometer", min, max, value, tempUnit: g("tempUnit") };
+  }
+
+  // Text alternative built from validated numbers and labels (always lists the values).
+  function describeVisual(d) {
+    const s = sanitizeVisual(d, "question") || sanitizeVisual(d, "memory");
+    if (!s) return "";
+    const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+    switch (s.kind) {
+      case "barChart":
+        return "Bar chart" + (s.title ? " (" + s.title + ")" : "") + ": " + s.bars.map((b) => b.label + " " + b.value).join(", ");
+      case "pie": {
+        const what = { pizza: "Pizza cut into " + s.parts + " equal slices", pie: "Pie cut into " + s.parts + " equal slices",
+          chocolate: "Chocolate cookie cut into " + s.parts + " equal pieces", plain: "Circle cut into " + s.parts + " equal parts" };
+        return what[s.theme] + ", " + s.shaded + " shaded";
+      }
+      case "numberLine":
+        return "Number line from " + s.min + " to " + s.max + ", counting by " + s.step +
+          (s.marks ? ", marked at " + s.marks.join(", ") : "");
+      case "clock":
+        return "Clock showing " + s.hour + ":" + (s.minute < 10 ? "0" : "") + s.minute;
+      case "shape": {
+        let t = s.shape.charAt(0).toUpperCase() + s.shape.slice(1);
+        if (s.sideLabels) t += " with sides " + s.sideLabels.map((n) => n + (s.lengthUnit === "none" ? "" : " " + s.lengthUnit)).join(", ");
+        if (s.splitParts) t += ", cut into " + s.splitParts + " equal parts, " + s.splitShaded + " shaded";
+        return t;
+      }
+      case "emojiGroup":
+        return s.count + " " + s.emoji + (s.groupSize ? " in groups of " + s.groupSize : "") +
+          (s.crossed ? ", " + s.crossed + " crossed out" : "");
+      case "pictograph":
+        return "Pictograph" + (s.title ? " (" + s.title + ")" : "") + ", each " + s.keyEmoji + " stands for " + s.keyEach + ": " +
+          s.rows.map((r) => r.label + " " + plural(r.count, "symbol")).join(", ");
+      case "thermometer":
+        return "Thermometer reading " + s.value + " degrees " + s.tempUnit + ", scale " + s.min + " to " + s.max;
+    }
+    return "";
+  }
+
+  // ---- drawing helpers: only createElementNS, numbers via visFmt, constants, textContent ----
+  const VIS_NS = "http://www.w3.org/2000/svg";
+  const VIS_FONT = "Comic Sans MS, Trebuchet MS, sans-serif";
+  const VIS_INK = "#2b3a67";
+  const VIS_PALETTE = ["#ff8787", "#74c0fc", "#8ce99a", "#ffd43b", "#b197fc"];
+  function visFmt(n) { n = Number(n); return Number.isFinite(n) ? String(Number(n.toFixed(2))) : "0"; }
+  function vs(tag, attrs, text) {
+    const e = document.createElementNS(VIS_NS, tag);
+    for (const k of Object.keys(attrs || {})) { const a = attrs[k]; e.setAttribute(k, typeof a === "number" ? visFmt(a) : a); }
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function vt(x, y, str, size, extra) {
+    return vs("text", Object.assign({ x, y, "font-size": size, "font-family": VIS_FONT, "text-anchor": "middle", fill: VIS_INK }, extra || {}), str);
+  }
+  const vline = (x1, y1, x2, y2, stroke, w, extra) => vs("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, extra || {}));
+  // Angles are degrees clockwise from 12 o'clock.
+  const vpt = (cx, cy, r, a) => [cx + r * Math.sin(a * Math.PI / 180), cy - r * Math.cos(a * Math.PI / 180)];
+  function vwedge(cx, cy, r, a0, a1) {
+    const p0 = vpt(cx, cy, r, a0), p1 = vpt(cx, cy, r, a1);
+    return "M " + visFmt(cx) + " " + visFmt(cy) + " L " + visFmt(p0[0]) + " " + visFmt(p0[1]) +
+      " A " + visFmt(r) + " " + visFmt(r) + " 0 " + (a1 - a0 > 180 ? "1" : "0") + " 1 " + visFmt(p1[0]) + " " + visFmt(p1[1]) + " Z";
+  }
+  const vpoints = (pts) => pts.map((p) => visFmt(p[0]) + "," + visFmt(p[1])).join(" ");
+
+  function visRoot(w, h, desc, maxWidth) {
+    const svg = vs("svg", { viewBox: "0 0 " + visFmt(w) + " " + visFmt(h), role: "img", "aria-label": desc, focusable: "false" });
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.maxWidth = visFmt(Number.isFinite(maxWidth) && maxWidth > 0 ? Math.min(maxWidth, 600) : w) + "px";
+    svg.appendChild(vs("title", {}, desc));
+    return svg;
+  }
+
+  function visBar(v, desc, mw) {
+    const W = 360, H = 250, pl = 46, pr = 352, pb = 172, pt = v.title ? 40 : 20, n = v.bars.length;
+    const svg = visRoot(W, H, desc, mw);
+    const mx = Math.max.apply(null, v.bars.map((b) => b.value));
+    let step = 50;
+    for (const s of [1, 2, 5, 10, 20, 25, 50]) { if (Math.ceil(mx / s) <= 8) { step = s; break; } }
+    const lines = Math.max(1, Math.ceil(mx / step)), top = lines * step;
+    const y = (val) => pb - (val / top) * (pb - pt);
+    if (v.title) svg.appendChild(vt(W / 2, 22, v.title, 15, { "font-weight": "bold" }));
+    if (v.yLabel) svg.appendChild(vt(12, (pt + pb) / 2, v.yLabel, 11, { transform: "rotate(-90 12 " + visFmt((pt + pb) / 2) + ")" }));
+    for (let k = 0; k <= lines; k++) {
+      const yy = y(k * step);
+      svg.appendChild(vline(pl, yy, pr, yy, k === 0 ? VIS_INK : "#d0d7e8", k === 0 ? 2 : 1, { class: "mqv-grid" }));
+      svg.appendChild(vt(pl - 6, yy + 4, String(k * step), 11, { "text-anchor": "end" }));
+    }
+    const slot = (pr - pl) / n, bw = Math.min(48, slot * 0.62);
+    const fs = n > 5 ? 10 : 12;
+    const hasEmoji = v.bars.some((b) => b.emoji);
+    v.bars.forEach((b, i) => {
+      const cx = pl + slot * i + slot / 2, yy = y(b.value);
+      svg.appendChild(vs("rect", { x: cx - bw / 2, y: yy, width: bw, height: pb - yy, rx: 4, fill: VIS_PALETTE[i % VIS_PALETTE.length],
+        stroke: VIS_INK, "stroke-width": 2, class: "mqv-bar" }));
+      if (v.showValues !== false) svg.appendChild(vt(cx, yy - 5, String(b.value), 13, { "font-weight": "bold", class: "mqv-value" }));
+      if (b.emoji) svg.appendChild(vt(cx, pb + 19, b.emoji, 16));
+      const ly = hasEmoji ? pb + 38 : pb + 20;
+      const rotate = Array.from(b.label).length * fs * 0.56 > slot - 4;
+      svg.appendChild(vt(cx, ly, b.label, fs, rotate
+        ? { "text-anchor": "end", transform: "rotate(-30 " + visFmt(cx) + " " + visFmt(ly - 4) + ")", class: "mqv-label" } : { class: "mqv-label" }));
+    });
+    return svg;
+  }
+
+  function visPie(v, desc, mw) {
+    const svg = visRoot(240, 240, desc, mw);
+    const cx = 120, cy = 120, R = 100, th = v.theme, step = 360 / v.parts;
+    const rIn = th === "plain" ? R : 88;
+    if (th !== "plain") {
+      svg.appendChild(vs("circle", { cx, cy, r: R, fill: th === "chocolate" ? "#a9713f" : "#e0a458", stroke: "#8a5a2b", "stroke-width": 3 }));
+    }
+    const fillOn = { pizza: "#ffc247", pie: "#d94f4f", chocolate: "#c68642", plain: "#4dabf7" }[th];
+    const fillOff = { pizza: "#f6e7c8", pie: "#f9e0d9", chocolate: "#f3e1c7", plain: "#e7f5ff" }[th];
+    const edgeOff = th === "plain" ? "#4dabf7" : "#b08968";
+    const wedge = (i, on) => vs("path", on
+      ? { d: vwedge(cx, cy, rIn, i * step, (i + 1) * step), fill: fillOn, stroke: "#ffffff", "stroke-width": 3, "stroke-linejoin": "round", class: "mqv-slice mqv-on" }
+      : { d: vwedge(cx, cy, rIn, i * step, (i + 1) * step), fill: fillOff, stroke: edgeOff, "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-slice mqv-off" });
+    for (let i = v.shaded; i < v.parts; i++) svg.appendChild(wedge(i, false));
+    for (let i = 0; i < v.shaded; i++) svg.appendChild(wedge(i, true));
+    // Toppings sit on shaded slices only, at fixed positions.
+    const pep = Math.max(4, Math.min(10, Math.PI * rIn * 0.5 / v.parts));
+    for (let i = 0; i < v.shaded; i++) {
+      const mid = (i + 0.5) * step, off = Math.min(12, step * 0.25);
+      if (th === "pizza") {
+        const p = vpt(cx, cy, rIn * 0.6, mid);
+        svg.appendChild(vs("circle", { cx: p[0], cy: p[1], r: pep, fill: "#d62828", stroke: "#9d0208", "stroke-width": 1, class: "mqv-topping" }));
+        svg.appendChild(vs("circle", { cx: p[0], cy: p[1], r: pep * 0.3, fill: "#9d0208", class: "mqv-topping" }));
+        const g1 = vpt(cx, cy, rIn * 0.33, mid + off), g2 = vpt(cx, cy, rIn * 0.84, mid - off);
+        svg.appendChild(vs("circle", { cx: g1[0], cy: g1[1], r: Math.max(2.5, pep * 0.4), fill: "#2d9d3a", class: "mqv-topping" }));
+        svg.appendChild(vs("circle", { cx: g2[0], cy: g2[1], r: Math.max(2.5, pep * 0.4), fill: "#2d9d3a", class: "mqv-topping" }));
+      } else if (th === "pie") {
+        for (const f of [0.5, 0.78]) {
+          const a = vpt(cx, cy, rIn * f, i * step + step * 0.2), b = vpt(cx, cy, rIn * f, (i + 1) * step - step * 0.2);
+          svg.appendChild(vline(a[0], a[1], b[0], b[1], "#f1c27d", 2, { class: "mqv-topping" }));
+        }
+      } else if (th === "chocolate") {
+        for (const f of [0.45, 0.78]) {
+          const p = vpt(cx, cy, rIn * f, mid + (f < 0.6 ? off : -off));
+          svg.appendChild(vs("ellipse", { cx: p[0], cy: p[1], rx: Math.max(3, pep * 0.6), ry: Math.max(2.5, pep * 0.45), fill: "#4a2c17", class: "mqv-topping" }));
+        }
+      }
+    }
+    return svg;
+  }
+
+  function visLine(v, desc, mw) {
+    const svg = visRoot(360, 110, desc, mw);
+    const x0 = 30, x1 = 330, y = 60, n = (v.max - v.min) / v.step;
+    const xs = (val) => x0 + ((val - v.min) / (v.max - v.min)) * (x1 - x0);
+    svg.appendChild(vline(14, y, 346, y, VIS_INK, 3));
+    svg.appendChild(vs("polygon", { points: vpoints([[10, y], [20, y - 6], [20, y + 6]]), fill: VIS_INK }));
+    svg.appendChild(vs("polygon", { points: vpoints([[350, y], [340, y - 6], [340, y + 6]]), fill: VIS_INK }));
+    const k = Math.ceil((n + 1) / 11);
+    for (let i = 0; i <= n; i++) {
+      const x = xs(v.min + i * v.step);
+      svg.appendChild(vline(x, y - 7, x, y + 7, VIS_INK, 2, { class: "mqv-tick" }));
+      if (i % k === 0) svg.appendChild(vt(x, y + 26, String(v.min + i * v.step), 12, { class: "mqv-tick-label" }));
+    }
+    (v.marks || []).forEach((m) => {
+      const x = xs(m);
+      svg.appendChild(vline(x, y - 8, x, y - 34, VIS_INK, 2));
+      svg.appendChild(vs("polygon", { points: vpoints([[x, y - 34], [x + 14, y - 28], [x, y - 22]]), fill: "#ff6b6b", stroke: VIS_INK, "stroke-width": 1 }));
+      svg.appendChild(vs("circle", { cx: x, cy: y, r: 7, fill: "#ff6b6b", stroke: VIS_INK, "stroke-width": 2, class: "mqv-mark" }));
+    });
+    return svg;
+  }
+
+  function visClock(v, desc, mw) {
+    const svg = visRoot(220, v.showDigital ? 252 : 220, desc, mw);
+    const cx = 110, cy = 110;
+    svg.appendChild(vs("circle", { cx, cy, r: 100, fill: "#ffffff", stroke: VIS_INK, "stroke-width": 6 }));
+    for (let i = 0; i < 60; i++) {
+      const big = i % 5 === 0, a = vpt(cx, cy, big ? 86 : 91, i * 6), b = vpt(cx, cy, 95, i * 6);
+      svg.appendChild(vline(a[0], a[1], b[0], b[1], VIS_INK, big ? 2.5 : 1, { class: "mqv-tick" }));
+    }
+    for (let n = 1; n <= 12; n++) { const p = vpt(cx, cy, 70, n * 30); svg.appendChild(vt(p[0], p[1] + 6, String(n), 18, { "font-weight": "bold" })); }
+    const ha = (v.hour % 12) * 30 + v.minute * 0.5, ma = v.minute * 6;
+    const hp = vpt(cx, cy, 48, ha), mp = vpt(cx, cy, 74, ma);
+    svg.appendChild(vline(cx, cy, hp[0], hp[1], VIS_INK, 7, { class: "mqv-hour", "data-angle": ha }));
+    svg.appendChild(vline(cx, cy, mp[0], mp[1], "#e8590c", 5, { class: "mqv-minute", "data-angle": ma }));
+    svg.appendChild(vs("circle", { cx, cy, r: 6, fill: VIS_INK }));
+    if (v.showDigital) svg.appendChild(vt(cx, 244, v.hour + ":" + (v.minute < 10 ? "0" : "") + v.minute, 22, { "font-weight": "bold", class: "mqv-digital" }));
+    return svg;
+  }
+
+  function visShape(v, desc, mw) {
+    const svg = visRoot(260, 220, desc, mw);
+    const cx = 130, cy = 105, fill = "#a5d8ff", sw = 4;
+    let verts = null;
+    if (v.shape === "square") verts = [[70, 45], [190, 45], [190, 165], [70, 165]];
+    else if (v.shape === "rectangle") verts = [[45, 55], [215, 55], [215, 155], [45, 155]];
+    else if (v.shape !== "circle") {
+      const n = VIS_EDGES[v.shape];
+      verts = [];
+      for (let i = 0; i < n; i++) verts.push(vpt(cx, cy + (n === 3 ? 10 : 0), 78, (360 / n) * i));
+    }
+    const outline = () => (verts
+      ? vs("polygon", { points: vpoints(verts), fill: "none", stroke: VIS_INK, "stroke-width": sw, "stroke-linejoin": "round", class: "mqv-outline" })
+      : vs("circle", { cx, cy, r: 70, fill: "none", stroke: VIS_INK, "stroke-width": sw, class: "mqv-outline" }));
+    if (verts) svg.appendChild(vs("polygon", { points: vpoints(verts), fill, class: "mqv-body" }));
+    else svg.appendChild(vs("circle", { cx, cy, r: 70, fill, class: "mqv-body" }));
+    if (v.splitParts) {
+      const sp = v.splitParts;
+      for (let i = 0; i < sp; i++) {
+        const on = i < v.splitShaded;
+        const common = on ? { fill: "#ffa94d", stroke: "#ffffff", "stroke-width": 2, class: "mqv-part mqv-on" }
+          : { fill: "#fff3bf", stroke: "#b08968", "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-part mqv-off" };
+        if (v.shape === "circle") svg.appendChild(vs("path", Object.assign({ d: vwedge(cx, cy, 70, i * (360 / sp), (i + 1) * (360 / sp)) }, common)));
+        else {
+          const xa = verts[0][0], w = verts[1][0] - verts[0][0], ya = verts[0][1], h = verts[2][1] - verts[0][1];
+          svg.appendChild(vs("rect", Object.assign({ x: xa + (w / sp) * i, y: ya, width: w / sp, height: h }, common)));
+        }
+      }
+    }
+    svg.appendChild(outline());
+    if (v.sideLabels && verts) {
+      const unit = v.lengthUnit === "none" ? "" : " " + v.lengthUnit;
+      const mid = verts.reduce((a, p) => [a[0] + p[0] / verts.length, a[1] + p[1] / verts.length], [0, 0]);
+      verts.forEach((p, i) => {
+        const q = verts[(i + 1) % verts.length];
+        const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+        let dx = mx - mid[0], dy = my - mid[1];
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= len; dy /= len;
+        svg.appendChild(vt(mx + dx * 22, my + dy * 18 + 5, v.sideLabels[i] + unit, 14, { "font-weight": "bold", class: "mqv-side" }));
+      });
+    }
+    return svg;
+  }
+
+  function visEmojiGroup(v, desc, mw) {
+    const W = 320, cell = 30;
+    const syms = [];
+    const rings = [];
+    let H;
+    if (v.groupSize) {
+      const cols = Math.min(v.groupSize, 5), bw = cols * 28 + 16, perRow = Math.max(1, Math.floor(W / (bw + 8)));
+      let i = 0, gi = 0, rowH = 0;
+      while (i < v.count) {
+        const size = Math.min(v.groupSize, v.count - i), rows = Math.ceil(size / cols), bh = rows * 28 + 16;
+        const gx = 4 + (gi % perRow) * (bw + 8), gy = 4 + Math.floor(gi / perRow) * (Math.ceil(v.groupSize / cols) * 28 + 24);
+        rings.push([gx, gy, bw, bh]);
+        for (let j = 0; j < size; j++) syms.push([gx + 8 + (j % cols) * 28 + 14, gy + 8 + Math.floor(j / cols) * 28 + 14]);
+        i += size; gi++; rowH = Math.ceil(v.groupSize / cols) * 28 + 24;
+      }
+      H = 8 + Math.ceil(gi / perRow) * rowH;
+    } else {
+      const cols = Math.min(v.count, 10), left = (W - cols * cell) / 2;
+      for (let i = 0; i < v.count; i++) syms.push([left + (i % cols) * cell + cell / 2, 10 + Math.floor(i / cols) * 34 + 17]);
+      H = 20 + Math.ceil(v.count / cols) * 34;
+    }
+    const svg = visRoot(W, H, desc, mw);
+    rings.forEach((r) => svg.appendChild(vs("rect", { x: r[0], y: r[1], width: r[2], height: r[3], rx: 12, fill: "none", stroke: "#4dabf7", "stroke-width": 2, "stroke-dasharray": "5 4", class: "mqv-ring" })));
+    syms.forEach((p, i) => {
+      svg.appendChild(vt(p[0], p[1] + 8, v.emoji, 22, { class: "mqv-sym" }));
+      if (v.crossed && i >= v.count - v.crossed) {
+        svg.appendChild(vline(p[0] - 12, p[1] - 12, p[0] + 12, p[1] + 12, "#d00000", 3, { class: "mqv-cross" }));
+        svg.appendChild(vline(p[0] + 12, p[1] - 12, p[0] - 12, p[1] + 12, "#d00000", 3, { class: "mqv-cross" }));
+      }
+    });
+    return svg;
+  }
+
+  function visPicto(v, desc, mw) {
+    const W = 360, top = 40, H = top + v.rows.length * 34 + 40;
+    const svg = visRoot(W, H, desc, mw);
+    if (v.title) svg.appendChild(vt(W / 2, 22, v.title, 15, { "font-weight": "bold" }));
+    v.rows.forEach((r, i) => {
+      const y = top + i * 34;
+      svg.appendChild(vs("rect", { x: 4, y: y - 2, width: W - 8, height: 32, rx: 8, fill: i % 2 ? "#ffffff" : "#f1f6ff" }));
+      svg.appendChild(vt(10, y + 21, r.label, 13, { "text-anchor": "start", "font-weight": "bold", class: "mqv-label" }));
+      for (let j = 0; j < r.count; j++) svg.appendChild(vt(112 + j * 24 + 12, y + 23, v.keyEmoji, 20, { class: "mqv-sym" }));
+    });
+    const ky = top + v.rows.length * 34 + 6;
+    svg.appendChild(vs("rect", { x: 100, y: ky, width: 160, height: 28, rx: 10, fill: "#fff9db", stroke: VIS_INK, "stroke-width": 2 }));
+    svg.appendChild(vt(180, ky + 20, v.keyEmoji + " = " + v.keyEach, 15, { "font-weight": "bold", class: "mqv-key" }));
+    return svg;
+  }
+
+  function visThermo(v, desc, mw) {
+    const svg = visRoot(140, 260, desc, mw);
+    const ty0 = 40, ty1 = 200, y = (val) => ty1 - ((val - v.min) / (v.max - v.min)) * (ty1 - ty0);
+    svg.appendChild(vt(70, 14, "°" + v.tempUnit, 13, { "font-weight": "bold" }));
+    svg.appendChild(vs("rect", { x: 58, y: 24, width: 24, height: 186, rx: 12, fill: "#e7f5ff", stroke: VIS_INK, "stroke-width": 3 }));
+    svg.appendChild(vs("circle", { cx: 70, cy: 226, r: 22, fill: "#e7f5ff", stroke: VIS_INK, "stroke-width": 3 }));
+    svg.appendChild(vs("circle", { cx: 70, cy: 226, r: 16, fill: "#ff6b6b", class: "mqv-mercury" }));
+    svg.appendChild(vs("rect", { x: 64, y: y(v.value), width: 12, height: 226 - y(v.value), fill: "#ff6b6b", class: "mqv-mercury" }));
+    const tick = v.max - v.min <= 50 ? 5 : 10;
+    for (let t = Math.ceil(v.min / tick) * tick; t <= v.max; t += tick) {
+      svg.appendChild(vline(86, y(t), 96, y(t), VIS_INK, 2, { class: "mqv-tick" }));
+      svg.appendChild(vt(100, y(t) + 4, String(t), 11, { "text-anchor": "start", class: "mqv-tick-label" }));
+    }
+    return svg;
+  }
+
+  // Never throws and never uses innerHTML. Returns an <svg> element or null (caller skips the picture).
+  function renderVisual(def, opts) {
+    try {
+      const host = (opts && opts.host) || "question";
+      const v = sanitizeVisual(def, host);
+      if (!v) return null;
+      const desc = describeVisual(v);
+      const mw = opts && opts.maxWidth;
+      switch (v.kind) {
+        case "barChart": return visBar(v, desc, mw);
+        case "pie": return visPie(v, desc, mw);
+        case "numberLine": return visLine(v, desc, mw);
+        case "clock": return visClock(v, desc, mw);
+        case "shape": return visShape(v, desc, mw);
+        case "emojiGroup": return visEmojiGroup(v, desc, mw);
+        case "pictograph": return visPicto(v, desc, mw);
+        case "thermometer": return visThermo(v, desc, mw);
+      }
+      return null;
+    } catch (e) {
+      console.warn("visual render failed");
+      return null;
+    }
+  }
+  /* MQ-VISUALS:END */
+
+  // =====================================================================
   //  CREATE A GAME / MY GAMES  (AI-built STEAM quizzes, Phase 2)
   //  A custom run never changes saved level/best/gems/leaderboard:
   //  persistProgress writes the pre-run snapshot (customRun.base) while it is active.
@@ -2089,6 +2608,12 @@
       if (!options.every(o => typeof o === "string" && o.trim() !== "" && o.length <= 80)) continue;
       if (new Set(options.map(o => o.trim().toLowerCase())).size !== options.length) continue;
       if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex >= options.length) continue;
+      // A question that carries a picture key is dropped when the picture fails validation (its text refers to the picture).
+      let visual = null;
+      if (Object.prototype.hasOwnProperty.call(q, "visual")) {
+        visual = sanitizeVisual(q.visual, "question");
+        if (!visual) continue;
+      }
       const emoji = (typeof q.emoji === "string" && q.emoji.length > 0 && q.emoji.length <= 8) ? q.emoji : "";
       questions.push({
         text: (emoji ? emoji + " " : "") + q.text,
@@ -2099,6 +2624,7 @@
         hint: (typeof q.hint === "string" && q.hint.trim()) ? q.hint : COPY.defaultHint,
         explanation: (typeof q.explanation === "string") ? q.explanation : "",
         videoWord: topic,
+        visual,
       });
     }
     if (questions.length < 3) return null;
@@ -2893,11 +3419,27 @@
     el.battle.classList.add("show");
   }
 
+  // Draws q.visual into #battleVisual (cleared when there is none). Returns false if a picture exists but could not be drawn.
+  function showBattleVisual(q) {
+    const box = el.battleVisual;
+    box.textContent = "";
+    box.style.display = "none";
+    if (!q || !q.visual) return true;
+    const svg = renderVisual(q.visual, { host: "question", maxWidth: 360 });
+    if (!svg) return false;
+    box.appendChild(svg);
+    box.style.display = "block";
+    return true;
+  }
+
   function loadQuestion() {
     // For multi-question battles (Grade 3+), pick a different variety than last.
-    const q = battleQuestionsNeeded > 1
+    const pick = () => (battleQuestionsNeeded > 1
       ? makeDistinctQuestion(level, lastQuestionKind)
-      : makeQuestion(level);
+      : makeQuestion(level));
+    let q = pick();
+    // Custom questions may carry a picture; if it cannot be drawn, take another question (it would refer to the picture).
+    for (let i = 0; i < 6 && !showBattleVisual(q); i++) q = pick();
     currentQuestion = q;
     lastQuestionKind = questionKind(q);
     questionAnswered = false;
