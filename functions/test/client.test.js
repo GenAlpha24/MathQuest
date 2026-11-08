@@ -80,10 +80,10 @@ async function boot(uid, extra, opts = {}) {
   const web = await webClient(uid);
   const env = { uid, saves: [], genCalls: 0, opens: [], lastResult: null, statusCb: null, authCb: null, timers: [] };
   const available = opts.available !== false;
-  const forward = async ({ prompt, grade }) => {
+  const forward = async ({ prompt, grade, template }) => {
     try {
-      const d = (await httpsCallable(web.functions, "generateGame", { timeout: 100000 })({ prompt, grade })).data || {};
-      if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining };
+      const d = (await httpsCallable(web.functions, "generateGame", { timeout: 100000 })({ prompt, grade, template })).data || {};
+      if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining, templateNote: d.templateNote || null };
       if (d.status === "refused") return { ok: false, kind: "refused", reason: d.reason, message: String(d.message || "") };
       return { ok: false, kind: "error", code: "unavailable" };
     } catch (e) {
@@ -102,7 +102,7 @@ async function boot(uid, extra, opts = {}) {
     watchMyStatus(u, cb) { env.statusCb = cb; return () => {}; },
     async logout() { env.loggedOut = true; },
     async generateGame(a) {
-      env.genCalls++;
+      env.genCalls++; env.lastArgs = a;
       const r = opts.gen ? await opts.gen(a) : await forward(a);
       env.lastResult = r;
       return r;
@@ -758,5 +758,225 @@ if (!MOCK_ON) {
     assert.equal(env.$("gameMsg").textContent, "This game can't be played. Try making another one!");
     assert.equal(env.$("tplBody").childNodes.length, 0);
     assert.equal(env.saves.length, savesBefore);
+  });
+
+  // ---- Phase 3: template chooser, preview and My games icons ----
+  const chipEls = (env) => [...env.doc.querySelectorAll("#cgTemplates .tpl-chip")];
+  const chipFor = (env, id) => env.doc.querySelector('#cgTemplates .tpl-chip[data-tpl="' + id + '"]');
+
+  test("template chooser: radiogroup of 7 chips, Surprise me default sent as 'auto', arrows move the choice, reset on reopen, disabled while building", async () => {
+    const env = await boot("chp" + tag);
+    await env.enter();
+    env.$("createGameBtn").click();
+    const group = env.$("cgTemplates");
+    assert.equal(group.getAttribute("role"), "radiogroup");
+    assert.equal(group.getAttribute("aria-label"), "Game style");
+    const chips = chipEls(env);
+    assert.deepEqual(chips.map((c) => c.getAttribute("data-tpl")), ["auto", "quiz", "picturequiz", "memory", "sequence", "sort", "catch"]);
+    assert.deepEqual(chips.map((c) => c.querySelector(".tc-name").textContent), ["Surprise me", "Monster Run", "Picture Pick", "Memory Match", "Order It", "Sort It", "Bubble Pop"]);
+    assert.ok(chips.every((c) => c.tagName === "BUTTON" && c.getAttribute("role") === "radio" && c.getAttribute("aria-label")));
+    assert.deepEqual(chips.map((c) => c.getAttribute("aria-checked")), ["true", "false", "false", "false", "false", "false", "false"]);
+    assert.deepEqual(chips.map((c) => c.tabIndex), [0, -1, -1, -1, -1, -1, -1]);
+    assert.ok(group.compareDocumentPosition(env.$("cgChips")) & env.win.Node.DOCUMENT_POSITION_PRECEDING, "chips sit below the example prompts");
+    // default build sends template 'auto'
+    await env.build("how bridges stay up");
+    assert.equal(env.lastArgs.template, "auto");
+    // arrow keys and clicks change the choice (roving tabindex); keys never reach the page-level Space handler
+    const arrow = (key) => { const ev = new env.win.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }); chipFor(env, "auto").dispatchEvent(ev); return ev; };
+    const right = arrow("ArrowRight");
+    assert.equal(right.defaultPrevented, true);
+    assert.equal(chipFor(env, "quiz").getAttribute("aria-checked"), "true");
+    assert.equal(chipFor(env, "quiz").tabIndex, 0);
+    assert.equal(chipFor(env, "auto").tabIndex, -1);
+    const left = arrow("ArrowLeft"); left.preventDefault();
+    assert.equal(chipFor(env, "auto").getAttribute("aria-checked"), "true", "ArrowLeft goes back, wrapping");
+    const space = new env.win.KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true, cancelable: true });
+    chipFor(env, "sort").dispatchEvent(space);
+    assert.equal(space.defaultPrevented, false, "Space on a chip is left to the button");
+    chipFor(env, "memory").click();
+    assert.equal(chipFor(env, "memory").getAttribute("aria-checked"), "true");
+    assert.equal(chipEls(env).filter((c) => c.getAttribute("aria-checked") === "true").length, 1);
+    // busy: chips disabled together with the form, clicks ignored
+    env.$("cgPrompt").value = "mockmemory plants";
+    env.$("cgCreateBtn").click();
+    assert.ok(chipEls(env).every((c) => c.disabled), "chips disabled while building");
+    chipFor(env, "sort").click();
+    assert.equal(chipFor(env, "memory").getAttribute("aria-checked"), "true");
+    await waitFor(() => !env.$("cgPreview").hidden, "preview");
+    assert.equal(env.lastArgs.template, "memory");
+    assert.ok(chipEls(env).every((c) => !c.disabled));
+    // reopening resets to Surprise me
+    env.$("cgCloseBtn").click();
+    env.$("createGameBtn").click();
+    assert.equal(chipFor(env, "auto").getAttribute("aria-checked"), "true");
+    assert.equal(chipFor(env, "memory").getAttribute("aria-checked"), "false");
+  });
+
+  test("each template: a chosen chip is sent, the preview shows its icon, name and unit, Play opens the right screen", async () => {
+    const env = await boot("tp" + tag);
+    await env.enter();
+    const cases = [
+      ["quiz", "🏃 Monster Run", /· 8 questions$/, null],
+      ["picturequiz", "🖼️ Picture Pick", /· 8 questions$/, "picturequiz"],
+      ["catch", "🫧 Bubble Pop", /· 8 questions$/, "catch"],
+      ["memory", "🃏 Memory Match", /· \d+ pairs$/, "memory"],
+      ["sequence", "🔢 Order It", /· \d+ rounds$/, "sequence"],
+      ["sort", "🧺 Sort It", /· \d+ items$/, "sort"],
+    ];
+    for (const [id, label, unit, dataTpl] of cases) {
+      env.$("createGameBtn").click();
+      chipFor(env, id).click();
+      env.$("cgPrompt").value = id === "quiz" ? "plants and seeds" : "mock" + (id === "picturequiz" ? "picture" : id) + " plants and seeds";
+      env.$("cgCreateBtn").click();
+      await waitFor(() => !env.$("cgPreview").hidden, "preview " + id);
+      assert.equal(env.lastArgs.template, id);
+      assert.equal(env.lastResult.game.type, id);
+      assert.equal(env.$("cgPreviewTpl").textContent, label, id);
+      assert.match(env.$("cgPreviewMeta").textContent, unit, id);
+      assert.equal(env.$("cgMsg").textContent, "", "no fallback note when the choice fits");
+      env.$("cgPlayBtn").click();
+      if (dataTpl) {
+        assert.equal(env.mq.state, "template", id);
+        assert.deepEqual(env.shown(), ["tpl"]);
+        assert.equal(env.$("tpl").getAttribute("data-tpl"), dataTpl);
+        env.doc.querySelector("#tpl .tpl-head .tpl-icon").click();
+        assert.deepEqual(env.shown(), ["start"]);
+      } else {
+        assert.equal(env.mq.state, "playing", "quiz runs the Monster Run");
+        assert.ok(env.mq.customRun);
+        env.$("createGameBtn").click();
+      }
+    }
+  });
+
+  test("each of the 8 picture kinds shows a small picture in the preview and a Play screen draws it", async () => {
+    const env = await boot("pv" + tag);
+    await env.enter();
+    for (const [word, kind] of [["mockbar", "barChart"], ["mockpie", "pie"], ["mockline", "numberLine"], ["mockclock", "clock"], ["mockshape", "shape"], ["mockemoji", "emojiGroup"], ["mockpicto", "pictograph"], ["mockthermo", "thermometer"]]) {
+      env.$("createGameBtn").click();
+      chipFor(env, "picturequiz").click();
+      env.$("cgPrompt").value = word + " math";
+      env.$("cgCreateBtn").click();
+      await waitFor(() => !env.$("cgPreview").hidden, "preview " + word);
+      assert.equal(env.lastResult.game.questions[0].visual.kind, kind, word);
+      const svg = env.$("cgPreviewVisual").querySelector("svg");
+      assert.ok(svg, word + ": preview picture drawn");
+      assert.ok(svg.getAttribute("aria-label") || svg.querySelector("title"), word + ": text alternative present");
+      assert.equal(env.$("cgPreviewVisual").querySelectorAll("script, foreignObject, image, a").length, 0);
+      env.$("cgPlayBtn").click();
+      assert.equal(env.mq.state, "template");
+      assert.ok(env.doc.querySelector("#tpl svg"), word + ": picture drawn in the game");
+      env.doc.querySelector("#tpl .tpl-head .tpl-icon").click();
+    }
+    // a new build clears the previous picture first
+    env.$("createGameBtn").click();
+    env.$("cgPrompt").value = "mockquiz volcanoes";
+    chipFor(env, "quiz").click();
+    env.$("cgCreateBtn").click();
+    await waitFor(() => !env.$("cgPreview").hidden, "text-only preview");
+    assert.equal(env.$("cgPreviewVisual").childNodes.length, 0);
+  });
+
+  test("fallback: a template that does not fit shows the fallback note and the game it picked", async () => {
+    const env = await boot("fb" + tag);
+    await env.enter();
+    env.$("createGameBtn").click();
+    chipFor(env, "memory").click();
+    env.$("cgPrompt").value = "mockfallback volcanoes";
+    env.$("cgCreateBtn").click();
+    await waitFor(() => !env.$("cgPreview").hidden, "preview");
+    assert.equal(env.lastResult.templateNote, "fallback");
+    assert.equal(env.$("cgPreviewTpl").textContent, "🏃 Monster Run");
+    assert.equal(env.$("cgMsg").textContent, "That idea works better in a different style, so I picked one for you!");
+  });
+
+  test("variety: after three identical games 'Surprise me' gives a different style", async () => {
+    const env = await boot("va" + tag);
+    await env.enter();
+    for (let i = 0; i < 3; i++) {
+      await env.build("mockquiz clouds " + i);
+      assert.equal(env.$("cgPreviewTpl").textContent, "🏃 Monster Run");
+    }
+    await env.build("mockquiz clouds four");
+    assert.notEqual(env.$("cgPreviewTpl").textContent, "🏃 Monster Run");
+    assert.equal(env.lastResult.game.templateSource, "variety");
+  });
+
+  test("My games: template icon and unit per row; v1, missing and unknown types show the runner icon; malformed picture does not block play or preview", async () => {
+    const uid = "ico" + tag;
+    const env = await boot(uid);
+    await env.enter();
+    const t = Date.now();
+    const pairs = Array.from({ length: 4 }, (_, i) => ({ id: "p" + i, a: { label: "Aa" + i }, b: { label: "Bb" + i }, hint: "H" + i, explanation: "E" + i }));
+    await seedGame(uid, "v1" + tag, { title: "Old runner", createdAt: new Date(t - 1000) });
+    await seedGame(uid, "m2" + tag, { schemaVersion: 2, type: "memory", title: "Mem row", pairs, questions: [], questionCount: 4, createdAt: new Date(t - 2000) });
+    await seedGame(uid, "pq" + tag, { schemaVersion: 2, type: "picturequiz", title: "Pic row", createdAt: new Date(t - 3000), questions: [0, 1, 2, 3].map((i) => goodQ(i, i === 0 ? { visual: { kind: "pie", parts: 3, shaded: 9 } } : {})), questionCount: 4 });
+    await seedGame(uid, "un" + tag, { schemaVersion: 2, type: "hologram", title: "Unknown row", createdAt: new Date(t - 4000) });
+    env.$("myGamesBtn").click();
+    await waitFor(() => env.doc.querySelectorAll("#gameList .game-row").length === 4 && !/Loading/.test(env.$("gameList").textContent), "four rows");
+    const row = (name) => [...env.doc.querySelectorAll("#gameList .game-row")].find((r) => r.textContent.includes(name));
+    const icon = (name) => row(name).querySelector(".row-icon").textContent;
+    assert.equal(icon("Old runner"), "🏃");
+    assert.equal(icon("Mem row"), "🃏");
+    assert.equal(icon("Pic row"), "🖼️");
+    assert.equal(icon("Unknown row"), "🏃");
+    assert.match(row("Mem row").textContent, /· 4 pairs/);
+    assert.match(row("Pic row").textContent, /· 4 questions/);
+    assert.match(row("Old runner").textContent, /· 5 questions/);
+    assert.ok(row("Mem row").querySelector(".row-icon").getAttribute("aria-hidden") === "true");
+    // the malformed picture is skipped; the game still plays
+    row("Pic row").querySelector("button").click();
+    assert.equal(env.mq.state, "template");
+    assert.equal(env.doc.querySelectorAll("#tpl svg").length, 0, "bad picture not drawn");
+    env.doc.querySelector("#tpl .tpl-head .tpl-icon").click();
+    // unknown type: friendly message, v1 still plays as the runner
+    env.$("myGamesBtn").click();
+    await waitFor(() => env.doc.querySelectorAll("#gameList .game-row").length === 4 && !/Loading/.test(env.$("gameList").textContent), "rows again");
+    row("Unknown row").querySelector("button").click();
+    assert.equal(env.$("gameMsg").textContent, "This game can't be played. Try making another one!");
+    row("Old runner").querySelector("button").click();
+    assert.equal(env.mq.state, "playing");
+    assert.ok(env.mq.customRun);
+  });
+
+  test("preview skips a malformed picture, draws the next good one, and never injects markup", async () => {
+    const evil = '<img src=x onerror="window.__pwn2=1">';
+    const game = (qs) => ({ ok: true, game: { id: "g1", schemaVersion: 2, type: "picturequiz", title: evil, subject: "Math", topic: "t", questions: qs, questionCount: qs.length }, templateNote: null });
+    const bad = { kind: "pie", parts: 3, shaded: 9 };
+    const good = { kind: "pie", parts: 4, shaded: 1, theme: "pizza" };
+    const env1 = await boot("pm1" + tag, {}, { gen: async () => game([goodQ(0, { visual: bad }), goodQ(1, { visual: good }), goodQ(2)]) });
+    await env1.enter();
+    await env1.build("anything about pizza");
+    assert.equal(env1.$("cgPreviewVisual").querySelectorAll("svg").length, 1, "first valid picture drawn");
+    assert.equal(env1.$("cgPreviewTitle").textContent, evil);
+    assert.equal(env1.doc.querySelectorAll("#cgPreview img").length, 0);
+    assert.equal(env1.win.__pwn2, undefined);
+    const env2 = await boot("pm2" + tag, {}, { gen: async () => game([goodQ(0, { visual: bad }), goodQ(1), goodQ(2)]) });
+    await env2.enter();
+    await env2.build("anything about pizza");
+    assert.equal(env2.$("cgPreview").hidden, false);
+    assert.equal(env2.$("cgPreviewVisual").childNodes.length, 0);
+  });
+
+  test("leaving a template game through the menu or logout tears it down; Create a Game opens with a clean chooser", async () => {
+    const env = await boot("td" + tag);
+    await env.enter();
+    env.$("createGameBtn").click();
+    chipFor(env, "sort").click();
+    env.$("cgPrompt").value = "mocksort solids and liquids";
+    env.$("cgCreateBtn").click();
+    await waitFor(() => !env.$("cgPreview").hidden, "preview");
+    env.$("cgPlayBtn").click();
+    assert.equal(env.mq.state, "template");
+    env.$("createGameBtn").click();
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    assert.equal(env.mq.state, "start");
+    assert.equal(chipFor(env, "auto").getAttribute("aria-checked"), "true");
+    env.$("cgPlayBtn").click(); // start the same game again, then log out while it runs
+    assert.equal(env.mq.state, "template");
+    env.$("logoutBtn").click();
+    await waitFor(() => env.loggedOut && env.$("auth").classList.contains("show"), "logout");
+    assert.equal(env.$("tplBody").childNodes.length, 0);
+    assert.equal(env.mq.customRun, null);
   });
 }

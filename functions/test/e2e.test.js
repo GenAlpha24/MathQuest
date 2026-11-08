@@ -151,4 +151,87 @@ if (!MOCK_ON) {
     const c = await client(uid, "arg");
     await rejects(c.generate({ prompt: "tell me about volcanoes", count: 99 }), "invalid-argument", "count");
   });
+
+  // ---- Phase 3: templates and pictures through the callable (mock model) ----
+  const firstVisual = (g) => {
+    const lists = [];
+    (g.questions || []).forEach((q) => lists.push(q.visual));
+    (g.pairs || []).forEach((p) => { lists.push(p.a.visual, p.b.visual); });
+    (g.rounds || []).forEach((r) => r.steps.forEach((s) => lists.push(s.visual)));
+    (g.items || []).forEach((i) => lists.push(i.visual));
+    return lists.find((v) => v && v.kind) || null;
+  };
+
+  test("template 'auto' gives each template's game with its own payload shape; stored type matches", async () => {
+    const uid = "tpl" + tag;
+    await makeUser(uid, {});
+    const c = await client(uid, "tpl");
+    const shapes = { mockmemory: ["memory", "pairs"], mocksequence: ["sequence", "rounds"], mocksort: ["sort", "items"], mockcatch: ["catch", "questions"], mockpicture: ["picturequiz", "questions"] };
+    for (const [word, [type, key]] of Object.entries(shapes)) {
+      const r = await c.generate({ prompt: word + " plants", grade: 2, template: "auto" });
+      assert.equal(r.data.status, "ok", word);
+      assert.equal(r.data.game.type, type, word);
+      assert.equal(r.data.game.schemaVersion, 2);
+      assert.ok(Array.isArray(r.data.game[key]) && r.data.game[key].length >= 3, word);
+      assert.equal(r.data.templateNote, null);
+      assert.equal((await aDb.collection("games").doc(r.data.gameId).get()).data().type, type);
+    }
+  });
+
+  test("each of the 8 picture kinds comes back attached and stored", async () => {
+    const uid = "vis" + tag;
+    await makeUser(uid, {});
+    const c = await client(uid, "vis");
+    const words = { mockbar: "barChart", mockpie: "pie", mockline: "numberLine", mockclock: "clock", mockshape: "shape", mockemoji: "emojiGroup", mockpicto: "pictograph", mockthermo: "thermometer" };
+    for (const [word, kind] of Object.entries(words)) {
+      const r = await c.generate({ prompt: word + " math", grade: 2, template: "quiz" });
+      assert.equal(r.data.status, "ok", word);
+      assert.equal(r.data.game.type, "quiz");
+      const v = firstVisual(r.data.game);
+      assert.ok(v && v.kind === kind, word + " -> " + (v && v.kind));
+      const stored = (await aDb.collection("games").doc(r.data.gameId).get()).data();
+      assert.equal(firstVisual(stored).kind, kind);
+    }
+  });
+
+  test("user-chosen template is honored; a template that does not fit falls back with templateNote", async () => {
+    const uid = "ovr" + tag;
+    await makeUser(uid, {});
+    const c = await client(uid, "ovr");
+    const chosen = await c.generate({ prompt: "volcanoes", grade: 2, template: "picturequiz" });
+    assert.equal(chosen.data.game.type, "picturequiz");
+    assert.equal(chosen.data.templateNote, null);
+    const fb = await c.generate({ prompt: "mockfallback volcanoes", grade: 2, template: "memory" });
+    assert.equal(fb.data.status, "ok");
+    assert.equal(fb.data.templateNote, "fallback");
+    assert.equal(fb.data.game.type, "quiz");
+    const legacy = await c.generate({ prompt: "mockmemory volcanoes", grade: 2 });
+    assert.equal(legacy.data.game.type, "quiz", "a client that sends no template always gets the classic quiz");
+    await rejects(c.generate({ prompt: "volcanoes", template: "hologram" }), "invalid-argument", "template");
+  });
+
+  test("variety: after 3 identical games 'auto' picks another fitting template", async () => {
+    const uid = "var" + tag;
+    await makeUser(uid, {});
+    const c = await client(uid, "var");
+    for (let i = 0; i < 3; i++) {
+      const r = await c.generate({ prompt: "mockquiz clouds " + i, grade: 2, template: "auto" });
+      assert.equal(r.data.game.type, "quiz");
+    }
+    const fourth = await c.generate({ prompt: "mockquiz clouds four", grade: 2, template: "auto" });
+    assert.notEqual(fourth.data.game.type, "quiz");
+    assert.equal(fourth.data.game.templateSource, "variety");
+  });
+
+  test("invalid-once retries and invalid-twice fails for a non-quiz template and for a picture game", async () => {
+    const uid = "rty" + tag;
+    await makeUser(uid, {});
+    const c = await client(uid, "rty");
+    const ok = await c.generate({ prompt: "mockinvalidonce mockmemory plants", grade: 2, template: "auto" });
+    assert.equal(ok.data.game.type, "memory");
+    const fixed = await c.generate({ prompt: "mockbadvisual mockpie pizza", grade: 2, template: "quiz" });
+    assert.equal(fixed.data.status, "ok");
+    assert.equal(firstVisual(fixed.data.game).kind, "pie");
+    await rejects(c.generate({ prompt: "mockinvalidtwice mocksort things", grade: 2, template: "auto" }), "unavailable", "gen_failed");
+  });
 }

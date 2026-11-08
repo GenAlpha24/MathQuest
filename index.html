@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -209,6 +209,20 @@
     border: none; border-radius: 12px; padding: 6px 12px;
     background: #fff; color: #2b3a67; box-shadow: 0 3px 0 #cfd8ff;
   }
+  #cgTemplates { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin:8px 0; max-width:460px; }
+  .tpl-chip {
+    font-family: inherit; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+    min-width: 88px; border: 3px solid transparent; border-radius: 12px; padding: 6px 8px;
+    background: #fff; color: #2b3a67; box-shadow: 0 3px 0 #cfd8ff;
+  }
+  .tpl-chip .tc-icon { font-size: 22px; }
+  .tpl-chip .tc-name { font-weight: bold; }
+  .tpl-chip .tc-blurb { font-size: 11px; opacity: 0.8; }
+  .tpl-chip[aria-checked="true"] { border-color: #ff5a8c; background: #fff0f5; }
+  .tpl-chip:focus-visible { outline: 3px solid #ff5a8c; }
+  .tpl-chip:disabled { opacity: 0.6; cursor: not-allowed; }
+  #cgPreviewVisual:empty { display: none; }
+  .row-icon { margin-right: 6px; }
   .cg-chip:disabled, #cgCreateBtn:disabled, #cgGrade:disabled, .cg-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
   #cgGrade { font-family:inherit; font-size:16px; font-weight:bold; border:none; border-radius:10px; padding:6px 10px; margin:0 0 8px 6px; }
   #cgMsg { min-height: 22px; color: #ffd43b; margin: 6px 0; max-width: 460px; }
@@ -581,13 +595,16 @@
           <button class="cg-chip" type="button">How bridges stay up</button>
           <button class="cg-chip" type="button">Fractions with pizza</button>
         </div>
+        <div id="cgTemplates" role="radiogroup" aria-label="Game style"></div>
         <label for="cgGrade">Grade:</label><select id="cgGrade"></select>
         <div><button class="btn big" id="cgCreateBtn">Build my game</button></div>
       </div>
       <div id="cgMsg" role="status" aria-live="polite"></div>
       <div id="cgPreview" class="cg-preview" hidden>
+        <span id="cgPreviewTpl" class="state"></span>
         <b id="cgPreviewTitle"></b>
         <span id="cgPreviewMeta" class="state"></span>
+        <div id="cgPreviewVisual"></div>
         <div>
           <button class="btn big" id="cgPlayBtn">Play</button>
           <button class="btn small" id="cgAnotherBtn">Make another</button>
@@ -1277,12 +1294,12 @@
     },
 
     // ---- STEAM game builder (Cloud Function) ----
-    async generateGame({ prompt, grade }) {
+    async generateGame({ prompt, grade, template }) {
       if (!functionsClient || !auth || !auth.currentUser) return { ok: false, kind: "offline" };
       try {
         const call = httpsCallable(functionsClient, "generateGame", { timeout: 100000 });
-        const d = (await call({ prompt, grade })).data || {};
-        if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining };
+        const d = (await call({ prompt, grade, template })).data || {};
+        if (d.status === "ok" && d.game) return { ok: true, game: { ...d.game, id: d.gameId }, remaining: d.remaining, templateNote: d.templateNote || null };
         if (d.status === "refused") return { ok: false, kind: "refused", reason: d.reason, message: String(d.message || "") };
         return { ok: false, kind: "error", code: "unavailable" };
       } catch (e) {
@@ -1382,6 +1399,9 @@
     cgPreview: document.getElementById("cgPreview"),
     cgPreviewTitle: document.getElementById("cgPreviewTitle"),
     cgPreviewMeta: document.getElementById("cgPreviewMeta"),
+    cgPreviewTpl: document.getElementById("cgPreviewTpl"),
+    cgPreviewVisual: document.getElementById("cgPreviewVisual"),
+    cgTemplates: document.getElementById("cgTemplates"),
     cgPlayBtn: document.getElementById("cgPlayBtn"),
     gameList: document.getElementById("gameList"),
     gameMsg: document.getElementById("gameMsg"),
@@ -3578,12 +3598,87 @@
   }
   /* MQ-TEMPLATES:END */
 
+  // ---- Create a Game: style chips, preview picture, My games icons ----
+  const CG_STYLE_ORDER = ["auto", "quiz", "picturequiz", "memory", "sequence", "sort", "catch"];
+  const CG_AUTO_META = Object.freeze({ icon: "🎲", name: "Surprise me", blurb: "I'll pick the best" });
+  let cgTemplate = "auto";
+
+  function tplMetaFor(type) {
+    return (typeof type === "string" && Object.prototype.hasOwnProperty.call(TEMPLATE_META, type)) ? TEMPLATE_META[type] : TEMPLATE_META.quiz;
+  }
+  function gameCount(g) {
+    const n = Number(g && g.questionCount);
+    if (n > 0) return n;
+    if (!g) return 0;
+    const a = g.questions || g.pairs || g.rounds || g.items;
+    return Array.isArray(a) ? a.length : 0;
+  }
+
+  function setCgTemplate(id) {
+    cgTemplate = CG_STYLE_ORDER.includes(id) ? id : "auto";
+    el.cgTemplates.querySelectorAll(".tpl-chip").forEach(c => {
+      const on = c.getAttribute("data-tpl") === cgTemplate;
+      c.setAttribute("aria-checked", on ? "true" : "false");
+      c.tabIndex = on ? 0 : -1;
+    });
+  }
+
+  function buildTemplateChips() {
+    el.cgTemplates.textContent = "";
+    CG_STYLE_ORDER.forEach(id => {
+      const m = id === "auto" ? CG_AUTO_META : TEMPLATE_META[id];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tpl-chip";
+      b.setAttribute("role", "radio");
+      b.setAttribute("data-tpl", id);
+      b.setAttribute("aria-label", `${m.name}: ${m.blurb}`);
+      [["tc-icon", m.icon], ["tc-name", m.name], ["tc-blurb", m.blurb]].forEach(([cls, text]) => {
+        const s = document.createElement("span");
+        s.className = cls;
+        s.textContent = text;
+        if (cls === "tc-icon") s.setAttribute("aria-hidden", "true");
+        b.appendChild(s);
+      });
+      b.onclick = () => { if (!creatingGame) setCgTemplate(id); };
+      el.cgTemplates.appendChild(b);
+    });
+    // Arrow keys move the choice; every key is kept away from the page-level Space/ArrowUp jump handler.
+    el.cgTemplates.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      const dir = (e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : (e.key === "ArrowLeft" || e.key === "ArrowUp") ? -1 : 0;
+      if (!dir || creatingGame) return;
+      e.preventDefault();
+      const i = CG_STYLE_ORDER.indexOf(cgTemplate);
+      const next = CG_STYLE_ORDER[(i + dir + CG_STYLE_ORDER.length) % CG_STYLE_ORDER.length];
+      setCgTemplate(next);
+      const chip = el.cgTemplates.querySelector(`.tpl-chip[data-tpl="${next}"]`);
+      if (chip) chip.focus();
+    });
+    setCgTemplate("auto");
+  }
+
+  // First picture the game has (question, memory card, step or sort item), drawn small into host.
+  function showFirstVisual(host, g) {
+    host.textContent = "";
+    if (!g || typeof g !== "object") return false;
+    const tries = [];
+    const add = (v, kind) => { if (v) tries.push([v, kind]); };
+    if (Array.isArray(g.questions)) g.questions.forEach(q => add(q && q.visual, "question"));
+    if (Array.isArray(g.pairs)) g.pairs.forEach(p => { add(p && p.a && p.a.visual, "memory"); add(p && p.b && p.b.visual, "memory"); });
+    if (Array.isArray(g.rounds)) g.rounds.forEach(r => { if (r && Array.isArray(r.steps)) r.steps.forEach(s => add(s && s.visual, "sequence")); });
+    if (Array.isArray(g.items)) g.items.forEach(it => add(it && it.visual, "sort"));
+    for (const [v, kind] of tries.slice(0, 12)) if (showVisual(host, v, kind, 160)) return true;
+    return false;
+  }
+
   function setCgBusy(b) {
     creatingGame = b;
     el.cgCreateBtn.disabled = b;
     el.cgPrompt.disabled = b;
     el.cgGrade.disabled = b;
     document.querySelectorAll("#cgChips .cg-chip").forEach(c => { c.disabled = b; });
+    document.querySelectorAll("#cgTemplates .tpl-chip").forEach(c => { c.disabled = b; });
   }
 
   function showCreateGame() {
@@ -3596,6 +3691,7 @@
       if (g === grade) opt.selected = true;
       el.cgGrade.appendChild(opt);
     }
+    setCgTemplate("auto");
     if (!creatingGame) { el.cgPreview.hidden = true; setCgMsg(""); }
     el.createGame.classList.add("show");
   }
@@ -3607,17 +3703,20 @@
     if (!cloud() || !cloud().available || !cloud().generateGame) { setCgMsg(COPY.closed); return; }
     setCgBusy(true);
     el.cgPreview.hidden = true;
+    el.cgPreviewVisual.textContent = "";
     setCgMsg(COPY.building);
     let res;
-    try { res = await cloud().generateGame({ prompt, grade: Number(el.cgGrade.value) }); }
+    try { res = await cloud().generateGame({ prompt, grade: Number(el.cgGrade.value), template: cgTemplate }); }
     catch (e) { res = { ok: false, kind: "error", code: "unavailable" }; }
     setCgBusy(false);
     if (res && res.ok && res.game) {
       lastCreatedGame = res.game;
-      const n = Number(res.game.questionCount) || (Array.isArray(res.game.questions) ? res.game.questions.length : 0);
+      const tm = tplMetaFor(res.game.type);
+      el.cgPreviewTpl.textContent = `${tm.icon} ${tm.name}`;
       el.cgPreviewTitle.textContent = String(res.game.title || "My game");
-      el.cgPreviewMeta.textContent = `${res.game.subject || "STEAM"} · ${res.game.topic || ""} · ${n} questions`;
-      setCgMsg("");
+      el.cgPreviewMeta.textContent = `${res.game.subject || "STEAM"} · ${res.game.topic || ""} · ${gameCount(res.game)} ${tm.unit}`;
+      showFirstVisual(el.cgPreviewVisual, res.game);
+      setCgMsg(res.templateNote === "fallback" ? COPY.templateFallback : "");
       el.cgPreview.hidden = false;
     } else if (res && res.kind === "refused") {
       setCgMsg(res.message || COPY.refused);
@@ -3666,12 +3765,17 @@
       d.className = "game-row";
       const who = document.createElement("span");
       who.className = "who";
-      who.textContent = String(r.title || "My game");
+      const tm = tplMetaFor(r.type);
+      const ic = document.createElement("span");
+      ic.className = "row-icon";
+      ic.setAttribute("aria-hidden", "true");
+      ic.textContent = tm.icon;
+      who.appendChild(ic);
+      who.appendChild(document.createTextNode(String(r.title || "My game")));
       const meta = document.createElement("span");
       meta.className = "state";
-      const n = Number(r.questionCount) || (Array.isArray(r.questions) ? r.questions.length : 0);
       const when = (r.createdAt && typeof r.createdAt.toDate === "function") ? r.createdAt.toDate().toLocaleDateString() : "";
-      meta.textContent = [r.subject, r.topic, `${n} questions`, when].filter(Boolean).join(" · ");
+      meta.textContent = [r.subject, r.topic, `${gameCount(r)} ${tm.unit}`, when].filter(Boolean).join(" · ");
       who.appendChild(meta);
       d.appendChild(who);
       const b = document.createElement("button");
@@ -4953,6 +5057,7 @@
   document.querySelectorAll("#cgChips .cg-chip").forEach(c => {
     c.onclick = () => { if (!creatingGame) el.cgPrompt.value = c.textContent; };
   });
+  buildTemplateChips();
   el.cgCreateBtn.onclick = onBuildGame;
   el.cgPlayBtn.onclick = () => { if (lastCreatedGame) startCustomGame(lastCreatedGame); };
   document.getElementById("cgAnotherBtn").onclick = () => { el.cgPreview.hidden = true; setCgMsg(""); el.cgPrompt.focus(); };
