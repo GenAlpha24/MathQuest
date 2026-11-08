@@ -4,20 +4,25 @@
 
 const cfg = require("./config");
 const { sanitizePrompt, containsBanned, hasUrl, hasContact, hasInjection, hasBadChars } = require("./prefilter");
+const {
+  isPlainObject, cpLen, hasOwn, readingFor, letterWords, textTooHard, optionTooHard, normKey, checkText, trimmed,
+} = require("./text");
+const { KINDS, LIMITS, validateVisual, validateAnswerCheck, opsFor, answerConsistent, emojiOk } = require("./visuals");
+const { TEMPLATES, TEMPLATE_IDS, COUNTS, familyOf, hostKindsFor } = require("./templates");
 
 const FIX_CODES = Object.freeze([
   "json", "size", "shape", "keys", "bool", "enum", "topic", "theme", "grade", "incoherent",
   "off_topic_attested", "title", "questions_count", "q_text", "q_options", "q_correct_index",
   "q_hint", "q_explanation", "q_emoji", "options_duplicate", "questions_duplicate",
   "text_chars", "text_url", "text_contact", "text_banned", "text_refusal", "reading_level",
+  "visual", "visual_kind", "visual_mismatch", "visual_missing", "pairs_count", "pair_shape", "rounds_count", "steps",
+  "bins", "items_count", "item_bin", "sort_balance", "labels_duplicate",
 ]);
 
-const CLASSIFICATION_KEYS = ["isSteam", "safe", "refusalReason", "subject", "topic", "theme", "grade", "difficulty"];
+const CLASSIFICATION_KEYS = ["isSteam", "safe", "refusalReason", "subject", "topic", "theme", "grade", "difficulty", "template", "fits", "visualKinds"];
+// Optional for the validator (older scripted classifiers omit them); the Vertex schema requires template, fits and visualKinds.
+const OPTIONAL_CLASSIFICATION_KEYS = ["theme", "template", "fits", "visualKinds"];
 const REFUSAL_REASONS = ["none", "off_topic", "unsafe", "personal_info", "chitchat", "injection", "too_vague"];
-
-const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-const cpLen = (s) => Array.from(s).length;
-const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 function parseJson(raw, maxLen) {
   if (typeof raw !== "string") return isPlainObject(raw) ? { value: raw } : { error: "shape" };
@@ -53,7 +58,7 @@ function validateClassification(raw, opts) {
   const keys = Object.keys(o);
   if (keys.some((k) => !CLASSIFICATION_KEYS.includes(k))) return { ok: false, errors: ["keys"] };
   const errors = [];
-  for (const k of CLASSIFICATION_KEYS) if (k !== "theme" && !hasOwn(o, k)) errors.push("keys");
+  for (const k of CLASSIFICATION_KEYS) if (!OPTIONAL_CLASSIFICATION_KEYS.includes(k) && !hasOwn(o, k)) errors.push("keys");
   if (errors.length) return { ok: false, errors: ["keys"] };
 
   if (typeof o.isSteam !== "boolean" || typeof o.safe !== "boolean") errors.push("bool");
@@ -61,6 +66,25 @@ function validateClassification(raw, opts) {
       !cfg.DIFFICULTIES.includes(o.difficulty)) errors.push("enum");
   if (!Number.isInteger(o.grade) || !cfg.GRADES.includes(o.grade)) errors.push("grade");
   if (errors.length) return { ok: false, errors: [...new Set(errors)] };
+
+  let template = "quiz";
+  let fits = ["quiz"];
+  let visualKinds = [];
+  if (hasOwn(o, "template")) { if (TEMPLATE_IDS.includes(o.template)) template = o.template; else errors.push("enum"); }
+  if (hasOwn(o, "fits")) {
+    if (Array.isArray(o.fits) && o.fits.length >= 1 && o.fits.length <= TEMPLATE_IDS.length &&
+        o.fits.every((x) => TEMPLATE_IDS.includes(x)) && new Set(o.fits).size === o.fits.length) fits = o.fits.slice();
+    else errors.push("enum");
+  }
+  if (hasOwn(o, "visualKinds")) {
+    if (Array.isArray(o.visualKinds) && o.visualKinds.length <= 2 && o.visualKinds.every((x) => KINDS.includes(x)) &&
+        new Set(o.visualKinds).size === o.visualKinds.length) visualKinds = o.visualKinds.slice();
+    else errors.push("enum");
+  }
+  if (!errors.length && !fits.includes(template)) errors.push("enum");
+  if (errors.length) return { ok: false, errors: [...new Set(errors)] };
+  // The choice family fits every topic, so a fallback always exists.
+  for (const t of ["quiz", "picturequiz"]) if (!fits.includes(t)) fits.push(t);
 
   const accepted = o.isSteam && o.safe;
   if ((o.refusalReason === "none") !== accepted) return { ok: false, errors: ["incoherent"] };
@@ -87,151 +111,263 @@ function validateClassification(raw, opts) {
       theme: accepted ? (theme === null ? null : theme.trim()) : null,
       grade: applyGradeAuthority(o.grade, hint),
       difficulty: o.difficulty,
+      template,
+      fits,
+      visualKinds,
     },
   };
 }
 
 // ---- game validation ----
-const FORBIDDEN_CHARS_RE = /[<>`{}[\]|\\*]/;
-const HIDDEN_CHARS_RE = /[\p{Cc}\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/u;
-const REFUSAL_MARKER_RE = /\bas an ai\b|\bi cannot\b|\bi can't\b|\bi can’t\b|\bi'm sorry\b|\bi’m sorry\b|\blanguage model\b/i;
-const EMOJI_RE = /^\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*$/u;
-const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
-const HANDLE_RE = /(?:^|[\s(])@\w+/;
-const PHONE_RE = /(?<!\d)\d{10,15}(?!\d)|(?<!\d)(?:\+?\d{1,3}[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/;
-
-// Reading level (see design 4.3 rule 6). Per question text: words (numbers/units excluded),
-// words in the longest sentence, and vocabulary difficulty; per option: words only.
-// Common STEAM terms (REL_ALLOW) never count as "hard" words, and a single hard word never fails a question.
-const READING = [
-  { max: 0, total: 12, sentence: 12, opt: 4, avg: 6.5, longRatio: 0.15 },
-  { max: 1, total: 22, sentence: 15, opt: 6, avg: 6.5, longRatio: 0.2 },
-  { max: 2, total: 28, sentence: 18, opt: 7, avg: 6.5, longRatio: 0.2 },
-  { max: 3, total: 42, sentence: 24, opt: 10, avg: 7, longRatio: 0.25 },
-  { max: 4, total: 48, sentence: 28, opt: 11, avg: 7.5, longRatio: 0.3 },
-  { max: 5, total: 54, sentence: 30, opt: 12, avg: 7.5, longRatio: 0.3 },
-];
-const LONG_WORD_LEN = 9;
-const REL_ALLOW = new Set((
-  "graph axis category frequency compare comparison measure measurement estimate equation fraction numerator denominator " +
-  "triangle rectangle pentagon hexagon octagon perimeter area volume symmetry pattern sequence multiplication addition " +
-  "subtraction division temperature thermometer planet gravity electricity magnet magnetic habitat ecosystem " +
-  "photosynthesis evaporation condensation precipitation solar energy engineer engineering technology computer " +
-  "algorithm program robot vertical horizontal tally pictograph data scale bridge triangle diameter circumference " +
-  "rotation reflection rhombus parallelogram quadrilateral predator vitamin mineral molecule material insect " +
-  "butterfly dinosaur volcano earthquake telescope microscope experiment observation prediction population " +
-  "environment recycle absorb reflect orbit galaxy rainbow vibration instrument rhythm melody pattern symmetrical"
-).split(/\s+/));
-const readingFor = (grade) => READING.find((r) => grade <= r.max) || READING[READING.length - 1];
-const wordsOf = (s) => s.split(/\s+/).filter(Boolean);
-// Alphabetic words only; numbers, units glued to numbers and symbols are ignored.
-const letterWords = (s) => s.match(/\p{L}[\p{L}'’-]*/gu) || [];
-const isAllowed = (w) => {
-  const k = w.toLowerCase().replace(/['’-]/g, "");
-  return REL_ALLOW.has(k) || REL_ALLOW.has(k.replace(/(?:es|s)$/, ""));
-};
-function textTooHard(text, rl) {
-  const words = letterWords(text);
-  if (words.length > rl.total) return true;
-  const sentences = text.split(/[.!?;:]+(?:\s|$)/).filter((x) => x.trim());
-  if (sentences.some((x) => letterWords(x).length > rl.sentence)) return true;
-  const plain = words.filter((w) => !isAllowed(w));
-  if (plain.length < 3) return false;
-  const lens = plain.map((w) => w.replace(/['’-]/g, "").length);
-  const long = lens.filter((n) => n >= LONG_WORD_LEN).length;
-  const avg = lens.reduce((a, n) => a + n, 0) / lens.length;
-  return avg > rl.avg || (long >= 2 && long / plain.length > rl.longRatio);
-}
-const optionTooHard = (opt, rl) => letterWords(opt).length > rl.opt;
-const normKey = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") || s.trim().toLowerCase();
-
-// Checks a generated string; pushes stable codes only.
-function checkText(s, errors) {
-  if (/[\n\r\t]/.test(s) || HIDDEN_CHARS_RE.test(s) || FORBIDDEN_CHARS_RE.test(s) ||
-      s.includes("://") || /www\./i.test(s) || s.includes("](")) errors.add("text_chars");
-  if (hasUrl(s)) errors.add("text_url");
-  if (EMAIL_RE.test(s) || HANDLE_RE.test(s) || PHONE_RE.test(s)) errors.add("text_contact");
-  if (containsBanned(s)) errors.add("text_banned");
-  if (REFUSAL_MARKER_RE.test(s)) errors.add("text_refusal");
+function emojiField(v, errors, code) {
+  if (v === undefined || v === null) return undefined;
+  if (!emojiOk(v)) { errors.add(code); return undefined; }
+  return v;
 }
 
-function trimmed(v, min, max) {
-  if (typeof v !== "string") return null;
-  const t = v.trim();
-  const n = cpLen(t);
-  return n >= min && n <= max ? t : null;
+// Shared per-game context for the family validators.
+function makeCtx(template, opts, grade) {
+  const hostKinds = hostKindsFor(template);
+  const kinds = Array.isArray(opts.allowedKinds) ? opts.allowedKinds.filter((k) => hostKinds.includes(k)) : [];
+  return { errors: new Set(), rl: readingFor(grade), allowedKinds: kinds, visuals: 0, template, host: TEMPLATES[template].host };
 }
 
+// Optional picture on an item. Returns the normalized visual or undefined (errors recorded on failure).
+function takeVisual(raw, ctx) {
+  if (raw === undefined || raw === null) return undefined;
+  if (ctx.visuals >= LIMITS.maxPerGame) { ctx.errors.add("visual"); return undefined; }
+  ctx.visuals++;
+  const r = validateVisual(raw, { host: ctx.host, allowedKinds: ctx.allowedKinds, rl: ctx.rl });
+  if (!r.ok) { ctx.errors.add(r.code); return undefined; }
+  return r.value;
+}
+
+const isAbsent = (x) => x === undefined || x === null;
+
+function choiceFamily(o, ctx, count) {
+  const { errors, rl } = ctx;
+  const out = [];
+  if (!Array.isArray(o.questions) || o.questions.length < cfg.MIN_QUESTIONS || o.questions.length > count) {
+    errors.add("questions_count");
+    return null;
+  }
+  const seen = new Set();
+  const hv = []; // whether the model offered a picture (valid or not), so one bad picture is not also reported as missing
+  const okinds = opsFor(ctx.allowedKinds);
+  o.questions.forEach((q, i) => {
+    if (!isPlainObject(q)) { errors.add("shape"); return; }
+    const text = trimmed(q.text, 8, 200);
+    if (text === null) errors.add("q_text");
+    else {
+      checkText(text, errors);
+      if (textTooHard(text, rl)) errors.add("reading_level");
+      const key = normKey(text);
+      if (seen.has(key)) errors.add("questions_duplicate");
+      seen.add(key);
+    }
+
+    let options = null;
+    if (Array.isArray(q.options) && q.options.length >= 3 && q.options.length <= 4) {
+      const opts2 = q.options.map((x) => trimmed(x, 1, 60));
+      if (opts2.every((x) => x !== null)) options = opts2;
+    }
+    if (options === null) errors.add("q_options");
+    else {
+      options.forEach((x) => {
+        checkText(x, errors);
+        if (optionTooHard(x, rl)) errors.add("reading_level");
+        if (ctx.template === "catch" && letterWords(x).length > 3) errors.add("q_options");
+      });
+      if (new Set(options.map(normKey)).size !== options.length) errors.add("options_duplicate");
+    }
+
+    const ci = q.correctIndex;
+    if (!Number.isInteger(ci) || options === null || ci < 0 || ci >= options.length) errors.add("q_correct_index");
+
+    const hint = trimmed(q.hint, 5, 200);
+    if (hint === null) errors.add("q_hint"); else checkText(hint, errors);
+    const explanation = trimmed(q.explanation, 5, 240);
+    if (explanation === null) errors.add("q_explanation"); else checkText(explanation, errors);
+
+    const emoji = emojiField(q.emoji, errors, "q_emoji");
+
+    const hasVisual = !isAbsent(q.visual);
+    const visual = hasVisual ? takeVisual(q.visual, ctx) : undefined;
+    if (!isAbsent(q.answerCheck)) {
+      if (!hasVisual) errors.add("visual_mismatch");
+      else if (visual) {
+        const a = validateAnswerCheck(q.answerCheck, visual, okinds);
+        if (!a.ok) errors.add(a.code);
+        else if (options !== null && Number.isInteger(ci) && !answerConsistent(visual, a.value, options, ci)) errors.add("visual_mismatch");
+      }
+    }
+
+    const item = { id: "q" + (i + 1), text, options, correctIndex: ci, hint, explanation };
+    if (emoji !== undefined) item.emoji = emoji;
+    if (visual !== undefined) item.visual = visual;
+    out.push(item);
+    hv.push(hasVisual);
+  });
+  if (ctx.template === "picturequiz" && ctx.allowedKinds.length) {
+    if (out.some((q, i) => !hv[i] && !q.emoji) || hv.filter(Boolean).length * 2 < out.length) errors.add("visual_missing");
+  }
+  return { questions: out };
+}
+
+// One side of a memory pair, a step, or a sort item: short label, optional emoji, optional picture.
+function labelled(s, ctx, code, max, extraWords, min) {
+  if (!isPlainObject(s)) { ctx.errors.add(code); return null; }
+  const label = trimmed(s.label, min || 1, max);
+  if (label === null) { ctx.errors.add(code); return null; }
+  checkText(label, ctx.errors);
+  const rl = ctx.rl;
+  if (letterWords(label).length > rl.opt + (extraWords || 0)) ctx.errors.add("reading_level");
+  const out = { label };
+  const emoji = emojiField(s.emoji, ctx.errors, code);
+  if (emoji !== undefined) out.emoji = emoji;
+  const visual = takeVisual(s.visual, ctx);
+  if (visual !== undefined) out.visual = visual;
+  return out;
+}
+
+function hintAndExplanation(r, errors, target) {
+  const hint = trimmed(r.hint, 5, 200);
+  if (hint === null) errors.add("q_hint"); else checkText(hint, errors);
+  const explanation = trimmed(r.explanation, 5, 240);
+  if (explanation === null) errors.add("q_explanation"); else checkText(explanation, errors);
+  target.hint = hint;
+  target.explanation = explanation;
+}
+
+function memoryFamily(o, ctx) {
+  const { errors } = ctx;
+  const c = COUNTS.memory;
+  if (!Array.isArray(o.pairs) || o.pairs.length < c.min || o.pairs.length > c.max) { errors.add("pairs_count"); return null; }
+  const seen = new Set();
+  const pairs = [];
+  o.pairs.forEach((p, i) => {
+    if (!isPlainObject(p)) { errors.add("pair_shape"); return; }
+    const a = labelled(p.a, ctx, "pair_shape", 30);
+    const b = labelled(p.b, ctx, "pair_shape", 30);
+    const item = { id: "p" + (i + 1), a, b };
+    hintAndExplanation(p, errors, item);
+    for (const s of [a, b]) {
+      if (!s) continue;
+      const key = normKey(s.label);
+      if (seen.has(key)) errors.add("labels_duplicate");
+      seen.add(key);
+    }
+    pairs.push(item);
+  });
+  return { pairs };
+}
+
+function sequenceFamily(o, ctx) {
+  const { errors, rl } = ctx;
+  const c = COUNTS.sequence;
+  if (!Array.isArray(o.rounds) || o.rounds.length < c.min || o.rounds.length > c.max) { errors.add("rounds_count"); return null; }
+  const rounds = [];
+  o.rounds.forEach((r, i) => {
+    if (!isPlainObject(r)) { errors.add("shape"); return; }
+    const prompt = trimmed(r.prompt, 8, 120);
+    if (prompt === null) errors.add("q_text");
+    else { checkText(prompt, errors); if (textTooHard(prompt, rl)) errors.add("reading_level"); }
+    let steps = null;
+    if (Array.isArray(r.steps) && r.steps.length >= c.minSteps && r.steps.length <= c.maxSteps) {
+      const list = r.steps.map((s) => labelled(s, ctx, "steps", 40, 3, 2));
+      if (list.every((x) => x !== null)) {
+        steps = list;
+        if (new Set(list.map((x) => normKey(x.label))).size !== list.length) errors.add("steps");
+      }
+    } else errors.add("steps");
+    const item = { id: "r" + (i + 1), prompt, steps };
+    hintAndExplanation(r, errors, item);
+    rounds.push(item);
+  });
+  return { rounds };
+}
+
+function sortFamily(o, ctx) {
+  const { errors } = ctx;
+  const c = COUNTS.sort;
+  let bins = null;
+  if (Array.isArray(o.bins) && o.bins.length >= c.minBins && o.bins.length <= c.maxBins) {
+    const list = o.bins.map((b, i) => {
+      if (!isPlainObject(b)) return null;
+      const label = trimmed(b.label, 1, 20);
+      const rule = trimmed(b.rule, 3, 60);
+      if (label === null || rule === null) return null;
+      checkText(label, errors);
+      checkText(rule, errors);
+      if (letterWords(label).length > ctx.rl.opt) errors.add("reading_level");
+      const bin = { id: "b" + (i + 1), label };
+      const emoji = emojiField(b.emoji, errors, "bins");
+      if (emoji !== undefined) bin.emoji = emoji;
+      bin.rule = rule;
+      return bin;
+    });
+    if (list.every((x) => x !== null) && new Set(list.map((x) => normKey(x.label))).size === list.length) bins = list;
+  }
+  if (bins === null) errors.add("bins");
+  if (!Array.isArray(o.items) || o.items.length < c.min || o.items.length > c.max) { errors.add("items_count"); return null; }
+  const seen = new Set();
+  const per = bins ? bins.map(() => 0) : [];
+  const items = [];
+  o.items.forEach((it, i) => {
+    const base = labelled(it, ctx, "shape", 30);
+    if (!base) return;
+    const key = normKey(base.label);
+    if (seen.has(key)) errors.add("labels_duplicate");
+    seen.add(key);
+    const explanation = trimmed(it.explanation, 5, 240);
+    if (explanation === null) errors.add("q_explanation"); else checkText(explanation, errors);
+    const bi = it.bin;
+    if (!Number.isInteger(bi) || bi < 0 || (bins && bi >= bins.length)) errors.add("item_bin");
+    else if (bins) per[bi]++;
+    items.push({ id: "i" + (i + 1), ...base, bin: bi, explanation });
+  });
+  if (bins && per.length && items.length === o.items.length) {
+    if (per.some((n) => n < 2) || per.some((n) => n > items.length * 0.7)) errors.add("sort_balance");
+  }
+  return { bins: bins || [], items };
+}
+
+const FAMILY_KEYS = { choice: ["questions"], memory: ["pairs"], sequence: ["rounds"], sort: ["bins", "items"] };
+
+// opts: { template ("quiz" default), grade, count, allowedKinds ([] default) }. Defaults reproduce the v1 behavior.
 function validateGame(raw, opts) {
-  const grade = opts && Number.isInteger(opts.grade) && cfg.GRADES.includes(opts.grade) ? opts.grade : 1;
+  const o_ = opts || {};
+  const template = typeof o_.template === "string" && hasOwn(TEMPLATES, o_.template) ? o_.template : "quiz";
+  const family = familyOf(template);
+  const grade = Number.isInteger(o_.grade) && cfg.GRADES.includes(o_.grade) ? o_.grade : 1;
   const count = Math.min(cfg.MAX_QUESTIONS, Math.max(cfg.MIN_QUESTIONS,
-    opts && Number.isInteger(opts.count) ? opts.count : cfg.DEFAULT_QUESTIONS));
+    Number.isInteger(o_.count) ? o_.count : cfg.DEFAULT_QUESTIONS));
   const parsed = parseJson(raw, cfg.GAME_MAX_BYTES);
   if (parsed.error) return { ok: false, errors: [parsed.error] };
   const o = parsed.value;
   if (!isPlainObject(o)) return { ok: false, errors: ["shape"] };
 
-  const errors = new Set();
+  const ctx = makeCtx(template, o_, grade);
+  const { errors } = ctx;
   if (o.stayedOnSteamTopic !== true) errors.add("off_topic_attested");
 
   const title = trimmed(o.title, 3, 60);
   if (title === null) errors.add("title");
   else checkText(title, errors);
 
-  const out = [];
-  if (!Array.isArray(o.questions) || o.questions.length < cfg.MIN_QUESTIONS || o.questions.length > count) {
-    errors.add("questions_count");
-  } else {
-    const rl = readingFor(grade);
-    const seen = new Set();
-    o.questions.forEach((q, i) => {
-      if (!isPlainObject(q)) { errors.add("shape"); return; }
-      const text = trimmed(q.text, 8, 200);
-      if (text === null) errors.add("q_text");
-      else {
-        checkText(text, errors);
-        if (textTooHard(text, rl)) errors.add("reading_level");
-        const key = normKey(text);
-        if (seen.has(key)) errors.add("questions_duplicate");
-        seen.add(key);
-      }
-
-      let options = null;
-      if (Array.isArray(q.options) && q.options.length >= 3 && q.options.length <= 4) {
-        const opts2 = q.options.map((x) => trimmed(x, 1, 60));
-        if (opts2.every((x) => x !== null)) options = opts2;
-      }
-      if (options === null) errors.add("q_options");
-      else {
-        options.forEach((x) => {
-          checkText(x, errors);
-          if (optionTooHard(x, rl)) errors.add("reading_level");
-        });
-        if (new Set(options.map(normKey)).size !== options.length) errors.add("options_duplicate");
-      }
-
-      const ci = q.correctIndex;
-      if (!Number.isInteger(ci) || options === null || ci < 0 || ci >= options.length) errors.add("q_correct_index");
-
-      const hint = trimmed(q.hint, 5, 200);
-      if (hint === null) errors.add("q_hint"); else checkText(hint, errors);
-      const explanation = trimmed(q.explanation, 5, 240);
-      if (explanation === null) errors.add("q_explanation"); else checkText(explanation, errors);
-
-      let emoji;
-      if (q.emoji !== undefined && q.emoji !== null) {
-        if (typeof q.emoji !== "string" || q.emoji.length > 8 || !EMOJI_RE.test(q.emoji)) errors.add("q_emoji");
-        else emoji = q.emoji;
-      }
-
-      const item = { id: "q" + (i + 1), text, options, correctIndex: ci, hint, explanation };
-      if (emoji !== undefined) item.emoji = emoji;
-      out.push(item);
-    });
+  // A document may carry only its own family's payload keys (blocks cross-template confusion).
+  for (const [fam, keys] of Object.entries(FAMILY_KEYS)) {
+    if (fam !== family && keys.some((k) => hasOwn(o, k) && !isAbsent(o[k]))) errors.add("shape");
   }
 
-  if (errors.size) return { ok: false, errors: [...errors] };
-  return { ok: true, value: { title, questions: out } };
+  let payload = null;
+  if (family === "memory") payload = memoryFamily(o, ctx);
+  else if (family === "sequence") payload = sequenceFamily(o, ctx);
+  else if (family === "sort") payload = sortFamily(o, ctx);
+  else payload = choiceFamily(o, ctx, count);
+
+  if (errors.size || !payload) return { ok: false, errors: errors.size ? [...errors] : ["shape"] };
+  return { ok: true, value: { title, ...payload } };
 }
 
 module.exports = {
