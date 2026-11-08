@@ -89,9 +89,11 @@ test("happy path saves exactly one game with the 4.1 shape and bumps usage", asy
   assert.deepEqual(
     Object.keys(g).sort(),
     ["schemaVersion", "type", "status", "title", "subject", "topic", "grade", "difficulty", "prompt", "questions", "questionCount",
-      "createdBy", "creatorRole", "createdAt", "expireAt", "model", "promptVersion"].sort(),
+      "createdBy", "creatorRole", "createdAt", "expireAt", "model", "promptVersion", "templateSource"].sort(),
   );
-  assert.equal(g.schemaVersion, 1);
+  assert.equal(g.schemaVersion, 2);
+  assert.equal(g.promptVersion, 2);
+  assert.equal(g.templateSource, "auto");
   assert.equal(g.type, "quiz");
   assert.equal(g.status, "ok");
   assert.equal(g.prompt, PROMPT);
@@ -493,4 +495,265 @@ test("mock model is steered by trigger words", async () => {
   assert.equal((await call(uid, { prompt: "mockblocked volcano" }, mk(m, ms))).reason, "unsafe");
   assert.equal((await call(uid, { prompt: "mockinvalidonce volcano" }, mk(m, ms))).status, "ok");
   await rejectsWith(call(uid, { prompt: "mockinvalidtwice volcano" }, mk(m, ms)), "unavailable", "gen_failed");
+});
+
+// ======================= schema v2 =======================
+const recorded = (m) => {
+  const calls = { classify: [], generate: [] };
+  return {
+    calls,
+    classify: async (r) => { calls.classify.push(r); return m.classify(r); },
+    generate: async (r) => { calls.generate.push(r); return m.generate(r); },
+  };
+};
+const seedGames = (uid, types) => Promise.all(types.map((type, i) =>
+  db.collection("games").add({ createdBy: uid, type, createdAt: Timestamp.fromMillis(Date.now() - (i + 1) * 1000), title: "seed" })));
+const hasKey = (o, key) => JSON.stringify(o).includes('"' + key + '"');
+
+test("legacy request (no template, and template:null) stores a quiz with no visual or answerCheck even when the classifier asks for pictures", async () => {
+  for (const data of [{ prompt: "mockbar mockmemory fruit" }, { prompt: "mockbar mockmemory fruit", template: null }]) {
+    const uid = newUid("s"), ms = nextDay();
+    await seedUser(uid);
+    const model = recorded(mock.create());
+    const out = await call(uid, data, mk(model, ms));
+    assert.equal(out.status, "ok");
+    assert.equal(out.templateNote, null);
+    const g = (await gamesOf(uid))[0].data();
+    assert.equal(g.type, "quiz");
+    assert.equal(g.schemaVersion, 2);
+    assert.equal(g.templateSource, "auto");
+    assert.ok(Array.isArray(g.questions) && !g.pairs);
+    assert.ok(!hasKey(g, "visual") && !hasKey(g, "answerCheck"));
+    assert.ok(!hasKey(out.game, "visual") && !hasKey(out.game, "answerCheck"));
+    const body = JSON.parse(model.calls.generate[0].userText);
+    assert.equal(body.template, "quiz");
+    assert.deepEqual(body.visualKinds, []);
+    assert.ok(!hasKey(model.calls.generate[0].responseSchema, "visual"));
+  }
+});
+
+const V2_CASES = [
+  ["mockquiz volcano facts", "quiz", "questions", 8],
+  ["mockcatch volcano facts", "catch", "questions", 8],
+  ["mockpicture mockpie pizza", "picturequiz", "questions", 8],
+  ["mockmemory number words", "memory", "pairs", 5],
+  ["mocksequence plant life", "sequence", "rounds", 4],
+  ["mocksort solid liquid", "sort", "items", 10],
+];
+for (const [prompt, type, key, n] of V2_CASES) {
+  test(`v2 auto request (${type}): doc shape, response and counters`, async () => {
+    const uid = newUid("s"), ms = nextDay();
+    await seedUser(uid);
+    const out = await call(uid, { prompt, template: "auto" }, mk(mock.create(), ms));
+    assert.equal(out.status, "ok");
+    assert.equal(out.templateNote, null);
+    assert.equal(out.game.createdBy, undefined);
+    assert.equal(out.game.creatorRole, undefined);
+    assert.equal(out.game.type, type);
+    const docs = await gamesOf(uid);
+    assert.equal(docs.length, 1);
+    const g = docs[0].data();
+    assert.equal(g.schemaVersion, 2);
+    assert.equal(g.type, type);
+    assert.equal(g.templateSource, "auto");
+    assert.equal(g.promptVersion, 2);
+    assert.equal(g.status, "ok");
+    assert.equal(g.questionCount, n);
+    assert.equal(g[key].length, n);
+    assert.ok(!hasKey(g, "answerCheck"));
+    assert.ok(!("questions" in g) || key === "questions");
+    const u = await usageDoc(uid, ms);
+    assert.equal(u.requests, 1);
+    assert.equal(u.games, 1);
+  });
+}
+test("v2 picture quiz stores validated visuals and no answerCheck", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const model = recorded(mock.create());
+  const out = await call(uid, { prompt: "mockpicture mockbar mockpie fruit", template: "auto" }, mk(model, ms));
+  const g = (await gamesOf(uid))[0].data();
+  assert.equal(g.type, "picturequiz");
+  assert.ok(g.questions.every((q) => q.visual && q.visual.kind));
+  assert.deepEqual(new Set(g.questions.map((q) => q.visual.kind)), new Set(["barChart", "pie"]));
+  assert.ok(!hasKey(g, "answerCheck"));
+  assert.deepEqual(JSON.parse(model.calls.generate[0].userText).visualKinds, ["barChart", "pie"]);
+  assert.equal(out.game.questions[0].visual.kind, g.questions[0].visual.kind);
+});
+test("memory/sequence/sort with a picture kind store compact visuals only", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const model = recorded(mock.create());
+  await call(uid, { prompt: "mockmemory mockbar mockpie numbers", template: "auto" }, mk(model, ms));
+  const g = (await gamesOf(uid))[0].data();
+  assert.equal(g.type, "memory");
+  assert.ok(g.pairs.every((p) => p.b.visual && p.b.visual.kind === "pie"));
+  assert.deepEqual(JSON.parse(model.calls.generate[0].userText).visualKinds, ["pie"]);
+});
+
+test("invalid template argument: no model call, no quota", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const model = goodModel();
+  for (const t of [5, "arcade", "x".repeat(21), {}, [], true, "AUTO", "__proto__"]) {
+    await rejectsWith(call(uid, { prompt: PROMPT, template: t }, mk(model, ms)), "invalid-argument", "template");
+  }
+  assert.equal(model.calls.classify.length, 0);
+  assert.equal(await usageDoc(uid, ms), undefined);
+});
+
+test("user override is honored when the template fits (templateSource user)", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const out = await call(uid, { prompt: "mockmemory number words", template: "quiz" }, mk(recorded(mock.create()), ms));
+  assert.equal(out.status, "ok");
+  assert.equal(out.templateNote, null);
+  const g = (await gamesOf(uid))[0].data();
+  assert.equal(g.type, "quiz");
+  assert.equal(g.templateSource, "user");
+  assert.ok(g.questions && !g.pairs);
+});
+
+test("override that does not fit falls back to the classifier template with templateNote", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const out = await call(uid, { prompt: "mockfallback mockmemory facts", template: "memory" }, mk(recorded(mock.create()), ms));
+  assert.equal(out.status, "ok");
+  assert.equal(out.templateNote, "fallback");
+  assert.equal(out.game.type, "quiz");
+  const g = (await gamesOf(uid))[0].data();
+  assert.equal(g.type, "quiz");
+  assert.equal(g.templateSource, "fallback");
+});
+
+test("variety: three recent games of the base template switch to another fitting template", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  await seedGames(uid, ["memory", "memory", "memory"]);
+  const model = scripted({ classify: [res(clsText({ template: "memory", fits: ["memory", "sort"], visualKinds: [] }))], generate: [res(JSON.stringify({
+    stayedOnSteamTopic: true, title: "Solid or Liquid",
+    bins: [{ label: "Solid", rule: "Keeps its shape" }, { label: "Liquid", rule: "Flows around" }],
+    items: ["Ice cube", "Water", "Rock", "Milk", "Wood block", "Juice", "Toy brick", "Soup"].map((label, i) => ({ label, bin: i % 2, explanation: "It follows the rule." })),
+  }))] });
+  const out = await call(uid, { prompt: "mocksort things", template: "auto" }, mk(model, ms));
+  assert.equal(out.status, "ok");
+  assert.equal(out.game.type, "sort");
+  const docs = (await gamesOf(uid)).map((d) => d.data()).filter((d) => d.status === "ok");
+  assert.equal(docs[0].templateSource, "variety");
+  assert.equal(JSON.parse(model.calls.generate[0].userText).template, "sort");
+});
+
+test("variety: no switch with only two recent games of the base template", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  await seedGames(uid, ["memory", "memory"]);
+  const out = await call(uid, { prompt: "mockmemory words", template: "auto" }, mk(mock.create(), ms));
+  assert.equal(out.game.type, "memory");
+});
+
+test("variety query failure is ignored and logged", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const wrap = (c) => new Proxy(c, { get: (t, p) => (p === "where" ? () => { throw new Error("boom"); } : typeof t[p] === "function" ? t[p].bind(t) : t[p]) });
+  const flaky = new Proxy(db, { get: (t, p) => {
+    if (p === "collection") return (n) => (n === "games" ? wrap(t.collection(n)) : t.collection(n));
+    return typeof t[p] === "function" ? t[p].bind(t) : t[p];
+  } });
+  const logger = makeLogger();
+  const out = await handleGenerate({ auth: { uid }, data: { prompt: "mockmemory words", template: "auto" } },
+    { db: flaky, model: mock.create(), now: clockAt(ms), logger });
+  assert.equal(out.status, "ok");
+  assert.equal(out.game.type, "memory");
+  assert.ok(logger.lines.some((l) => l.includes("variety_unavailable")));
+});
+
+test("schema rejected (400) on attempt 1 degrades to a text-only retry", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const model = recorded(mock.create());
+  const logger = makeLogger();
+  const out = await call(uid, { prompt: "mockschema400 mockbar mockpicture graph", template: "auto" }, mk(model, ms, logger));
+  assert.equal(out.status, "ok");
+  assert.equal(model.calls.generate.length, 2);
+  assert.deepEqual(JSON.parse(model.calls.generate[0].userText).visualKinds, ["barChart"]);
+  assert.deepEqual(JSON.parse(model.calls.generate[1].userText).visualKinds, []);
+  assert.ok(hasKey(model.calls.generate[0].responseSchema, "visual"));
+  assert.ok(!hasKey(model.calls.generate[1].responseSchema, "visual"));
+  const g = (await gamesOf(uid))[0].data();
+  assert.equal(g.type, "picturequiz");
+  assert.ok(!hasKey(g, "visual") && !hasKey(g, "answerCheck"));
+  assert.ok(g.questions.every((q) => /Cats have 6/.test(q.text)));
+  assert.ok(logger.lines.some((l) => l.includes("gen_degraded")));
+});
+
+test("v2 template: invalid once retries with only the fix codes and then stores the game", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const model = recorded(mock.create());
+  const out = await call(uid, { prompt: "mockinvalidonce mocksequence plants", template: "auto" }, mk(model, ms));
+  assert.equal(out.status, "ok");
+  assert.equal(model.calls.generate.length, 2);
+  assert.deepEqual(JSON.parse(model.calls.generate[1].userText).fixes, ["json"]);
+  assert.equal((await gamesOf(uid))[0].data().type, "sequence");
+});
+
+test("picture errors are retried with their fix codes (visual, visual_mismatch)", async () => {
+  for (const [word, code] of [["mockbadvisual", "visual"], ["mockmismatch", "visual_mismatch"]]) {
+    const uid = newUid("s"), ms = nextDay();
+    await seedUser(uid);
+    const model = recorded(mock.create());
+    const out = await call(uid, { prompt: word + " mockpicture mockpie pizza", template: "auto" }, mk(model, ms));
+    assert.equal(out.status, "ok", word);
+    assert.equal(model.calls.generate.length, 2, word);
+    assert.deepEqual(JSON.parse(model.calls.generate[1].userText).fixes, [code], word);
+    assert.ok(!model.calls.generate[1].userText.includes("shaded"), word);
+  }
+});
+
+test("v2 template: invalid twice -> gen_failed with refund and no game", async () => {
+  for (const word of ["mockinvalidtwice mockmemory", "mockdupcards mockmemory", "mockbadsort mocksort"]) {
+    const uid = newUid("s"), ms = nextDay();
+    await seedUser(uid);
+    const bad = recorded({
+      classify: (r) => mock.create().classify(r),
+      generate: async (r) => {
+        // Never honor the fixes, so the second attempt fails too.
+        const body = JSON.parse(r.userText);
+        delete body.fixes;
+        return mock.create().generate({ ...r, userText: JSON.stringify(body) });
+      },
+    });
+    if (word.startsWith("mockinvalidtwice")) {
+      await rejectsWith(call(uid, { prompt: word + " words", template: "auto" }, mk(mock.create(), ms)), "unavailable", "gen_failed");
+    } else {
+      await rejectsWith(call(uid, { prompt: word + " words", template: "auto" }, mk(bad, ms)), "unavailable", "gen_failed");
+      assert.equal(bad.calls.generate.length, 2, word);
+    }
+    assert.equal((await gamesOf(uid)).length, 0, word);
+    const u = await usageDoc(uid, ms);
+    assert.equal(u.requests, 0, word);
+    assert.equal(u.refunds, 1, word);
+    assert.equal(u.lockUntil, null, word);
+  }
+});
+
+test("logs carry ids and codes only: no prompt, labels or model text", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const logger = makeLogger();
+  await call(uid, { prompt: "mockbadvisual mockpicture mockbar secretprompt", template: "auto" }, mk(mock.create(), ms, logger));
+  const all = logger.lines.join("\n");
+  for (const s of ["secretprompt", "Apples", "Picture Quiz Fun", "Fruit we picked", "tallest bar"]) assert.ok(!all.includes(s), s);
+  assert.ok(all.includes("picturequiz"));
+  assert.ok(all.includes('"templateSource":"auto"') || all.includes("templateSource"));
+});
+
+test("a refused or failed v2 request stores nothing and keeps the refusal shape", async () => {
+  const uid = newUid("s"), ms = nextDay();
+  await seedUser(uid);
+  const out = await call(uid, { prompt: "mockoffTopic mockmemory", template: "auto" }, mk(mock.create(), ms));
+  assert.equal(out.status, "refused");
+  assert.equal(out.reason, "off_topic");
+  assert.equal(out.templateNote, undefined);
+  assert.equal((await gamesOf(uid)).length, 0);
 });
