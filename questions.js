@@ -394,6 +394,239 @@
   }
 
   // =====================================================================
+  //  GRADE 3 MULTIPLICATION SET (from ridhi-questions.pdf, 3.OA workbook)
+  //  Every question carries a `how` string used by hint(). Answers are
+  //  numbers unless a question's options are words (mulPattern).
+  // =====================================================================
+  // 4 unique numeric options: the answer plus nearby / given wrong picks.
+  function numOpts(answer, extras) {
+    const set = new Set([answer]);
+    for (const w of shuffle([...(extras || [])])) {
+      if (set.size < 4 && w >= 0 && Number.isInteger(w)) set.add(w);
+    }
+    for (let k = 1; set.size < 4; k++) {
+      if (answer + k >= 0) set.add(answer + k);
+      if (set.size < 4 && answer - k >= 0) set.add(answer - k);
+    }
+    return shuffle([...set]);
+  }
+  const MUL_ICONS = ["🏀", "⚽", "🐞", "🐛", "🦋", "🍎", "🐢", "⭐"];
+
+  // Equal groups: "3 groups of 2" drawn with emoji (page "Play Ball!")
+  function makeEqualGroups() {
+    const g = rand(2, 5), p = rand(2, 6), icon = pick(MUL_ICONS);
+    const answer = g * p;
+    const row = icon.repeat(p);
+    return {
+      text: `Look at the equal groups:\n${Array(g).fill(row).join("   |   ")}\nHow many ${icon} are there in all?`,
+      answer, opts: numOpts(answer, [g + p, answer + p, answer - p, answer + g]),
+      topic: "equalGroups",
+      how: `Multiplication is a short way to add equal groups.\n` +
+           `There are ${g} groups with ${p} in each group.\n` +
+           `${Array(g).fill(p).join(" + ")} = ${g} × ${p} = ${answer}.`,
+    };
+  }
+
+  // Repeated addition <-> multiplication ("Addition, Addition")
+  function makeRepeatedAddition() {
+    const n = rand(2, 6), v = rand(2, 9);
+    const sum = Array(n).fill(v).join(" + ");
+    const how = `Adding the same number again and again is multiplication.\n` +
+                `${sum} has ${n} addends of ${v}, so it is ${n} × ${v}.\n` +
+                `${n} × ${v} = ${n * v}.`;
+    if (Math.random() < 0.5) {
+      const answer = n * v;
+      return {
+        text: `${sum} = ?`, answer,
+        opts: numOpts(answer, [answer + v, answer - v, n + v]),
+        topic: "repeatedAddition", how,
+      };
+    }
+    const answer = `${n} × ${v}`;
+    const opts = shuffle([answer, `${n + 1} × ${v}`, `${n} × ${v + 1}`, `${n} + ${v}`]);
+    return { text: `Which multiplication matches ${sum}?`, answer, opts, topic: "repeatedAddition", how };
+  }
+
+  // Skip counting on a number line ("Skip on the Line!")
+  function makeSkipCount() {
+    const step = pick([2, 3, 4, 5, 10]), shown = rand(3, 4);
+    const seq = Array.from({ length: shown }, (_, i) => (i + 1) * step);
+    const answer = (shown + 1) * step;
+    return {
+      text: `Skip count by ${step}s:\n${seq.join(", ")}, ___`,
+      answer, opts: numOpts(answer, [answer + 1, answer - 1, answer + step, answer - step]),
+      topic: "skipCount",
+      how: `Skipping by ${step}s means adding ${step} each time.\n` +
+           `${seq[shown - 1]} + ${step} = ${answer}.\n` +
+           `Counting by ${step}s is the same as the ${step} times table.`,
+    };
+  }
+
+  // Mixed facts 0-12, drills like "Fast Facts!" and the times tables
+  function makeTimesFact() {
+    const a = rand(0, 12), b = rand(0, 12), answer = a * b;
+    let tip;
+    if (a === 0 || b === 0) tip = `Any number times 0 is 0.`;
+    else if (a === 1 || b === 1) tip = `Any number times 1 is that number.`;
+    else if (a === 10 || b === 10) tip = `Times 10 puts a 0 on the end of the other number.`;
+    else if (a === 11 || b === 11) tip = `11 × n = (10 × n) + n.`;
+    else if (a === 12 || b === 12) tip = `12 is a dozen. Count by twelves, or double the 6 fact.`;
+    else tip = `Count by ${Math.min(a, b)}s, ${Math.max(a, b)} times.`;
+    return {
+      text: `${a} × ${b} = ?`, answer,
+      opts: numOpts(answer, [answer + a, answer - a, answer + b, answer - b, answer + 1, answer - 1]),
+      topic: "timesFact",
+      how: `${tip}\n${a} × ${b} means ${a} groups of ${b}.\n${a} × ${b} = ${answer}.`,
+    };
+  }
+
+  // Arrays: rows and columns drawn with emoji ("What's an Array?")
+  function makeArray() {
+    const r = rand(2, 5), c = rand(2, 7), icon = pick(MUL_ICONS), answer = r * c;
+    return {
+      text: `An array has ${r} rows and ${c} columns.\n${Array(r).fill(icon.repeat(c)).join("\n")}\nHow many ${icon} are in the array?`,
+      answer, opts: numOpts(answer, [r + c, answer + r, answer - c, answer + c]),
+      topic: "array",
+      how: `An array shows objects in rows and columns.\n` +
+           `Multiply the number of rows by the number of columns.\n${r} × ${c} = ${answer}.`,
+    };
+  }
+
+  // Missing factor ("What's Missing?")
+  function makeMissingFactor() {
+    const a = rand(2, 9), b = rand(2, 9), p = a * b;
+    return {
+      text: `${a} × ? = ${p}`, answer: b,
+      opts: numOpts(b, [b + 1, b - 1, a, b + 2, b - 2]),
+      topic: "missingFactor",
+      how: `Think: ${a} times what number equals ${p}?\n` +
+           `Count by ${a}s until you reach ${p}: you take ${b} jumps.\n${a} × ${b} = ${p}.`,
+    };
+  }
+
+  // Nickels and dimes ("Save Your Nickels", "Dime Time")
+  function makeCoinsMultiply() {
+    const nickel = Math.random() < 0.5, v = nickel ? 5 : 10, n = rand(2, 9);
+    const name = nickel ? "nickel" : "dime", answer = n * v;
+    return {
+      text: `A ${name} is worth ${v}¢. How many cents are ${n} ${name}s worth?`,
+      answer, opts: numOpts(answer, [answer + v, answer - v, n + v, answer + 1]),
+      topic: "coinsMultiply",
+      how: `Each ${name} is ${v}¢, so count by ${v}s, ${n} times.\n` +
+           `${n} × ${v}¢ = ${answer}¢.`,
+    };
+  }
+
+  // Commutative property ("In Any Order", "Draw a Winner", "Cross Out!")
+  function makeCommutative() {
+    let a = rand(2, 9), b = rand(2, 9);
+    while (b === a) b = rand(2, 9);
+    const how = `Factors can be multiplied in any order and the product stays the same.\n` +
+                `${a} × ${b} = ${b} × ${a} = ${a * b}.`;
+    if (Math.random() < 0.5) {
+      return { text: `If ${a} × ${b} = ${a * b}, what is ${b} × ${a}?`, answer: a * b,
+               opts: numOpts(a * b, [a * b + a, a * b - b, a + b]), topic: "commutative", how };
+    }
+    return { text: `${a} × ${b} = ${b} × ?`, answer: a,
+             opts: numOpts(a, [a + 1, a - 1, a * b, b]), topic: "commutative", how };
+  }
+
+  // Word problems: fixed ones from the workbook plus "each one has" templates
+  const MUL_WORD_FIXED = [
+    ["Seven bicycles are parked in front of the library. How many wheels are there altogether?", 14, "Each bicycle has 2 wheels.\n7 × 2 = 14."],
+    ["There are 3 spiders in a web. How many legs are there altogether?", 24, "Each spider has 8 legs.\n3 × 8 = 24."],
+    ["If there are exactly 8 more weeks of the year left, how many days are left?", 56, "A week has 7 days.\n8 × 7 = 56."],
+    ["A small singing group calls itself \"The Triple Trio.\" How many people are in the singing group?", 9, "A trio is 3 people, and there are 3 trios.\n3 × 3 = 9."],
+    ["Two baseball teams are playing ball. How many players are there?", 18, "A baseball team has 9 players.\n2 × 9 = 18."],
+    ["How many fingers are on 8 hands?", 40, "Each hand has 5 fingers.\n8 × 5 = 40."],
+    ["Eight insects are sitting on a lily pad. How many legs are there altogether?", 48, "Every insect has 6 legs.\n8 × 6 = 48."],
+    ["Roger had 8 strikes in a row last week when he went bowling. How many pins did he knock down?", 80, "A strike knocks down all 10 pins.\n8 × 10 = 80."],
+    ["Rico saves some money each month for college 9 years from now. For how many months will he have to save money?", 108, "A year has 12 months.\n9 × 12 = 108."],
+    ["Six football teams are playing in a city park. How many players are in the park?", 66, "A football team has 11 players.\n6 × 11 = 66."],
+    ["Ed reads 2 books a week. How many books will be read in 6 weeks?", 12, "Add 2 six times, or 6 × 2 = 12."],
+    ["Maria baby-sits for 4 different families. If each family has 3 children, how many children does she baby-sit?", 12, "4 families with 3 children each.\n4 × 3 = 12."],
+    ["Kai's dog eats 2 times a day. How many times does the dog eat in 5 days?", 10, "5 days with 2 meals each.\n5 × 2 = 10."],
+    ["Four golfers each have 9 golf balls. How many golf balls are there in all?", 36, "4 groups of 9.\n4 × 9 = 36."],
+    ["A book of stamps has 2 rows with 4 stamps in each row. How many stamps are there?", 8, "2 rows of 4.\n2 × 4 = 8."],
+    ["John bought 3 dozen apples to make some pies. How many apples did he buy?", 36, "A dozen is 12.\n3 × 12 = 36."],
+    ["Kevin is a dozen years old. How old is he?", 12, "A dozen means 12."],
+    ["The third grade class planted 10 dozen trees on Arbor Day. How many trees did they plant?", 120, "A dozen is 12.\n10 × 12 = 120."],
+    ["Kayla bought 3 dozen buttons. Then she bought 2 dozen more to complete her project. How many buttons did she buy?", 60, "3 dozen + 2 dozen = 5 dozen.\n5 × 12 = 60."],
+    ["Jan's teacher bought a gross of pencils. A gross is 12 dozen. How many pencils did she buy?", 144, "A gross is 12 dozen.\n12 × 12 = 144."],
+    ["Tennis balls are sold in cans of 3. How many cans of balls must you buy to have a dozen tennis balls?", 4, "A dozen is 12 balls.\n12 ÷ 3 = 4, because 3 × 4 = 12."],
+    ["Some pairs of socks are sold in packages of 6. How many packages would you have to buy to have 3 dozen pairs of socks?", 6, "3 dozen is 36.\n36 ÷ 6 = 6, because 6 × 6 = 36."],
+    ["Hot dog buns are sold in packages of 8. How many packages would you have to buy to have 4 dozen buns?", 6, "4 dozen is 48.\n48 ÷ 8 = 6, because 8 × 6 = 48."],
+    ["A foot is 12 inches. Maria is 4 feet tall. How many inches tall is she?", 48, "4 × 12 = 48."],
+    ["A foot is 12 inches. Maria's brother is 6 feet tall. How many inches tall is he?", 72, "6 × 12 = 72."],
+    ["A yard is equal to 3 feet. How many inches are in 1 yard?", 36, "3 feet × 12 inches = 36."],
+    ["The flagpole in front of the school is 10 feet tall. How many inches high is the flagpole?", 120, "10 × 12 = 120."],
+    ["How many inches are around a 1-foot square tile?", 48, "A square has 4 sides of 12 inches.\n4 × 12 = 48."],
+    ["How many inches are around a rectangle that is 3 feet long and 2 feet wide?", 120, "3 + 2 + 3 + 2 = 10 feet around.\n10 × 12 = 120 inches."],
+    ["Ashton is 5 feet 3 inches tall. How many inches tall is she?", 63, "5 feet = 5 × 12 = 60 inches.\n60 + 3 = 63."],
+    ["Jesse is 4 feet tall. His sister is 8 inches taller. His older brother is 4 inches taller than his sister. How tall is Jesse's older brother in inches?", 60, "Jesse: 4 × 12 = 48 inches.\nSister: 48 + 8 = 56. Brother: 56 + 4 = 60."],
+    ["I am 9 × 8 or 6 × 12. Who am I?", 72, "9 × 8 = 72 and 6 × 12 = 72."],
+    ["I am 3 × 8, 4 × 6, or 2 × 12. Who am I?", 24, "All three facts equal 24."],
+    ["I am 10 × 4 or 5 × 8. Who am I?", 40, "10 × 4 = 40 and 5 × 8 = 40."],
+    ["If you add 4 of me, you get 20. Who am I?", 5, "4 × 5 = 20."],
+    ["If you add 3 of me, you get the same answer as 6 × 5. Who am I?", 10, "6 × 5 = 30, and 3 × 10 = 30."],
+    ["If you multiply me by 5, you get 6 × 10. Who am I?", 12, "6 × 10 = 60, and 5 × 12 = 60."],
+    ["If you multiply me by 7 and then add 7 to the product, you get 6 × 7. Who am I?", 5, "6 × 7 = 42. 42 − 7 = 35, and 7 × 5 = 35."],
+    ["If you multiply me by 9 and then add 7 to the product, you get 5 × 5. Who am I?", 2, "5 × 5 = 25. 25 − 7 = 18, and 9 × 2 = 18."],
+    ["If you multiply me by 2 and then add 1 to the product, you get 9. Who am I?", 4, "9 − 1 = 8, and 2 × 4 = 8."],
+  ];
+  const MUL_WORD_EACH = [ // [one thing, what it has, per, min, max]
+    ["coat", "buttons", 4, 2, 8], ["hat", "red stripes", 2, 2, 9], ["pair of pants", "patches", 2, 2, 8],
+    ["bicycle", "wheels", 2, 3, 9], ["spider", "legs", 8, 2, 6], ["insect", "legs", 6, 2, 9],
+    ["hand", "fingers", 5, 2, 9], ["golfer", "golf balls", 9, 2, 6], ["family", "children", 3, 2, 9],
+  ];
+  function makeMulWord() {
+    if (Math.random() < 0.6) {
+      const [text, answer, how] = pick(MUL_WORD_FIXED);
+      return { text, answer, opts: numOpts(answer, [answer + 1, answer - 1, answer + 10, answer - 10, answer * 2, answer + 12]),
+               topic: "mulWord", how: `Find the equal groups.\n${how}` };
+    }
+    const [thing, has, per, lo, hi] = pick(MUL_WORD_EACH), n = rand(lo, hi), answer = n * per;
+    return {
+      text: `Each ${thing} has ${per} ${has}. How many ${has} are there on ${n} ${thing}s?`,
+      answer, opts: numOpts(answer, [answer + per, answer - per, n + per, answer + n]),
+      topic: "mulWord", how: `${n} groups with ${per} in each group.\n${n} × ${per} = ${answer}.`,
+    };
+  }
+
+  // Patterns and tricks in the multiplication table ("It's in the Table!", "Nine Is Fine", "Ten and One", "Double the Fours")
+  const MUL_PATTERN_FIXED = [
+    ["When you multiply a number by 0, the product is always...", "0", ["0", "1", "that number", "10"], "Any number times 0 equals 0."],
+    ["When you multiply a number by 1, the product is...", "that number", ["0", "1", "that number", "10"], "Any number times 1 equals that number."],
+    ["When you multiply by 5, the product always ends with 5 or...", "0", ["0", "2", "4", "7"], "Count by 5s: 5, 10, 15, 20. They end in 5 or 0."],
+    ["When you multiply by 10, the product always ends with...", "0", ["0", "1", "5", "10"], "Count by 10s: 10, 20, 30. They end in 0."],
+    ["When you multiply by 2, the product is always...", "an even number", ["an even number", "an odd number", "a multiple of 5", "zero"], "Count by 2s: 2, 4, 6, 8. They are even."],
+  ];
+  function makeMulPattern() {
+    const r = Math.random();
+    if (r < 0.35) {
+      const [text, answer, opts, how] = pick(MUL_PATTERN_FIXED);
+      return { text, answer, opts: shuffle([...opts]), topic: "mulPattern", how };
+    }
+    if (r < 0.6) { // nines: digits of the product add up to 9
+      const n = rand(2, 9), p = 9 * n, answer = Math.floor(p / 10) + (p % 10);
+      return { text: `9 × ${n} = ${p}. What is ${Math.floor(p / 10)} + ${p % 10}?`, answer,
+               opts: numOpts(answer, [8, 10, 18, 7]), topic: "mulPattern",
+               how: `With 9s, the digits of the product add up to 9.\n${Math.floor(p / 10)} + ${p % 10} = ${answer}.` };
+    }
+    if (r < 0.8) { // ten and one for the 11 facts
+      const n = rand(2, 9), answer = n * 11;
+      return { text: `11 × ${n} = (10 × ${n}) + ${n} = ${10 * n} + ${n} = ?`, answer,
+               opts: numOpts(answer, [answer + 10, answer - 10, answer + n, 10 * n]), topic: "mulPattern",
+               how: `Since 11 = 10 + 1, 11 × ${n} = (10 × ${n}) + ${n}.\n${10 * n} + ${n} = ${answer}.` };
+    }
+    // double the fours for the 8 facts
+    const n = rand(2, 9), four = 4 * n, answer = 8 * n;
+    return { text: `4 × ${n} = ${four}. Double it. What is 8 × ${n}?`, answer,
+             opts: numOpts(answer, [four + n, four + 4, answer + 8, answer - 8]), topic: "mulPattern",
+             how: `8 is double 4, so double the 4 fact.\n${four} + ${four} = ${answer}, so 8 × ${n} = ${answer}.` };
+  }
+
+  // =====================================================================
   //  GRADE TABLE  (the "database")
   //  For each grade, a list of extra topics with a cumulative probability.
   //  make() rolls a number in [0,1): the first topic whose `upTo` exceeds
@@ -411,13 +644,24 @@
       { upTo: 0.37, gen: () => makeCompare(10, 200) },
       { upTo: 0.47, gen: () => makeTelling() },
     ],
-    3: [ // facts drills (÷9, ×2), data graphs, place value, compare, rounding
-      { upTo: 0.16, gen: () => makeDivisionFact(9) },
-      { upTo: 0.32, gen: () => makeMultiplicationFact(2) },
-      { upTo: 0.46, gen: () => makeDataGraph() },
-      { upTo: 0.58, gen: () => makePlaceValue(4) },
-      { upTo: 0.68, gen: () => makeCompare(100, 9999) },
-      { upTo: 0.78, gen: () => makeRounding([10, 100], 1000) },
+    3: [ // facts drills (÷9, ×2), data graphs, place value, compare, rounding,
+         // plus the multiplication workbook set (ridhi-questions.pdf)
+      { upTo: 0.06, gen: () => makeDivisionFact(9) },
+      { upTo: 0.12, gen: () => makeMultiplicationFact(2) },
+      { upTo: 0.20, gen: () => makeDataGraph() },
+      { upTo: 0.26, gen: () => makePlaceValue(4) },
+      { upTo: 0.31, gen: () => makeCompare(100, 9999) },
+      { upTo: 0.36, gen: () => makeRounding([10, 100], 1000) },
+      { upTo: 0.48, gen: () => makeTimesFact() },
+      { upTo: 0.53, gen: () => makeEqualGroups() },
+      { upTo: 0.58, gen: () => makeRepeatedAddition() },
+      { upTo: 0.63, gen: () => makeSkipCount() },
+      { upTo: 0.68, gen: () => makeArray() },
+      { upTo: 0.73, gen: () => makeMissingFactor() },
+      { upTo: 0.76, gen: () => makeCoinsMultiply() },
+      { upTo: 0.79, gen: () => makeCommutative() },
+      { upTo: 0.89, gen: () => makeMulWord() },
+      { upTo: 0.92, gen: () => makeMulPattern() },
     ],
     4: [ // bigger place value, rounding, factors, order of operations
       { upTo: 0.15, gen: () => makePlaceValue(5) },
@@ -835,6 +1079,7 @@
              `${q.a} × ${q.b} is ${q.a} groups of ${q.b}.\n` +
              `Count: ${Array.from({length: Math.min(q.a, 6)}, (_, i) => (i + 1) * q.b).join(", ")}${q.a > 6 ? ", …" : ""} → ${answer}.`;
     }
+    if (MUL_TOPICS.has(q.topic)) return q.how;   // multiplication workbook set
     if (q.topic === "data") {
       return `Read the graph carefully.\n` +
              `For a picture graph, multiply the number of icons by what each icon is worth.\n` +
@@ -875,7 +1120,19 @@
     divisionFact: "division facts dividing by 9",
     multiplicationFact: "multiplication facts times 2",
     data: "reading picture graphs and bar graphs for kids",
+    equalGroups: "multiplication equal groups for kids",
+    repeatedAddition: "repeated addition and multiplication",
+    skipCount: "skip counting on a number line",
+    timesFact: "multiplication facts times tables for kids",
+    array: "multiplication arrays rows and columns",
+    missingFactor: "missing factor multiplication",
+    coinsMultiply: "counting nickels and dimes skip counting",
+    commutative: "commutative property of multiplication",
+    mulWord: "multiplication word problems for kids",
+    mulPattern: "multiplication patterns and tricks",
   };
+  const MUL_TOPICS = new Set(["equalGroups", "repeatedAddition", "skipCount", "timesFact", "array",
+    "missingFactor", "coinsMultiply", "commutative", "mulWord", "mulPattern"]);
   function videoTopic(q) {
     if (q && q.topic === "science") return SCIENCE_TOPIC_WORD[q.sciTopic] || "science for kids";
     return ELA_TOPIC_WORD[q.topic] || TOPIC_WORD[q.topic] || OP_WORD[q.op] || "math";
