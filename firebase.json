@@ -1,5 +1,14 @@
 {
   "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json", "firestore.*", "*.log", "*.md", "*.pdf", ".*", "**/.*",
+      "functions/**", "rules-test/**", "deploy/**", ".agents/**", ".kiro/**", ".git/**",
+      "node_modules/**", "**/node_modules/**",
+      "index-Crayon-version.html", "index-Original.html"
+    ]
+  },
   "functions": [{
     "source": "functions",
     "codebase": "default",
