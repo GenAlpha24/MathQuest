@@ -185,6 +185,12 @@ async function handleGenerate(request, deps) {
           invalid++;
           fixes = v.errors;
           log("warn", { outcome: "gen_invalid", attempt, inTokens: res.inTokens, outTokens: res.outTokens, checks: v.errors.join(",") });
+          // Too many pictures in one game: the retry asks for a text/emoji-only game
+          // (picturequiz needs its pictures, so it keeps them).
+          if (attempt === 1 && allowedKinds.length && v.errors.includes("visual") && choice.template !== "picturequiz") {
+            allowedKinds = [];
+            log("info", { outcome: "gen_degraded", attempt, reason: "visual" });
+          }
         }
       }
       if (!game && attempt < 2 && !canRetry()) break;
